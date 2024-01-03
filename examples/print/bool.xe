@@ -1,0 +1,4 @@
+var myBool = true
+print(myBool)
+var anotherBool = false
+print(anotherBool)

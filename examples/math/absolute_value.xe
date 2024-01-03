@@ -1,0 +1,3 @@
+// Absolute value function returns the absolute value of a number:
+abs(-9)
+abs(12)

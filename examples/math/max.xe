@@ -1,0 +1,2 @@
+// The max(x,y) function can be used to find the highest value of x and y:
+max(9, 3)

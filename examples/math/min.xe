@@ -1,0 +1,2 @@
+// min(x,y) function can be used to find the lowest value of x and y:
+min(9, 3)
