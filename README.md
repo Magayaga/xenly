@@ -20,7 +20,7 @@ print("Hello, World!")
 
 I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in C programming language.
 
-The following shows how a **"Hello, World!"** program is written in Hyzero programming language:
+The following shows how a **"Hello, World!"** program is written in [Hyzero](https://github.com/magayaga/Hyzero) programming language:
 
 ```python
 # “Hello, World!” program
@@ -83,13 +83,40 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
 
    # GCC
    $ gcc sources/xenly.c -o xenly
-   ```
+   ```:
 
    Last, Open the application:
    ```shell
    ./xenly
    ```
+
+3. **macOS** operating system
+
+   ```shell
+   # Install tools; Choose the Clang or GCC
+   $ brew install gcc git
+   $ brew install clang git
+
+   # Download Xenly's code
+   $ git clone https://github.com/magayaga/xenly.git
+   $ cd xenly
+   ```
+
+   Then you can build and run the code:
+   ```shell
+   # Clang
+   $ clang sources/xenly.c -o xenly
+
+   # GCC
+   $ gcc sources/xenly.c -o xenly
+   ```
+
+   Last, Open the Application:
    
+   ```shell
+   ./xenly
+   ```
+
 ## History
 
 Xenon was designed on August 23, 2023, by Cyril John Magayaga, a 15-year-old Filipino student and developer. Xenon is influenced by C (Static typing and run-time efficiency) and Go (strong typing and concurrent computing). Its designers were primarily motivated by their shared **dislike of C++**.
