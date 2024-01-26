@@ -43,7 +43,7 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
    # Update apt
    $ sudo apt update
 
-   # Install tools; Choose the Clang or GCC
+   # Install tools; Choose the Clang, GCC, or tcc
    $ sudo apt install gcc git
    $ sudo apt install clang git
 
@@ -59,6 +59,9 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
 
    # GCC
    $ gcc sources/xenly.c -o xenly
+
+   # tcc
+   $ tcc sources/xenly.c -o xenly
    ```
 
    Last, Open the application:
@@ -68,7 +71,7 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
 
 2. **Windows** operating system:
 
-   Choose the [**MinGW Installer**](https://sourceforge.net/projects/mingw-w64/), [**Cygwin**](https://www.cygwin.com/), or [**MSYS2**](https://www.msys2.org/) on Windows operating system. After, the download the [Git on Windows](https://git-scm.com/).
+   Choose the [**MinGW Installer**](https://sourceforge.net/projects/mingw-w64/), [**Cygwin**](https://www.cygwin.com/), [**MSYS2**](https://www.msys2.org/), [**tcc**](https://bellard.org/tcc/) on Windows operating system. Then, the download the [Git on Windows](https://git-scm.com/).
 
    ```shell
    # Download Xenly's code
@@ -83,6 +86,9 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
 
    # GCC
    $ gcc sources/xenly.c -o xenly
+
+   # tcc
+   $ tcc sources/xenly.c -o xenly
    ```:
 
    Last, Open the application:
@@ -93,7 +99,7 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
 3. **macOS** operating system
 
    ```shell
-   # Install tools; Choose the Clang or GCC
+   # Install tools; Choose the Clang, GCC, or tcc
    $ brew install gcc git
    $ brew install clang git
 
@@ -109,6 +115,9 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
 
    # GCC
    $ gcc sources/xenly.c -o xenly
+
+   # tcc
+   $ tcc sources/xenly.c -o xenly
    ```
 
    Last, Open the Application:
@@ -125,7 +134,7 @@ On August 26, 2023, He announced a new programming language, the dense and multi
 
 On November 25, 2023, He announced a closed-source or proprietary software of Xenon programming language.
 
-On December 22, 2023, He announced that updating and fixing the Xenly programming language files use the `.xe` file extension. Xenly is Asia's most popular and best programming language. He was very good at mathematics such as algebra, geometry, trigonometry, calculus, analysis, and more branches of mathematics. After night, He announced that Xenly programming language is the new high-level, fast, and general-purpose programming language.
+On December 22, 2023, He announced that updating and fixing the Xenly programming language files use the `.xe` file extension. Xenly is Philippines' most popular and best programming language. He was very good at mathematics such as algebra, geometry, trigonometry, calculus, analysis, and more branches of mathematics. After night, He announced that Xenly programming language is the new high-level, fast, and general-purpose programming language.
 
 On December 26, 2023, He announced that **Xenon** was renamed to **Xenly**, the updating and fixing programming language.
 
@@ -134,6 +143,6 @@ On December 27, 2023, He announced updating and fixing the Xenly programming lan
 
 ## Copyright
 
-Copyright (c) 2023-2024 Cyril John Magayaga. All rights reserved.
+Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.

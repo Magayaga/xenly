@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+#include <ctype.h>
 #include <math.h>
 
 #define MAX_TOKEN_SIZE 1000
@@ -22,7 +24,7 @@
 #define MATH_SILVER_RATIO 2.41421356237309504880
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
 
-#define XENLY_VERSION "0.1.0-preview2"
+#define XENLY_VERSION "0.1.0-preview3"
 
 typedef struct {
     char name[MAX_TOKEN_SIZE];
@@ -51,6 +53,12 @@ typedef struct {
 Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
 
+bool evaluately_condition(const char* condition) {
+    // Implement a more comprehensive logic for evaluating conditions
+    // This is a simplified example
+    return atoi(condition) != 0;
+}
+
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
     exit(1);
@@ -62,51 +70,65 @@ void execute_comment(const char* comment) {
 
 double evaluate_condition(const char* condition);
 double execute_sqrt(const char* arg);
+void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body);
+double evaluate_arithmetic_expression(const char* expression);
 
 void execute_print(const char* arg) {
     if (arg[0] == '"' && arg[strlen(arg) - 1] == '"') {
         printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
     }
+    
+    else if (strpbrk(arg, "+-*/%^")) {
+        double result = evaluate_arithmetic_expression(arg);
+        printf("%lf\n", result);
+    }
+    
     else if (strcmp(arg, "pi") == 0) {
         printf("%lf\n", MATH_PI);
     }
-
+    
     else if (strcmp(arg, "tau") == 0) {
         printf("%lf\n", MATH_TAU);
     }
-
+    
     else if (strcmp(arg, "e") == 0) {
         printf("%lf\n", MATH_E);
     }
-
+    
     else if (strcmp(arg, "goldenRatio") == 0) {
         printf("%lf\n", MATH_GOLDEN_RATIO);
     }
-
+    
     else if (strcmp(arg, "silverRatio") == 0) {
         printf("%lf\n", MATH_SILVER_RATIO);
     }
-
+    
     else if (strcmp(arg, "supergoldenRatio") == 0) {
         printf("%lf\n", MATH_SUPERGOLDEN_RATIO);
     }
-
+    
     else if (strncmp(arg, "sqrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
         double result = evaluate_condition(arg + 5);
         if (result >= 0) {
             printf("%lf\n", sqrt(result));
         }
-
+        
         else {
             error("Square root of a negative number is not supported");
         }
     }
-
+    
     else if (strncmp(arg, "cbrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
         double result = evaluate_condition(arg + 5);
         printf("%lf\n", cbrt(result));
     }
-
+    
+    else if (isdigit(arg[0]) || (arg[0] == '-' && isdigit(arg[1]))) {
+        // Check if it's a numeric constant or expression
+        double result = evaluate_condition(arg);
+        printf("%lf\n", result);
+    }
+    
     else {
         int is_variable = 0;
         for (int i = 0; i < num_variables; i++) {
@@ -132,12 +154,44 @@ void execute_var(const char* name, const char* value) {
 
     if (num_variables < MAX_VARIABLES) {
         strcpy(variables[num_variables].name, name);
-        strcpy(variables[num_variables].value, value);
-        num_variables++;
-    }
 
-    else {
+        // Check if the value is an arithmetic expression or a string
+        if (value[0] == '"' && value[strlen(value) - 1] == '"') {
+            strcpy(variables[num_variables].value, value);
+        }
+        
+        else {
+            double result = evaluate_condition(value);
+            snprintf(variables[num_variables].value, sizeof(variables[num_variables].value), "%lf", result);
+        }
+
+        num_variables++;
+    } else {
         error("Maximum number of variables exceeded");
+    }
+}
+
+void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body) {
+    for (int i = start_value; i <= end_value; i++) {
+        // Set loop variable
+        char loop_variable_value[MAX_TOKEN_SIZE];
+        snprintf(loop_variable_value, sizeof(loop_variable_value), "%d", i);
+        execute_var(loop_variable, loop_variable_value);
+
+        // Execute loop body
+        char line[MAX_TOKEN_SIZE + 10]; // Assuming the loop body can be up to MAX_TOKEN_SIZE characters
+        snprintf(line, sizeof(line), "%s", loop_body);
+        while (fgets(line, sizeof(line), input_file)) {
+            line[strcspn(line, "\n")] = '\0';
+
+            // End of the loop body
+            if (strncmp(line, "}", 1) == 0) {
+                break;
+            }
+
+            // Execute the line within the loop body
+            // Add relevant logic here
+        }
     }
 }
 
@@ -303,29 +357,100 @@ char* convert_decimal_to_binary(int decimal) {
     return strdup(binary);
 }
 
+double evaluate_factor(const char** expression) {
+    // Evaluate a factor in an arithmetic expression
+    double result;
+
+    if (**expression == '(') {
+        (*expression)++; // Move past the opening parenthesis
+        result = evaluate_arithmetic_expression(*expression);
+        if (**expression == ')') {
+            (*expression)++; // Move past the closing parenthesis
+        }
+        
+        else {
+            error("Mismatched parentheses");
+        }
+    }
+    
+    else {
+        result = atof(*expression);
+        while (isdigit(**expression) || **expression == '.') {
+            (*expression)++; // Move past digits and the decimal point
+        }
+    }
+
+    return result;
+}
+
+double evaluate_term(const char** expression) {
+    // Evaluate a term (factor) in an arithmetic expression
+    double result = evaluate_factor(expression);
+    while (**expression) {
+        char operator = **expression;
+        if (operator == '*' || operator == '/' || operator == '%') {
+            (*expression)++; // Move past the operator
+            double factor = evaluate_factor(expression);
+            if (operator == '*') {
+                result *= factor;
+            }
+            
+            else if (operator == '/') {
+                if (factor != 0) {
+                    result /= factor;
+                }
+                
+                else {
+                    error("Division by zero");
+                }
+            }
+            
+            else if (operator == '%') {
+                if (factor != 0) {
+                    result = fmod(result, factor);
+                }
+                
+                else {
+                    error("Modulo by zero");
+                }
+            }
+        }
+        
+        else {
+            break; // Not an operator, exit the loop
+        }
+    }
+    return result;
+}
+
+double evaluate_arithmetic_expression(const char* expression) {
+    // Use a recursive descent parser to evaluate arithmetic expressions
+    double result = evaluate_term(&expression);
+    while (*expression) {
+        char operator = *expression;
+        if (operator == '+' || operator == '-') {
+            expression++; // Move past the operator
+            double term = evaluate_term(&expression);
+            if (operator == '+') {
+                result += term;
+            }
+            
+            else {
+                result -= term;
+            }
+        }
+        
+        else {
+            break; // Not an operator, exit the loop
+        }
+    }
+    return result;
+}
+
 double evaluate_condition(const char* condition) {
-    if (strcmp(condition, "pi") == 0) {
-        return MATH_PI;
-    }
-
-    if (strcmp(condition, "tau") == 0) {
-        return MATH_TAU;
-    }
-
-    if (strcmp(condition, "e") == 0) {
-        return MATH_E;
-    }
-
-    if (strcmp(condition, "goldenRatio") == 0) {
-        return MATH_GOLDEN_RATIO;
-    }
-
-    if (strcmp(condition, "silverRatio") == 0) {
-        return MATH_SILVER_RATIO;
-    }
-
-    if (strcmp(condition, "supergoldenRatio") == 0) {
-        return MATH_SUPERGOLDEN_RATIO;
+    if (strpbrk(condition, "+-*/%^")) {
+        // Use a simple recursive descent parser to evaluate arithmetic expressions
+        return evaluate_arithmetic_expression(condition);
     }
 
     if (strncmp(condition, "pow(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
@@ -502,6 +627,22 @@ void print_version() {
     printf("Xenly %s (Pre-alpha release)\n", XENLY_VERSION);
 }
 
+// Print help
+void print_help() {
+    printf("Usage: xenly [input file]\n");
+    printf("Options:\n");
+    printf("  --help                   Display this information.\n");
+    printf("  --version                Display compiler version information.\n");
+    printf("  --author                 Display the author information.\n\n");
+    printf("For bug reporting instructions, please see:\n");
+    printf("<https://github.com/magayaga/xenly>\n");
+}
+
+// Print author
+void print_author() {
+    printf("Cyril John Magayaga is the original author of Xenly programming language.\n");
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         error("Usage: xenly [input file]");
@@ -512,69 +653,102 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    if (strcmp(argv[1], "--help") == 0) {
+        print_help();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--author") == 0) {
+        print_author();
+        return 0;
+    }
+
     FILE* input_file = fopen(argv[1], "r");
     if (input_file == NULL) {
         error("Unable to open input file");
     }
 
     char line[1000];
+    bool in_condition_block = false;
+    bool condition_met = false;
     while (fgets(line, sizeof(line), input_file)) {
         line[strcspn(line, "\n")] = '\0';
+        
+        if (strncmp(line, "if", 2) == 0 || strncmp(line, "elif", 4) == 0 || strncmp(line, "else", 4) == 0) {
+            if (in_condition_block) {
+            // Handle nested conditions
+            // ...
+            }
+            
+            char condition[MAX_TOKEN_SIZE];
+            strncpy(condition, line + (strncmp(line, "else", 4) == 0 ? 4 : 2), strlen(line) - (strncmp(line, "else", 4) == 0 ? 4 : 2));
+            condition[strlen(line) - (strncmp(line, "else", 4) == 0 ? 4 : 2)] = '\0';
+            
+            in_condition_block = true;
+            if ((strncmp(line, "if", 2) == 0 && evaluately_condition(condition)) ||
+            (strncmp(line, "elif", 4) == 0 && !condition_met && evaluately_condition(condition))) {
+                condition_met = true;
+            }
+            
+            else {
+                condition_met = false;
+                continue;
+            }
+        }
+        
+        else if (strncmp(line, "{", 1) == 0) {
+            // Start of the code block
+            if (condition_met) {
+                while (fgets(line, sizeof(line), input_file)) {
+                    line[strcspn(line, "\n")] = '\0';
+                    if (strncmp(line, "}", 1) == 0) {
+                        // End of the code block
+                        in_condition_block = false;
+                        break;
+                    }
+                    
+                    // Execute the line within the code block
+                    // Add relevant logic here
+                }
+             }
+        }
+        
+        else if (strncmp(line, "}", 1) == 0) {
+            // End of the code block
+            in_condition_block = false;
+        }
 
-        if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
+        else if (strncmp(line, "for", 3) == 0) {
+            char loop_variable[MAX_TOKEN_SIZE];
+            int start_value, end_value;
+            char loop_body[MAX_TOKEN_SIZE];
+
+            // Extract loop variable, start value, and end value from the line
+            if (sscanf(line + 3, "%s = %d to %d {", loop_variable, &start_value, &end_value) == 3) {
+                // Extract the loop body until the corresponding '}'
+                char temp_line[MAX_TOKEN_SIZE + 10]; // Assuming the loop body can be up to MAX_TOKEN_SIZE characters
+                strcpy(loop_body, "");
+                while (fgets(temp_line, sizeof(temp_line), input_file)) {
+                    temp_line[strcspn(temp_line, "\n")] = '\0';
+                    if (strncmp(temp_line, "}", 1) == 0) {
+                        break;
+                    }
+                    strcat(loop_body, temp_line);
+                }
+
+                // Execute the 'for' loop
+                execute_for(input_file, loop_variable, start_value, end_value, loop_body);
+            } else {
+                error("Invalid 'for' loop");
+            }
+        }
+
+        else if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
             char argument[1000];
             strncpy(argument, line + 6, strlen(line) - 7);
             argument[strlen(line) - 7] = '\0';
 
-            if (strncmp(argument, "sqrt", 4) == 0 && argument[4] == '(' && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument + 5);
-                if (result >= 0) {
-                    printf("%lf\n", sqrt(result));
-                }
-
-                else {
-                    error("Square root of a negative number is not supported");
-                }
-            }
-
-            else if (strncmp(argument, "cbrt", 4) == 0 && argument[4] == '(' && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument + 5);
-                if (result >= 0) {
-                    printf("%lf\n", cbrt(result));
-                }
-
-                else {
-                    error("Cube root of a negative number is not supported");
-                }
-            }
-
-            else if (strncmp(argument, "ffrt", 4) == 0 && argument[4] == '(' && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument + 5);
-                if (result >= 0) {
-                    printf("%lf\n", ffrt(result));
-                }
-
-                else {
-                    error("Fifth root of a negative number is not supported");
-                }
-            }
-
-            else if (strncmp(argument, "pow(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "sin(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "cos(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "tan(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
+            if (strncmp(argument, "pow(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
                 double result = evaluate_condition(argument);
                 printf("%lf\n", result);
             }
@@ -644,7 +818,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
-                else if (strncmp(line, "sqrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
+        else if (strncmp(line, "sqrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
             double result = evaluate_condition(line + 5);
             if (result >= 0) {
                 printf("%lf\n", sqrt(result));
@@ -720,7 +894,11 @@ int main(int argc, char* argv[]) {
         }
         
         else if (strncmp(line, "gamma(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line);
+            char argument[MAX_TOKEN_SIZE];
+            strncpy(argument, line + 6, strlen(line) - 7);
+            argument[strlen(line) - 7] = '\0';
+            
+            double result = execute_gamma(argument);
             printf("%lf\n", result);
         }
 
