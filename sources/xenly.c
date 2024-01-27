@@ -936,6 +936,21 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        else if (strncmp(line, "sin(", 4) == 0 && line[strlen(line) - 1] == ')') {
+            double result = evaluate_condition(line);
+            printf("%lf\n", result);
+        }
+
+        else if (strncmp(line, "cos(", 4) == 0 && line[strlen(line) - 1] == ')') {
+            double result = evaluate_condition(line);
+            printf("%lf\n", result);
+        }
+
+        else if (strncmp(line, "tan(", 4) == 0 && line[strlen(line) - 1] == ')') {
+            double result = evaluate_condition(line);
+            printf("%lf\n", result);
+        }
+
         else if (strncmp(line, "//", 2) == 0) {
             continue;
         }

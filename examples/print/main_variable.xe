@@ -1,6 +1,6 @@
-var x = Good Morning
-var y = Good Afternoon
-var z = Good Evening
+var x = "Good Morning"
+var y = "Good Afternoon"
+var z = "Good Evening"
 print(x)
 print(y)
 print(z)
