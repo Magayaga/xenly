@@ -6,7 +6,7 @@
 
 <h1 align="center">Xenly programming language</h1>
 
-**Xenly** (formerly known as **Xenon**) is a high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in **C programming language** and created and developed by [Cyril John Magayaga](https://github.com/magayaga), who is best known for the creating [Hyzero](https://github.com/magayaga/hyzero) programming language, [Nanomath](https://github.com/magayaga/nanomath) command-based scientific and programming calculator, and [Concat](https://github.com/magayaga/concat) command-based concatenate and print files.
+**Xenly** (formerly known as **Xenon**) is a compiled high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in **C programming language** and created and developed by [Cyril John Magayaga](https://github.com/magayaga), who is best known for the creating [Hyzero](https://github.com/magayaga/hyzero) programming language, [Nanomath](https://github.com/magayaga/nanomath) command-based scientific and programming calculator, and [Concat](https://github.com/magayaga/concat) command-based concatenate and print files.
 
 Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
 
@@ -36,6 +36,8 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
 ---
 
 ### Getting started
+
+If you do want to try out Xenly locally, you'll need to install our build dependencies (git, and compilers such as **Clang**, **GCC**, or **tcc**) and check out the Xenly repository, for example on Debian or Ubuntu, Windows, and macOS:
 
 1. **Debian or Ubuntu** operating systems:
    ```shell
@@ -89,14 +91,14 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
 
    # tcc
    $ tcc sources/xenly.c -o xenly
-   ```:
+   ```
 
    Last, Open the application:
    ```shell
    ./xenly
    ```
 
-3. **macOS** operating system
+3. **macOS** operating system:
 
    ```shell
    # Install tools; Choose the Clang, GCC, or tcc
@@ -121,10 +123,17 @@ In chemistry, **Xenon** is a chemical element; it has symbol **Xe** and atomic n
    ```
 
    Last, Open the Application:
-   
    ```shell
    ./xenly
    ```
+## Source Code Organization
+
+The Xenly source code is organized as follows:
+
+|  Directory  |             Contents            |
+|:-----------:|:-------------------------------:|
+| `examples/` | example code for Xenly language |
+| `sources/`  | source for Xenly language       |
 
 ## History
 
@@ -140,6 +149,7 @@ On December 26, 2023, He announced that **Xenon** was renamed to **Xenly**, the 
 
 On December 27, 2023, He announced updating and fixing the Xenly programming language's features.
 
+On January 26, 2024, He announced that Xenly’s documents, design, implementation, and related tools are hosted on GitHub under the MIT License with GCC and LLVM Exceptions.
 
 ## Copyright
 
