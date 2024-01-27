@@ -1,24 +1,22 @@
 @echo off
 
-set SOURCE_FILE=sources\xenly.c
-set OUTPUT_FILE=xenly.exe
+rem Check for the availability of compilers
+where gcc >nul 2>nul && set compiler=gcc
+if not defined compiler where tcc >nul 2>nul && set compiler=tcc
+if not defined compiler where clang >nul 2>nul && set compiler=clang
 
-rem Check if GCC is installed
-gcc --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo GCC not found. Please install GCC and add it to your system PATH.
+if not defined compiler (
+    echo Error: No suitable C compiler found (gcc, tcc, or clang)
     exit /b 1
 )
 
-rem Compile the C code
-gcc -o %OUTPUT_FILE% %SOURCE_FILE%
+rem Compile xenly.c with the selected compiler
+%compiler% sources\xenly.c -o xenly
 
 rem Check if compilation was successful
 if %errorlevel% equ 0 (
-    echo Compilation successful. Output: %OUTPUT_FILE%
+    echo Compilation successful. Running xenly programming language
+    xenly.exe
 ) else (
     echo Compilation failed.
 )
-
-exit /b %errorlevel%
-
