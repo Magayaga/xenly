@@ -166,7 +166,9 @@ void execute_var(const char* name, const char* value) {
         }
 
         num_variables++;
-    } else {
+    }
+    
+    else {
         error("Maximum number of variables exceeded");
     }
 }
@@ -625,15 +627,24 @@ double execute_get(const char* array_name, int index) {
 // Print version
 void print_version() {
     printf("Xenly %s (Pre-alpha release)\n", XENLY_VERSION);
+    printf("Copyright (c) 2023-2024 Cyril John Magayaga\n");
+}
+
+// Print dumpversion
+void print_dumpversion() {
+    printf("%s\n", XENLY_VERSION);
 }
 
 // Print help
 void print_help() {
     printf("Usage: xenly [input file]\n");
     printf("Options:\n");
-    printf("  --help                   Display this information.\n");
-    printf("  --version                Display compiler version information.\n");
-    printf("  --author                 Display the author information.\n\n");
+    printf("  -h, --help                   Display this information.\n");
+    printf("  -v, --version                Display compiler version information.\n");
+    printf("  -dv, --dumpversion           Display the version of the compiler.\n");
+    printf("  -dm, --dumpmachine           Display the compiler's target processor.\n");
+    printf("  -os, --operatingsystem       Display the operating system.\n");
+    printf("  --author                     Display the author information.\n\n");
     printf("For bug reporting instructions, please see:\n");
     printf("<https://github.com/magayaga/xenly>\n");
 }
@@ -648,13 +659,30 @@ int main(int argc, char* argv[]) {
         error("Usage: xenly [input file]");
     }
 
-    if (strcmp(argv[1], "--version") == 0) {
+    if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
         print_version();
         return 0;
     }
 
-    if (strcmp(argv[1], "--help") == 0) {
+    if (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
         print_help();
+        return 0;
+    }
+
+    if (argc == 2 && (strcmp(argv[1], "--operatingsystem" ) == 0 || strcmp(argv[1], "-os") == 0)) {
+        // Print the compiler's operating system
+        printf("%s\n", getenv("OS"));
+        return 0;
+    }
+
+    if (argc == 2 && (strcmp(argv[1], "--dumpmachine" ) == 0 || strcmp(argv[1], "-dm") == 0)) {
+        // Print the compiler's target processor
+        printf("%s\n", getenv("PROCESSOR_ARCHITECTURE"));
+        return 0;
+    }
+
+    if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
+        print_dumpversion();
         return 0;
     }
 
