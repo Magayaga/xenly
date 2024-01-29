@@ -52,14 +52,17 @@ If you do want to try out Xenly locally, you'll need to install our build depend
 
    Then you can build and run the code:
    ```shell
+   # Makefile
+   $ make
+
    # Clang
-   $ clang sources/xenly.c -o xenly
+   $ clang sources/xenly.c -o xenly -lm
 
    # GCC
-   $ gcc sources/xenly.c -o xenly
+   $ gcc sources/xenly.c -o xenly -lm
 
    # tcc
-   $ tcc sources/xenly.c -o xenly
+   $ tcc sources/xenly.c -o xenly -lm
    ```
 
    Last, Open the application:
@@ -79,6 +82,9 @@ If you do want to try out Xenly locally, you'll need to install our build depend
 
    Then you can build and run the code:
    ```shell
+   # Make.bat
+   $ ./make.bat
+   
    # Clang
    $ clang sources/xenly.c -o xenly
 
