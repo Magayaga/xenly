@@ -671,7 +671,17 @@ int main(int argc, char* argv[]) {
 
     if (argc == 2 && (strcmp(argv[1], "--operatingsystem" ) == 0 || strcmp(argv[1], "-os") == 0)) {
         // Print the compiler's operating system
-        printf("%s\n", getenv("OS"));
+        #if defined(_WIN32)
+            printf("Windows\n");
+        #elif defined(__linux__)
+            printf("Linux\n");
+        #elif defined(__unix__) || defined(__unix)
+            printf("Unix\n");
+        #elif defined(__APPLE__) || defined(__MACH__)
+            printf("macOS\n");
+        #else
+            printf("Unknown/Segmentation fault\n");
+        #endif
         return 0;
     }
 
