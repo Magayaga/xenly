@@ -5,4 +5,4 @@
 # It is initially written in C programming language.
 #
 xenly:
-	cc sources/xenly.c -o xenly
+	cc sources/xenly.c -o xenly -lm
