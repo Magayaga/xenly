@@ -39,7 +39,7 @@ write("Hello, World!")
 
 A **Hyzero** variable is created the moment you first assign a value to it.
 ```python
-// "VAR" variable to print()
+# "VAR" variable to print()
 VAR hi = "Hello, World!"
 print(hi)
 ```
