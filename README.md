@@ -15,9 +15,17 @@ Xenly programming language should be command-line interfaces, web servers, and d
 ### Hello, World! program
 The following shows how a **"Hello, World!"** program is written in Xenly programming language:
 
-```c
+```swift
 // “Hello, World!” program
 print("Hello, World!")
+```
+
+A **Xenly** variable is created the moment you first assign a value to it.
+
+```swift
+// "var" variable to print()
+var hi = "Hello, World!"
+print(hi)
 ```
 
 I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in C programming language.
@@ -27,6 +35,13 @@ The following shows how a **"Hello, World!"** program is written in [Hyzero](htt
 ```python
 # “Hello, World!” program
 write("Hello, World!")
+```
+
+A **Hyzero** variable is created the moment you first assign a value to it.
+```python
+// "VAR" variable to print()
+VAR hi = "Hello, World!"
+print(hi)
 ```
 
 Here is the Hyzero programming language that was initially written in Python programming language like interpreter, high-level, and functional.
