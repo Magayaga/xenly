@@ -71,6 +71,8 @@ On December 27, 2023, He announced updating and fixing the Xenly programming lan
 
 On January 26, 2024, He announced that Xenly’s documents, design, implementation, and related tools are hosted on GitHub under the MIT License with GCC and LLVM Exceptions.
 
+On January 30, 2024, He announced that the Xenly programming language was inspired by the **C** programming language, as well as other influences including **Rust** programming language.
+
   ## Getting started
 
 If you do want to try out Xenly locally, you'll need to install our build dependencies (git, and compilers such as **Clang**, **GCC**, or **tcc**) and check out the Xenly repository, for example on Debian or Ubuntu, Windows, and macOS:
