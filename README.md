@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/magayaga/xenly">
-    <img src=".github/logo/cjm_official.svg" width="6.5%" height="100%">
+    <img src=".github/logo/cjm_official.svg" width="75px" height="100%">
   </a>
 </p>
 
