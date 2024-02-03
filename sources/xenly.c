@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <math.h>
+#include "xenly.h"
 
 #define MAX_TOKEN_SIZE 1000
 #define MAX_VARIABLES 1000
