@@ -86,8 +86,11 @@ If you do want to try out Xenly locally, you'll need to install our build depend
 1. **Debian or Ubuntu** operating systems:
    ```shell
 
-   # Update apt
+   # Update sudo
    $ sudo apt update
+
+   # Update sudo with fixing missing
+   $ sudo apt-get update --fix-missing
 
    # Install tools; Choose the Clang, GCC, or tcc
    $ sudo apt install gcc git
