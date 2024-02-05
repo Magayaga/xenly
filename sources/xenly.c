@@ -16,6 +16,7 @@
 #define MAX_TOKEN_SIZE 1000
 #define MAX_VARIABLES 1000
 #define MAX_OBJECTS 1000
+#define MAX_VALUE_LENGTH 256
 #define MAX_ARRAYS 100
 
 #define MATH_PI 3.14159265358979323846
@@ -146,32 +147,55 @@ void execute_print(const char* arg) {
     }
 }
 
+int parse_numeric_value(const char* value, double* result) {
+    char* endptr;
+    *result = strtod(value, &endptr);
+
+    // Check if the conversion was successful
+    if (*endptr != '\0') {
+        return 0;  // Conversion failed
+    }
+
+    return 1;  // Conversion successful
+}
+
 void execute_var(const char* name, const char* value) {
+    if (num_variables >= MAX_VARIABLES) {
+        error("Maximum number of variables exceeded");
+        return;
+    }
+
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
             error("Variable already declared");
+            return;
         }
     }
 
-    if (num_variables < MAX_VARIABLES) {
-        strcpy(variables[num_variables].name, name);
+    strcpy(variables[num_variables].name, name);
 
-        // Check if the value is an arithmetic expression or a string
-        if (value[0] == '"' && value[strlen(value) - 1] == '"') {
-            strcpy(variables[num_variables].value, value);
+    // Check if the value is an arithmetic expression or a string
+    if (value[0] == '"' && value[strlen(value) - 1] == '"') {
+        if (strlen(value) >= MAX_VARIABLES) {
+            error("Value length exceeds maximum limit");
+            return;
         }
-        
-        else {
-            double result = evaluate_condition(value);
-            snprintf(variables[num_variables].value, sizeof(variables[num_variables].value), "%lf", result);
-        }
-
-        num_variables++;
+        strcpy(variables[num_variables].value, value);
     }
     
     else {
-        error("Maximum number of variables exceeded");
+        // Parse the numeric value using a helper function
+        double result;
+        if (!parse_numeric_value(value, &result)) {
+            error("Invalid numeric value");
+            return;
+        }
+        
+        // Adjust the format specifier to avoid buffer overflow
+        snprintf(variables[num_variables].value, sizeof(variables[num_variables].value), "%.10lf", result);
     }
+
+    num_variables++;
 }
 
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body) {

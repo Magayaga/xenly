@@ -28,6 +28,7 @@ double execute_sqrt(const char* arg);
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body);
 double evaluate_arithmetic_expression(const char* expression);
 void execute_print(const char* arg);
+int parse_numeric_value(const char* value, double* result);
 void execute_var(const char* name, const char* value);
 void execute_int(const char* name, const char* value);
 double execute_cbrt(const char* arg);
