@@ -13,12 +13,6 @@
 #include <math.h>
 #include "xenly.h"
 
-#define MAX_TOKEN_SIZE 1000
-#define MAX_VARIABLES 1000
-#define MAX_OBJECTS 1000
-#define MAX_VALUE_LENGTH 256
-#define MAX_ARRAYS 100
-
 #define MATH_PI 3.14159265358979323846
 #define MATH_TAU 6.28318530717958647692
 #define MATH_E 2.71828182845904523536
@@ -27,30 +21,6 @@
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
 
 #define XENLY_VERSION "0.1.0-preview3"
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    char value[MAX_TOKEN_SIZE];
-} Variable;
-
-Variable variables[MAX_VARIABLES];
-int num_variables = 0;
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    int type; // 0 for variable, 1 for object, 2 for array
-    char value[MAX_TOKEN_SIZE];
-} Data;
-
-Data data_storage[MAX_VARIABLES + MAX_OBJECTS + MAX_ARRAYS];
-int num_data = 0;
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    int type; // 0 for variable, 1 for object, 2 for array
-    int size;
-    double* elements;
-} Array;
 
 Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
