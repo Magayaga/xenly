@@ -1,7 +1,6 @@
 # applications
 *.exe
 *.dll.exp
-*.dll
 *.dll.lib
 *.pdb
 *.so

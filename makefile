@@ -5,7 +5,7 @@
 # It is initially written in C programming language.
 #
 xenly:
-	cc src/xenly.c -o xenly -lm
+	cc src/xenly.c -o xenly -lm -I. src/goxenly.dll
 
 clean:
 	rm -f xenly
