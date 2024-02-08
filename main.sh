@@ -19,7 +19,7 @@ else
 fi
 
 # Compile xenly.c with the selected compiler
-$compiler sources/xenly.c -o xenly -lm
+$compiler src/xenly.c -o xenly -lm
 
 # Check if compilation was successful
 if [ $? -eq 0 ]; then
