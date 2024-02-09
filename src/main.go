@@ -5,7 +5,7 @@ import "fmt"
 
 //export print_version
 func print_version() {
-    fmt.Println("Xenly 0.1.0-preview3")
+    fmt.Println("Xenly 0.1.0-preview3 (Pre-alpha release)")
     fmt.Println("Copyright (c) 2023-2024 Cyril John Magayaga")
 }
 

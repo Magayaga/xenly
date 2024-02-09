@@ -12,7 +12,6 @@
 #include <ctype.h>
 #include <math.h>
 #include "xenly.h"
-#include "goxenly.h"
 
 #define MATH_PI 3.14159265358979323846
 #define MATH_TAU 6.28318530717958647692
@@ -118,32 +117,55 @@ void execute_print(const char* arg) {
     }
 }
 
+int parse_numeric_value(const char* value, double* result) {
+    char* endptr;
+    *result = strtod(value, &endptr);
+
+    // Check if the conversion was successful
+    if (*endptr != '\0') {
+        return 0;  // Conversion failed
+    }
+
+    return 1;  // Conversion successful
+}
+
 void execute_var(const char* name, const char* value) {
+    if (num_variables >= MAX_VARIABLES) {
+        error("Maximum number of variables exceeded");
+        return;
+    }
+
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
             error("Variable already declared");
+            return;
         }
     }
 
-    if (num_variables < MAX_VARIABLES) {
-        strcpy(variables[num_variables].name, name);
+    strcpy(variables[num_variables].name, name);
 
-        // Check if the value is an arithmetic expression or a string
-        if (value[0] == '"' && value[strlen(value) - 1] == '"') {
-            strcpy(variables[num_variables].value, value);
+    // Check if the value is an arithmetic expression or a string
+    if (value[0] == '"' && value[strlen(value) - 1] == '"') {
+        if (strlen(value) >= MAX_VARIABLES) {
+            error("Value length exceeds maximum limit");
+            return;
         }
-        
-        else {
-            double result = evaluate_condition(value);
-            snprintf(variables[num_variables].value, sizeof(variables[num_variables].value), "%lf", result);
-        }
-
-        num_variables++;
+        strcpy(variables[num_variables].value, value);
     }
     
     else {
-        error("Maximum number of variables exceeded");
+        // Parse the numeric value using a helper function
+        double result;
+        if (!parse_numeric_value(value, &result)) {
+            error("Invalid numeric value");
+            return;
+        }
+        
+        // Adjust the format specifier to avoid buffer overflow
+        snprintf(variables[num_variables].value, sizeof(variables[num_variables].value), "%.10lf", result);
     }
+
+    num_variables++;
 }
 
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body) {
@@ -594,7 +616,37 @@ double execute_get(const char* array_name, int index) {
         }
     }
     error("Array not found");
-    return 0; // You can choose to return a default value here
+    return 0.0; // You can choose to return a default value here
+}
+
+// Print version
+void print_version() {
+    printf("Xenly %s (Pre-alpha release)\n", XENLY_VERSION);
+    printf("Copyright (c) 2023-2024 Cyril John Magayaga\n");
+}
+
+// Print dumpversion
+void print_dumpversion() {
+    printf("%s\n", XENLY_VERSION);
+}
+
+// Print help
+void print_help() {
+    printf("Usage: xenly [input file]\n");
+    printf("Options:\n");
+    printf("  -h, --help                   Display this information.\n");
+    printf("  -v, --version                Display compiler version information.\n");
+    printf("  -dv, --dumpversion           Display the version of the compiler.\n");
+    printf("  -dm, --dumpmachine           Display the compiler's target processor.\n");
+    printf("  -os, --operatingsystem       Display the operating system.\n");
+    printf("  --author                     Display the author information.\n\n");
+    printf("For bug reporting instructions, please see:\n");
+    printf("<https://github.com/magayaga/xenly>\n");
+}
+
+// Print author
+void print_author() {
+    printf("Cyril John Magayaga is the original author of Xenly programming language.\n");
 }
 
 int main(int argc, char* argv[]) {
@@ -636,13 +688,6 @@ int main(int argc, char* argv[]) {
 
     if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
         print_dumpversion();
-        return 0;
-    }
-
-    if (argc == 2 && (strcmp(argv[1], "--path") == 0 || strcmp(argv[1], "-p") == 0)) {
-        // Print the path to the Xenly compiler executable
-        // argv[0] contains the path to the executable
-        printf("%s\n", argv[0]);
         return 0;
     }
 
