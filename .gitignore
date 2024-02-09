@@ -5,12 +5,7 @@
 *.pdb
 *.so
 *.a
-target/release
-target/release/.fingerprint
-target/release/build
-target/release/deps
-target/release/examples
-target/release/incremental
-target/release/.cargo-lock
-.rustc_info.json
-CACHEDIR.TAG
+*.rs
+
+# folders
+target/
