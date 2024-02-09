@@ -9,6 +9,3 @@ xenly:
 
 clean:
 	rm -f xenly
-
-py-install:
-    python3 install.py
