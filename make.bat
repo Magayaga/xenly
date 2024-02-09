@@ -15,7 +15,7 @@ gcc -o %OUTPUT_FILE% %SOURCE_FILE%
 
 rem Check if compilation was successful
 if %errorlevel% equ 0 (
-    echo Compilation successful. Running xenly programming language %OUTPUT_FILE%
+    echo Compilation successful. Running xenly programming language
 ) else (
     echo Compilation failed.
 )

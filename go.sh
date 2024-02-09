@@ -19,4 +19,4 @@ LIB_NAME="goxenly.dll"
 mkdir -p "$OUT_DIR"
 
 # Build the Go shared library
-go build -o "$OUT_DIR/$LIB_NAME" -buildmode=c-shared "$SRC_DIR/main.go"
+go build -o "$OUT_DIR/$LIB_NAME" -buildmode=c-shared "$SRC_DIR/goxenly.go"

@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <math.h>
 #include "xenly.h"
+// #include "goxenly.h"
 
 #define MATH_PI 3.14159265358979323846
 #define MATH_TAU 6.28318530717958647692
@@ -20,22 +21,25 @@
 #define MATH_SILVER_RATIO 2.41421356237309504880
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
 
-#define XENLY_VERSION "0.1.0-preview3"
+#define XENLY_VERSION "0.1.0-preview4"
 
 Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
 
+// Evaluately condition
 bool evaluately_condition(const char* condition) {
     // Implement a more comprehensive logic for evaluating conditions
     // This is a simplified example
     return atoi(condition) != 0;
 }
 
+// Error
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
     exit(1);
 }
 
+// Execute comment
 void execute_comment(const char* comment) {
     printf("// %s\n", comment);
 }
@@ -45,6 +49,7 @@ double execute_sqrt(const char* arg);
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body);
 double evaluate_arithmetic_expression(const char* expression);
 
+// Print
 void execute_print(const char* arg) {
     if (arg[0] == '"' && arg[strlen(arg) - 1] == '"') {
         printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
@@ -117,6 +122,7 @@ void execute_print(const char* arg) {
     }
 }
 
+// Parse numeric value
 int parse_numeric_value(const char* value, double* result) {
     char* endptr;
     *result = strtod(value, &endptr);
@@ -129,45 +135,48 @@ int parse_numeric_value(const char* value, double* result) {
     return 1;  // Conversion successful
 }
 
-void execute_var(const char* name, const char* value) {
+// Var
+void execute_var(const char* name, const char* val) {
+
     if (num_variables >= MAX_VARIABLES) {
-        error("Maximum number of variables exceeded");
+        fprintf(stderr, "Error: maximum number of variables exceeded\n");
         return;
     }
 
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
-            error("Variable already declared");
+            fprintf(stderr, "Error: variable already declared\n");
             return;
         }
     }
 
-    strcpy(variables[num_variables].name, name);
+    strncpy(variables[num_variables].name, name, sizeof(variables[num_variables].name) - 1);
 
-    // Check if the value is an arithmetic expression or a string
-    if (value[0] == '"' && value[strlen(value) - 1] == '"') {
-        if (strlen(value) >= MAX_VARIABLES) {
-            error("Value length exceeds maximum limit");
+    if (val[0] == '"' && val[strlen(val) - 1] == '"') {
+        if (strlen(val) >= sizeof(variables[num_variables].value)) {
+            fprintf(stderr, "Error: value length exceeds maximum limit\n");
             return;
         }
-        strcpy(variables[num_variables].value, value);
+        strncpy(variables[num_variables].value, val, sizeof(variables[num_variables].value) - 1);
     }
     
     else {
-        // Parse the numeric value using a helper function
         double result;
-        if (!parse_numeric_value(value, &result)) {
-            error("Invalid numeric value");
+        if (!parse_numeric_value(val, &result)) {
+            fprintf(stderr, "Error: invalid numeric value\n");
             return;
         }
         
-        // Adjust the format specifier to avoid buffer overflow
         snprintf(variables[num_variables].value, sizeof(variables[num_variables].value), "%.10lf", result);
     }
+
+    variables[num_variables].name[sizeof(variables[num_variables].name) - 1] = '\0';
+    variables[num_variables].value[sizeof(variables[num_variables].value) - 1] = '\0';
 
     num_variables++;
 }
 
+// For
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body) {
     for (int i = start_value; i <= end_value; i++) {
         // Set loop variable
@@ -192,6 +201,7 @@ void execute_for(FILE* input_file, const char* loop_variable, int start_value, i
     }
 }
 
+// Int
 void execute_int(const char* name, const char* value) {
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
@@ -210,6 +220,7 @@ void execute_int(const char* name, const char* value) {
     }
 }
 
+// Square root
 double execute_sqrt(const char* arg) {
     double result = evaluate_condition(arg);
     if (result >= 0) {
@@ -222,11 +233,19 @@ double execute_sqrt(const char* arg) {
     return 0;
 }
 
+// Cube root
 double execute_cbrt(const char* arg) {
     double result = evaluate_condition(arg);
+    
+    if (result < 0) {
+        printf("Cube root of a negative number is not supported.\n");
+        return -1;
+    }
+    
     return cbrt(result);
 }
 
+// Pow
 double execute_pow(const char* arg) {
     double base, exponent;
     if (sscanf(arg, "%lf, %lf", &base, &exponent) == 2) {
@@ -238,43 +257,52 @@ double execute_pow(const char* arg) {
     return 0.0;
 }
 
+
+// Sin
 double execute_sin(const char* arg) {
     double result = evaluate_condition(arg);
     return sin(result);
 }
 
+// Cos
 double execute_cos(const char* arg) {
     double result = evaluate_condition(arg);
     return cos(result);
 }
 
+// Tan
 double execute_tan(const char* arg) {
     double result = evaluate_condition(arg);
     return tan(result);
 }
 
+// Gamma
 double execute_gamma(const char* arg) {
     double result = evaluate_condition(arg);
     return tgamma(result);
 }
 
+// Max
 double execute_max(const char* arg1, const char* arg2) {
     double x = evaluate_condition(arg1);
     double y = evaluate_condition(arg2);
     return (x > y) ? x : y;
 }
 
+// Min
 double execute_min(const char* arg1, const char* arg2) {
     double x = evaluate_condition(arg1);
     double y = evaluate_condition(arg2);
     return (x < y) ? x : y;
 }
 
+// Abs
 double execute_abs(const char* arg) {
     double x = atoi(arg);
     return abs(x);
 }
 
+// Fifth root
 double ffrt(double x) {
     if (x >= 0) {
         return pow(x, 1.0 / 5);
@@ -284,6 +312,7 @@ double ffrt(double x) {
     }
 }
 
+// Factorial function
 int factorial(int n) {
     if (n == 0 || n == 1) {
         return 1;
@@ -291,6 +320,7 @@ int factorial(int n) {
     return n * factorial(n - 1);
 }
 
+// Factorial numbers
 int execute_factorial(const char* arg) {
     int result = evaluate_condition(arg);
     if (result < 0) {
@@ -299,6 +329,7 @@ int execute_factorial(const char* arg) {
     return factorial(result);
 }
 
+// Fibonacci function
 int fibonacci(int n) {
     if (n <= 0) {
         return 0;
@@ -309,6 +340,7 @@ int fibonacci(int n) {
     }
 }
 
+// Fibonacci numbers
 int execute_fibonacci(const char* arg) {
     int result = evaluate_condition(arg);
     if (result < 0) {
@@ -317,6 +349,7 @@ int execute_fibonacci(const char* arg) {
     return fibonacci(result);
 }
 
+// Binary numbers to decimal
 int convert_binary_to_decimal(const char* binary) {
     int length = strlen(binary);
     int decimal = 0;
@@ -330,6 +363,7 @@ int convert_binary_to_decimal(const char* binary) {
     return decimal;
 }
 
+// Decimal to Binary number
 char* convert_decimal_to_binary(int decimal) {
     char binary[32]; // Assuming 32-bit integers
     int index = 0;
@@ -354,6 +388,7 @@ char* convert_decimal_to_binary(int decimal) {
     return strdup(binary);
 }
 
+// Factor
 double evaluate_factor(const char** expression) {
     // Evaluate a factor in an arithmetic expression
     double result;
@@ -380,6 +415,7 @@ double evaluate_factor(const char** expression) {
     return result;
 }
 
+// Term
 double evaluate_term(const char** expression) {
     // Evaluate a term (factor) in an arithmetic expression
     double result = evaluate_factor(expression);
@@ -420,6 +456,7 @@ double evaluate_term(const char** expression) {
     return result;
 }
 
+// Evaluate arithmetic expression
 double evaluate_arithmetic_expression(const char* expression) {
     // Use a recursive descent parser to evaluate arithmetic expressions
     double result = evaluate_term(&expression);
@@ -444,6 +481,7 @@ double evaluate_arithmetic_expression(const char* expression) {
     return result;
 }
 
+// Evaluate condition
 double evaluate_condition(const char* condition) {
     if (strpbrk(condition, "+-*/%^")) {
         // Use a simple recursive descent parser to evaluate arithmetic expressions
@@ -561,6 +599,7 @@ double evaluate_condition(const char* condition) {
     return atoi(condition); // Convert string to integer
 }
 
+// Object
 void execute_object(const char* name, const char* properties) {
     // Create a new object with given properties
     if (num_data < MAX_OBJECTS) {
@@ -573,6 +612,7 @@ void execute_object(const char* name, const char* properties) {
     }
 }
 
+// Array
 void execute_array(const char* name, int size) {
     if (num_arrays < MAX_ARRAYS) {
         arrays[num_arrays].type = 2; // 2 for array
@@ -591,6 +631,7 @@ void execute_array(const char* name, int size) {
     }
 }
 
+// Set
 void execute_set(const char* array_name, int index, double value) {
     for (int i = 0; i < num_arrays; i++) {
         if (strcmp(arrays[i].name, array_name) == 0) {
@@ -605,6 +646,7 @@ void execute_set(const char* array_name, int index, double value) {
     error("Array not found");
 }
 
+// Get
 double execute_get(const char* array_name, int index) {
     for (int i = 0; i < num_arrays; i++) {
         if (strcmp(arrays[i].name, array_name) == 0) {
@@ -639,7 +681,7 @@ void print_help() {
     printf("  -dv, --dumpversion           Display the version of the compiler.\n");
     printf("  -dm, --dumpmachine           Display the compiler's target processor.\n");
     printf("  -os, --operatingsystem       Display the operating system.\n");
-    printf("  --author                     Display the author information.\n\n");
+    printf("  --author                     Display the author information.\n");
     printf("For bug reporting instructions, please see:\n");
     printf("<https://github.com/magayaga/xenly>\n");
 }
@@ -649,6 +691,7 @@ void print_author() {
     printf("Cyril John Magayaga is the original author of Xenly programming language.\n");
 }
 
+// Main function
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         error("Usage: xenly [input file]");
