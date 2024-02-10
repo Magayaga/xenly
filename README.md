@@ -132,13 +132,13 @@ If you do want to try out Xenly locally, you'll need to install our build depend
    $ ./make.bat
    
    # Clang
-   $ clang sources/xenly.c -o xenly
+   $ clang src/xenly.c -o xenly
 
    # GCC
-   $ gcc sources/xenly.c -o xenly
+   $ gcc src/xenly.c -o xenly
 
    # tcc
-   $ tcc sources/xenly.c -o xenly
+   $ tcc src/xenly.c -o xenly
    ```
 
    Last, Open the application:
