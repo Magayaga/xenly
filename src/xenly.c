@@ -22,6 +22,7 @@
 #define MATH_SILVER_RATIO 2.41421356237309504880
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
 
+#define XENLY_RELEASEDATE "February 29, 2024"
 #define XENLY_VERSION "0.1.0-preview4"
 
 Array arrays[MAX_ARRAYS];
@@ -659,7 +660,7 @@ double execute_get(const char* array_name, int index) {
         }
     }
     error("Array not found");
-    return 0.0; // You can choose to return a default value here
+    return 0.0;
 }
 
 // Print version
@@ -673,6 +674,11 @@ void print_dumpversion() {
     printf("%s\n", XENLY_VERSION);
 }
 
+// Print dumpreleasedate
+void print_dumpreleasedate() {
+    printf("%s\n", XENLY_RELEASEDATE);
+}
+
 // Print help
 void print_help() {
     printf("Usage: xenly [input file]\n");
@@ -680,6 +686,7 @@ void print_help() {
     printf("  -h, --help                   Display this information.\n");
     printf("  -v, --version                Display compiler version information.\n");
     printf("  -dv, --dumpversion           Display the version of the compiler.\n");
+    printf("  -drd, --dumpreleasedate      Display the release date of the compiler.\n");
     printf("  -dm, --dumpmachine           Display the compiler's target processor.\n");
     printf("  -os, --operatingsystem       Display the operating system.\n");
     printf("  --author                     Display the author information.\n");
@@ -733,6 +740,11 @@ int main(int argc, char* argv[]) {
     if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
         print_dumpversion();
         return 0;
+    }
+
+    if (argc == 2 && (strcmp(argv[1], "--dumpreleasedate") == 0 || strcmp(argv[1], "-drd") == 0)) {
+	print_dumpreleasedate();
+	return 0;
     }
 
     if (strcmp(argv[1], "--author") == 0) {
