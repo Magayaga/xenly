@@ -131,15 +131,9 @@ If you do want to try out Xenly locally, you'll need to install our build depend
    ```shell
    # Make.bat
    $ ./make.bat
-   
-   # Clang
-   $ clang src/xenly.c -o xenly
 
-   # GCC
-   $ gcc src/xenly.c -o xenly
-
-   # tcc
-   $ tcc src/xenly.c -o xenly
+   # Python
+   $ py install.py
    ```
 
    Last, Open the application:
