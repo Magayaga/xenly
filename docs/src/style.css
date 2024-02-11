@@ -1,3 +1,8 @@
 .pr-2 {
     padding-right: 8px;
 }
+
+a, p, h1 {
+    font-family: "SF Pro Display";
+    font-weight: 200;
+}
