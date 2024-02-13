@@ -157,6 +157,9 @@ If you do want to try out Xenly locally, you'll need to install our build depend
    ```shell
    # Bash
    $ bash main.sh
+
+   # Python
+   $ py install.py
    ```
 
    Last, Open the Application:
