@@ -33,6 +33,7 @@ bool evaluately_condition(const char* condition) {
     // Implement a more comprehensive logic for evaluating conditions
     // This is a simplified example
     return atoi(condition) != 0;
+    return true;
 }
 
 // Error
