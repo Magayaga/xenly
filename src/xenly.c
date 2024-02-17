@@ -27,7 +27,7 @@
 
 Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
-int inside_multiline_comment = 0;
+int multiline_comment = 0;
 
 // Evaluately condition
 bool evaluately_condition(const char* condition) {
@@ -1042,12 +1042,12 @@ int main(int argc, char* argv[]) {
         }
 
         else if (strncmp(line, "/*", 2) == 0) {
-            inside_multiline_comment = 1;
+            multiline_comment = 1;
             continue;
         }
 
         else if (strncmp(line, "*/", 2) == 0) {
-            inside_multiline_comment = 0;
+            multiline_comment = 0;
             continue;
         }
 
