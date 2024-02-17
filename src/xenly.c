@@ -27,6 +27,7 @@
 
 Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
+int inside_multiline_comment = 0;
 
 // Evaluately condition
 bool evaluately_condition(const char* condition) {
@@ -40,11 +41,6 @@ bool evaluately_condition(const char* condition) {
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
     exit(1);
-}
-
-// Execute comment
-void execute_comment(const char* comment) {
-    printf("// %s\n", comment);
 }
 
 double evaluate_condition(const char* condition);
@@ -1045,8 +1041,18 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        else if (strncmp(line, "/*", 2) == 0) {
+            inside_multiline_comment = 1;
+            continue;
+        }
+
+        else if (strncmp(line, "*/", 2) == 0) {
+            inside_multiline_comment = 0;
+            continue;
+        }
+
         else {
-            error("Invalid sttatement");
+            error("Invalid statement");
         }
     }
 
