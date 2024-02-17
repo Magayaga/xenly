@@ -60,7 +60,7 @@ The Xenly source code is organized as follows:
 |:----------------------------:|:--------------------------------------------:|
 | `docs/`                      | documentation for Xenly programming language |
 | `examples/`                  | example code for Xenly programming language  |
-| `src/`, formerly `sources/`  | source for Xenly programming language        |
+| `src/`                       | source for Xenly programming language        |
 
 ## History
 
