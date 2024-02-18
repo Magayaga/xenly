@@ -4,9 +4,10 @@ To run code in a file non-interactively, you can give it as the first argument t
 
 ```shell
 $ xenly examples/print/main.xe
+$ xenly examples/math/operations.xe
 ```
 
-You can pass additional arguments to **Xenly**, and to your program `main.xe`
+You can pass additional arguments to **Xenly**, and to your program `main.xe` or `operations.xe`.
 
 ## Copyright
 
