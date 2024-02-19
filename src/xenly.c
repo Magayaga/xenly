@@ -175,6 +175,38 @@ void execute_var(const char* name, const char* val) {
     num_variables++;
 }
 
+int parse_and_execute_arithmetic_operation(const char* operation, int* result) {
+    // Assuming the operation is in the format "operand1 operator operand2"
+    int operand1, operand2;
+    char op;
+    
+    if (sscanf(operation, "%d %c %d", &operand1, &op, &operand2) != 3) {
+        return 0; // Parsing failed
+    }
+    
+    switch(op) {
+        case '+':
+            *result = operand1 + operand2;
+            break;
+        case '-':
+            *result = operand1 - operand2;
+            break;
+        case '*':
+            *result = operand1 * operand2;
+            break;
+        case '/':
+            if (operand2 == 0) {
+                return 0; // Division by zero error
+            }
+            *result = operand1 / operand2;
+            break;
+        default:
+            return 0; // Invalid operator
+    }
+    
+    return 1; // Operation executed successfully
+}
+
 // For
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body) {
     for (int i = start_value; i <= end_value; i++) {
