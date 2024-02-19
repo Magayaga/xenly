@@ -1,0 +1,6 @@
+int x = "Good Morning"
+int y = "Good Afternoon"
+int z = "Good Evening"
+print(x)
+print(y)
+print(z)

@@ -196,6 +196,13 @@ void execute_for(FILE* input_file, const char* loop_variable, int start_value, i
 
             // Execute the line within the loop body
             // Add relevant logic here
+            // Example: Assuming each line in the loop body contains an arithmetic operation
+            int result;
+            if (parse_and_execute_arithmetic_operation(line, &result)) {
+                printf("Result of operation: %d\n", result);
+            } else {
+                printf("Error: Invalid operation\n");
+            }
         }
     }
 }
