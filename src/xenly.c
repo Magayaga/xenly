@@ -521,12 +521,20 @@ double evaluate_arithmetic_expression(const char* expression) {
 
 // Evaluate condition
 double evaluate_condition(const char* condition) {
-    if (strpbrk(condition, "+-*/%^")) {
+    if (strcmp(condition, "true") == 0) {
+        return 1.0;
+    }
+    
+    else if (strcmp(condition, "false") == 0) {
+        return 0.0;
+    }
+    
+    else if (strpbrk(condition, "+-*/%^")) {
         // Use a simple recursive descent parser to evaluate arithmetic expressions
         return evaluate_arithmetic_expression(condition);
     }
 
-    if (strncmp(condition, "pow(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "pow(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
         // Extract the base and exponent values from the argument
         char arguments[1000];
         strncpy(arguments, condition + 4, strlen(condition) - 5);
@@ -541,27 +549,27 @@ double evaluate_condition(const char* condition) {
         return pow(base, exponent);
     }
 
-    if (strncmp(condition, "sin(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "sin(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
         double inner_result = evaluate_condition(condition + 4);
         return sin(inner_result);
     }
 
-    if (strncmp(condition, "cos(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "cos(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
         double inner_result = evaluate_condition(condition + 4);
         return cos(inner_result);
     }
 
-    if (strncmp(condition, "tan(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "tan(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
         double inner_result = evaluate_condition(condition + 4);
         return tan(inner_result);
     }
 
-    if (strncmp(condition, "gamma(", 6) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "gamma(", 6) == 0 && condition[strlen(condition) - 1] == ')') {
         double inner_result = evaluate_condition(condition + 6);
         return tgamma(inner_result);
     }
 
-    if (strncmp(condition, "fibonacci(", 10) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "fibonacci(", 10) == 0 && condition[strlen(condition) - 1] == ')') {
         int inner_result = evaluate_condition(condition + 10);
         if (inner_result < 0) {
             error("Fibonacci of a negative number is not supported");
@@ -569,7 +577,7 @@ double evaluate_condition(const char* condition) {
         return fibonacci(inner_result);
     }
 
-    if (strncmp(condition, "factorial(", 10) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "factorial(", 10) == 0 && condition[strlen(condition) - 1] == ')') {
         int inner_result = evaluate_condition(condition + 10);
         if (inner_result < 0) {
             error("Factorial of a negative number is not supported");
@@ -577,7 +585,7 @@ double evaluate_condition(const char* condition) {
         return factorial(inner_result);
     }
 
-    if (condition[0] == '(' && condition[strlen(condition) - 1] == ')') {
+    else if (condition[0] == '(' && condition[strlen(condition) - 1] == ')') {
         char expression[1000];
         strncpy(expression, condition + 1, strlen(condition) - 2);
         expression[strlen(condition) - 2] = '\0';
@@ -610,15 +618,9 @@ double evaluate_condition(const char* condition) {
             default:
                 error("Invalid operator in condition");
         }
-    } else {
-        for (int i = 0; i < num_variables; i++) {
-            if (strcmp(variables[i].name, condition) == 0) {
-                return strcmp(variables[i].value, "true") == 0 ? 1 : 0;
-            }
-        }
     }
 
-    if (strncmp(condition, "sqrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "sqrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
         double inner_result = evaluate_condition(condition + 5);
         if (inner_result >= 0) {
             return sqrt(inner_result);
@@ -629,9 +631,17 @@ double evaluate_condition(const char* condition) {
         }
     }
 
-    if (strncmp(condition, "cbrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
+    else if (strncmp(condition, "cbrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
         double inner_result = evaluate_condition(condition + 5);
         return cbrt(inner_result);
+    }
+    
+    else {
+        for (int i = 0; i < num_variables; i++) {
+            if (strcmp(variables[i].name, condition) == 0) {
+                return strcmp(variables[i].value, "true") == 0 ? 1 : 0;
+            }
+        }
     }
 
     return atoi(condition); // Convert string to integer
@@ -645,7 +655,9 @@ void execute_object(const char* name, const char* properties) {
         data_storage[num_data].type = 1; // 1 for object
         strcpy(data_storage[num_data].value, properties);
         num_data++;
-    } else {
+    }
+    
+    else {
         error("Maximum number of objects exceeded");
     }
 }
@@ -690,7 +702,9 @@ double execute_get(const char* array_name, int index) {
         if (strcmp(arrays[i].name, array_name) == 0) {
             if (index >= 0 && index < arrays[i].size) {
                 return arrays[i].elements[index];
-            } else {
+            }
+            
+            else {
                 error("Array index out of bounds");
             }
         }
