@@ -1,0 +1,16 @@
+name: Bash Script for Xenly programming language
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: script
+      run: PATH/script.sh
+      shell: bash
