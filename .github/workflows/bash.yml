@@ -12,5 +12,5 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: script
-      run: ${GITHUB_WORKSPACE}/src/main.sh
+      run: src/main.sh
       shell: bash
