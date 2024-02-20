@@ -755,17 +755,17 @@ int main(int argc, char* argv[]) {
         error("Usage: xenly [input file]");
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
+    else if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
         print_version();
         return 0;
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
+    else if (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
         print_help();
         return 0;
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--operatingsystem" ) == 0 || strcmp(argv[1], "-os") == 0)) {
+    else if (argc == 2 && (strcmp(argv[1], "--operatingsystem" ) == 0 || strcmp(argv[1], "-os") == 0)) {
         // Print the compiler's operating system
         #if defined(_WIN32)
             printf("Windows\n");
@@ -774,30 +774,49 @@ int main(int argc, char* argv[]) {
         #elif defined(__unix__) || defined(__unix)
             printf("Unix\n");
         #elif defined(__APPLE__) || defined(__MACH__)
-            printf("macOS\n");
+            #include "TargetConditionals.h"
+            #if TARGET_OS_MAC
+                printf("macOS\n");
+            #elif TARGET_OS_IOS
+                printf("iOS\n");
+            #elif TARGET_OS_TV
+                printf("tvOS\n");
+            #elif TARGET_OS_WATCH
+                printf("watchOS\n");
+            #endif
+        #elif defined(__ANDROID__)
+            printf("Android\n");
+        #elif defined(__FreeBSD__)
+            printf("FreeBSD\n");
+        #elif defined(__DragonFly__)
+            printf("DragonFlyBSD\n");
+        #elif defined(__OpenBSD__)
+            printf("OpenBSD\n");
+        #elif defined(__NetBSD__)
+            printf("NetBSD\n");
         #else
             printf("Unknown/Segmentation fault\n");
         #endif
         return 0;
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--dumpmachine" ) == 0 || strcmp(argv[1], "-dm") == 0)) {
+    else if (argc == 2 && (strcmp(argv[1], "--dumpmachine" ) == 0 || strcmp(argv[1], "-dm") == 0)) {
         // Print the compiler's target processor
         printf("%s\n", getenv("PROCESSOR_ARCHITECTURE"));
         return 0;
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
+    else if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
         print_dumpversion();
         return 0;
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--dumpreleasedate") == 0 || strcmp(argv[1], "-drd") == 0)) {
+    else if (argc == 2 && (strcmp(argv[1], "--dumpreleasedate") == 0 || strcmp(argv[1], "-drd") == 0)) {
 	print_dumpreleasedate();
 	return 0;
     }
 
-    if (strcmp(argv[1], "--author") == 0) {
+    else if (strcmp(argv[1], "--author") == 0) {
         print_author();
         return 0;
     }
