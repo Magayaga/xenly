@@ -107,7 +107,7 @@ If you do want to try out Xenly locally, you'll need to install our build depend
 
 2. **Windows** operating system:
 
-   Choose the [**MinGW Installer**](https://sourceforge.net/projects/mingw-w64/), [**Cygwin**](https://www.cygwin.com/), [**MSYS2**](https://www.msys2.org/), [**tcc**](https://bellard.org/tcc/) on Windows operating system. Then, the download the [Git on Windows](https://git-scm.com/).
+   Choose the [**Microsoft Visual Studio**](https://visualstudio.microsoft.com/), [**MinGW Installer**](https://sourceforge.net/projects/mingw-w64/), [**Cygwin**](https://www.cygwin.com/), [**MSYS2**](https://www.msys2.org/), [**tcc**](https://bellard.org/tcc/) on Windows operating system. Then, the download the [Git on Windows](https://git-scm.com/).
 
    ```shell
    # Download Xenly's code
