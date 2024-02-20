@@ -18,10 +18,7 @@
 
 Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
 
-
-
 https://github.com/Magayaga/xenly/assets/93117076/dd924975-eea3-4bc6-8b0d-c322bc4092b3
-
 
 ## Examples
 ### Hello, World! program
