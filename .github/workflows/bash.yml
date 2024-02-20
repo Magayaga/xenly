@@ -12,5 +12,5 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: script
-      run: PATH/script.sh
+      run: main.sh
       shell: bash
