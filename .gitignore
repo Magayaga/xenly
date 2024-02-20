@@ -9,3 +9,5 @@
 # folders
 target/
 
+# files
+preinstall.py
