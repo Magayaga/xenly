@@ -4,8 +4,13 @@
 # 
 # It is initially written in C programming language.
 #
-xenly:
+xenly: src/xenly.c
 	cc src/xenly.c -o xenly -lm
+
+test:
+    # Add your test commands here
+    # For example:
+    # ./xenly <input_file> >output_file
 
 clean:
 	rm -f xenly
