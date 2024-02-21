@@ -104,7 +104,7 @@ fn main() {
         return;
     }
 
-    if args.len() == 2 && args[1] == "--help" {
+    if args.len() == 2 && (args[1] == "-h" || args[1] == "--help") {
         println!("Usage: xenly [input file]");
         println!("Options:");
         println!("  -h, --help                   Display this information.");
@@ -116,6 +116,37 @@ fn main() {
         println!("  --author                     Display the author information.");
         println!("For bug reporting instructions, please see:");
         println!("<https://github.com/magayaga/xenly>");
+        return;
+    }
+
+    if args.len() == 2 && (args[1] == "-v" || args[1] == "--version") {
+        println!("Xenly 0.1.0-preview4 (Pre-alpha release)");
+        println!("Copyright (c) 2023-2024 Cyril John Magayaga");
+        return;
+    }
+
+    if args.len() == 2 && (args[1] == "-dv" || args[1] == "--dumpversion") {
+        println!("0.1.0-preview4");
+        return;
+    }
+
+    if args.len() == 2 && (args[1] == "-drd" || args[1] == "--dumpreleasedate") {
+        println!("February 29, 2024");
+        return;
+    }
+
+    if args.len() == 2 && (args[1] == "-dm" || args[1] == "--dumpmachine") {
+        println!("Coming soon!");
+        return;
+    }
+
+    if args.len() == 2 && args[1] == "--author" {
+        println!("Copyright (c) 2023-2024 Cyril John Magayaga");
+        return 0;
+    }
+
+    if args.len() == 2 && (args[1] == "-os" || args[1] == "--operatingsystem") {
+        println!("Coming soon!");
         return;
     }
 
