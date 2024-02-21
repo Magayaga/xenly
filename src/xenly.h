@@ -77,10 +77,5 @@ void execute_object(const char* name, const char* properties);
 void execute_array(const char* name, int size);
 void execute_set(const char* array_name, int index, double value);
 double execute_get(const char* array_name, int index);
-void print_version();
-void print_dumpversion();
-void print_help();
-void print_author();
-
 
 #endif // XENLY_H

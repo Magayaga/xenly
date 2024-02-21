@@ -5,7 +5,7 @@
 import os
 
 # Compile xenly.c using gcc
-compile_command = " src/xenly.c -o xenly -lm"
+compile_command = "gcc src/xenly.c src/print_info.c -o xenly -lm"
 compile_status = os.system(compile_command)
 
 # Check if compilation was successful

@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <math.h>
 #include "xenly.h"
+#include "print_info.h"
 // #include "goxenly.h"
 
 #define MATH_PI 3.14159265358979323846
@@ -21,9 +22,6 @@
 #define MATH_GOLDEN_RATIO 1.61803398874989484820
 #define MATH_SILVER_RATIO 2.41421356237309504880
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
-
-#define XENLY_RELEASEDATE "February 29, 2024"
-#define XENLY_VERSION "0.1.0-preview4"
 
 Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
@@ -713,42 +711,6 @@ double execute_get(const char* array_name, int index) {
     return 0.0;
 }
 
-// Print version
-void print_version() {
-    printf("Xenly %s (Pre-alpha release)\n", XENLY_VERSION);
-    printf("Copyright (c) 2023-2024 Cyril John Magayaga\n");
-}
-
-// Print dumpversion
-void print_dumpversion() {
-    printf("%s\n", XENLY_VERSION);
-}
-
-// Print dumpreleasedate
-void print_dumpreleasedate() {
-    printf("%s\n", XENLY_RELEASEDATE);
-}
-
-// Print help
-void print_help() {
-    printf("Usage: xenly [input file]\n");
-    printf("Options:\n");
-    printf("  -h, --help                   Display this information.\n");
-    printf("  -v, --version                Display compiler version information.\n");
-    printf("  -dv, --dumpversion           Display the version of the compiler.\n");
-    printf("  -drd, --dumpreleasedate      Display the release date of the compiler.\n");
-    printf("  -dm, --dumpmachine           Display the compiler's target processor.\n");
-    printf("  -os, --operatingsystem       Display the operating system.\n");
-    printf("  --author                     Display the author information.\n");
-    printf("For bug reporting instructions, please see:\n");
-    printf("<https://github.com/magayaga/xenly>\n");
-}
-
-// Print author
-void print_author() {
-    printf("Cyril John Magayaga is the original author of Xenly programming language.\n");
-}
-
 // Main function
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -766,37 +728,7 @@ int main(int argc, char* argv[]) {
     }
 
     else if (argc == 2 && (strcmp(argv[1], "--operatingsystem" ) == 0 || strcmp(argv[1], "-os") == 0)) {
-        // Print the compiler's operating system
-        #if defined(_WIN32)
-            printf("Windows\n");
-        #elif defined(__linux__)
-            printf("Linux\n");
-        #elif defined(__unix__) || defined(__unix)
-            printf("Unix\n");
-        #elif defined(__APPLE__) || defined(__MACH__)
-            #include "TargetConditionals.h"
-            #if TARGET_OS_MAC
-                printf("macOS\n");
-            #elif TARGET_OS_IOS
-                printf("iOS\n");
-            #elif TARGET_OS_TV
-                printf("tvOS\n");
-            #elif TARGET_OS_WATCH
-                printf("watchOS\n");
-            #endif
-        #elif defined(__ANDROID__)
-            printf("Android\n");
-        #elif defined(__FreeBSD__)
-            printf("FreeBSD\n");
-        #elif defined(__DragonFly__)
-            printf("DragonFlyBSD\n");
-        #elif defined(__OpenBSD__)
-            printf("OpenBSD\n");
-        #elif defined(__NetBSD__)
-            printf("NetBSD\n");
-        #else
-            printf("Unknown/Segmentation fault\n");
-        #endif
+        print_operatingsystem();
         return 0;
     }
 

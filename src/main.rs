@@ -104,6 +104,21 @@ fn main() {
         return;
     }
 
+    if args.len() == 2 && args[1] == "--help" {
+        println!("Usage: xenly [input file]");
+        println!("Options:");
+        println!("  -h, --help                   Display this information.");
+        println!("  -v, --version                Display compiler version information.");
+        println!("  -dv, --dumpversion           Display the version of the compiler.");
+        println!("  -drd, --dumpreleasedate      Display the release date of the compiler.");
+        println!("  -dm, --dumpmachine           Display the compiler's target processor.");
+        println!("  -os, --operatingsystem       Display the operating system.");
+        println!("  --author                     Display the author information.");
+        println!("For bug reporting instructions, please see:");
+        println!("<https://github.com/magayaga/xenly>");
+        return;
+    }
+
     // Get the filename from the arguments
     let filename = &args[1];
 
