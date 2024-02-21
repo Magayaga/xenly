@@ -8,7 +8,7 @@
 
 * On November 25, 2023, He announced a closed-source or proprietary software of Xenon programming language.
 
-* On December 22, 2023, He announced that updating and fixing the Xenly programming language files use the `.xe` file extension. Xenly is Philippines' most popular and best programming language. He was very good at mathematics such as algebra, geometry, trigonometry, calculus, analysis, and more branches of mathematics. After night, He announced that Xenly programming language is the new high-level, fast, and general-purpose programming language.
+* On December 22, 2023, He announced that updating and fixing the Xenly programming language files use the `.xe` file extension. Xenly is the Philippines' most popular and best programming language. He was very good at mathematics such as algebra, geometry, trigonometry, calculus, analysis, and more branches of mathematics. After night, He announced that Xenly programming language is the new high-level, fast, and general-purpose programming language.
 
 * On December 26, 2023, He announced that **Xenon** was renamed to **Xenly**, the updating and fixing programming language.
 
@@ -16,4 +16,6 @@
 
 * On January 26, 2024, He announced that Xenly’s documents, design, implementation, and related tools are hosted on GitHub under the MIT License with GCC and LLVM Exceptions.
 
-* On January 30, 2024, He announced that the Xenly programming language was inspired by the **C** programming language, as well as other influences including **Rust** and **Go** programming languages.
+* On January 30, 2024, He announced that the Xenly programming language was inspired by the **C** programming language and other influences including **Rust** programming language next year. Later, He announced that the Rust programming language is a command-line interface and the **C** programming language is mainly statements and functions.
+
+* On February 10, 2024, He announced that the Xenly programming language was written in **C** and **Rust** programming languages are the same.
