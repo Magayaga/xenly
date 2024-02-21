@@ -1,3 +1,10 @@
+/*
+ * XENLY - high-level and general-purpose programming language
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in C programming language.
+ *
+ */
 #include <stdio.h>
 #include "print_info.h"
 
@@ -10,12 +17,12 @@ void print_version() {
     printf("Copyright (c) 2023-2024 Cyril John Magayaga\n");
 }
 
-// Print dumpversion
+// Print dump version
 void print_dumpversion() {
     printf("%s\n", XENLY_VERSION);
 }
 
-// Print dumpreleasedate
+// Print dump release date
 void print_dumpreleasedate() {
     printf("%s\n", XENLY_RELEASEDATE);
 }
@@ -45,7 +52,7 @@ void print_operatingsystem() {
     // Print the compiler's operating system
     #if defined(_WIN32)
         printf("Windows\n");
-   #elif defined(__linux__)
+    #elif defined(__linux__)
         printf("Linux\n");
     #elif defined(__unix__) || defined(__unix)
         printf("Unix\n");

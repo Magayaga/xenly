@@ -76,8 +76,10 @@ extern "C" {
 
 extern __declspec(dllexport) void print_version();
 extern __declspec(dllexport) void print_dumpversion();
+extern __declspec(dllexport) void print_dumpreleasedate();
 extern __declspec(dllexport) void print_help();
 extern __declspec(dllexport) void print_author();
+extern __declspec(dllexport) void print_operatingsystem();
 
 #ifdef __cplusplus
 }
