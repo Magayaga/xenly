@@ -142,7 +142,7 @@ fn main() {
 
     if args.len() == 2 && args[1] == "--author" {
         println!("Copyright (c) 2023-2024 Cyril John Magayaga");
-        return 0;
+        return;
     }
 
     if args.len() == 2 && (args[1] == "-os" || args[1] == "--operatingsystem") {
