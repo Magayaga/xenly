@@ -93,6 +93,30 @@ fn parse_program(input: &str) -> IResult<&str, Vec<Statement>> {
     let (input, _) = multispace0(input)?;
     Ok((input, statements))
 }
+
+fn print_operatingsystem() {
+    if cfg!(target_os = "windows") {
+        println!("Windows");
+    } else if cfg!(target_os = "linux") {
+        println!("Linux");
+    } else if cfg!(target_os = "macos") {
+        println!("macOS");
+    } else if cfg!(target_os = "ios") {
+        println!("iOS");
+    } else if cfg!(target_os = "android") {
+        println!("Android");
+    } else if cfg!(target_os = "freebsd") {
+        println!("FreeBSD");
+    } else if cfg!(target_os = "dragonfly") {
+        println!("DragonFlyBSD");
+    } else if cfg!(target_os = "openbsd") {
+        println!("OpenBSD");
+    } else if cfg!(target_os = "netbsd") {
+        println!("NetBSD");
+    } else {
+        println!("Unknown/Segmentation fault");
+    }
+}
  
 fn main() {
     // Get the command-line arguments
@@ -146,7 +170,7 @@ fn main() {
     }
 
     if args.len() == 2 && (args[1] == "-os" || args[1] == "--operatingsystem") {
-        println!("Coming soon!");
+        print_operatingsystem();
         return;
     }
 
