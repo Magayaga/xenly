@@ -744,8 +744,8 @@ int main(int argc, char* argv[]) {
     }
 
     else if (argc == 2 && (strcmp(argv[1], "--dumpreleasedate") == 0 || strcmp(argv[1], "-drd") == 0)) {
-	print_dumpreleasedate();
-	return 0;
+        print_dumpreleasedate();
+        return 0;
     }
 
     else if (strcmp(argv[1], "--author") == 0) {
