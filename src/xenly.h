@@ -20,6 +20,7 @@
 #define MAX_OBJECTS 1000
 #define MAX_VALUE_LENGTH 256
 #define MAX_ARRAYS 100
+#define MAX_NUM_ARGS 10
 
 typedef struct {
     char name[MAX_TOKEN_SIZE];
@@ -61,7 +62,7 @@ double execute_sin(const char* arg);
 double execute_cos(const char* arg);
 double execute_tan(const char* arg);
 double execute_gamma(const char* arg);
-double execute_max(const char* arg1, const char* arg2);
+double execute_max(const char* arg1, const char* arg2, ...);
 double execute_min(const char* arg1, const char* arg2);
 double execute_abs(const char* arg);
 double ffrt(double x);

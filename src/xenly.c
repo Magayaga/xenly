@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <ctype.h>
 #include <math.h>
@@ -293,7 +294,6 @@ double execute_pow(const char* arg) {
     return 0.0;
 }
 
-
 // Sin
 double execute_sin(const char* arg) {
     double result = evaluate_condition(arg);
@@ -319,10 +319,30 @@ double execute_gamma(const char* arg) {
 }
 
 // Max
-double execute_max(const char* arg1, const char* arg2) {
+double execute_max(const char* arg1, const char* arg2, ...) {
+    double max_value;
+    double current_value;
+    
+    // Evaluate first two arguments
     double x = evaluate_condition(arg1);
     double y = evaluate_condition(arg2);
-    return (x > y) ? x : y;
+    max_value = (x > y) ? x : y;
+
+    va_list args;
+    va_start(args, arg2); // Start after arg2
+    
+    // Iterate through the rest of the arguments
+    const char* arg;
+    while ((arg = va_arg(args, const char*)) != NULL) {
+        current_value = evaluate_condition(arg);
+        if (current_value > max_value) {
+            max_value = current_value;
+        }
+    }
+    
+    va_end(args);
+    
+    return max_value;
 }
 
 // Min
