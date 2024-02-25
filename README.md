@@ -59,12 +59,13 @@ Here is the Hyzero programming language that was initially written in Python pro
 
 The Xenly source code is organized as follows:
 
-|          Directory           |                    Contents                     |
-|:----------------------------:|:-----------------------------------------------:|
-| `doc/`                       | documentation for Xenly programming language    |
-| `docs/`                      | official website for Xenly programming language |
-| `examples/`                  | example code for Xenly programming language     |
-| `src/`                       | source for Xenly programming language           |
+|          Directory           |                           Contents                          |
+|:----------------------------:|:-----------------------------------------------------------:|
+| `assets/`                    | Types of files for the Xenly programming language           |
+| `doc/`                       | Documentation for the Xenly programming language            |
+| `docs/`                      | Official website for the Xenly programming language         |
+| `examples/`                  | Example code for the Xenly programming language             |
+| `src/`                       | Source for the Xenly programming language                   |
 
 ## Getting started
 
