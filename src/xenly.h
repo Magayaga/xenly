@@ -62,6 +62,8 @@ double execute_sin(const char* arg);
 double execute_cos(const char* arg);
 double execute_tan(const char* arg);
 double execute_gamma(const char* arg);
+double max(double x, double y);
+double min(double x, double y);
 double execute_max(const double* numbers, int count);
 double execute_min(const double* numbers, int count);
 double execute_abs(const char* arg);

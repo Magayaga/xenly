@@ -318,11 +318,21 @@ double execute_gamma(const char* arg) {
     return tgamma(result);
 }
 
+// Max
+double max(double x, double y) {
+    return (x > y) ? x : y;
+}
+
+// Min
+double min(double x, double y) {
+    return (x < y) ? x : y;
+}
+
 // Max function
 double execute_max(const double* numbers, int count) {
     double max_value = numbers[0];
     for (int i = 1; i < count; i++) {
-        max_value = fmax(max_value, numbers[i]);
+        max_value = max(max_value, numbers[i]);
     }
     return max_value;
 }
@@ -331,7 +341,7 @@ double execute_max(const double* numbers, int count) {
 double execute_min(const double* numbers, int count) {
     double min_value = numbers[0];
     for (int i = 1; i < count; i++) {
-        min_value = fmin(min_value, numbers[i]);
+        min_value = min(min_value, numbers[i]);
     }
     return min_value;
 }
