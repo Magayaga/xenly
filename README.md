@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/magayaga/xenly">
-    <img src=".github/logo/xenly.svg" width="100%" height="100%">
+    <img src="assets/xenly.svg" width="100%" height="100%">
   </a>
 </p>
 
@@ -18,7 +18,7 @@
 
 Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
 
-https://github.com/Magayaga/xenly/assets/93117076/dd924975-eea3-4bc6-8b0d-c322bc4092b3
+![Introduction to Xenly](assets/xenly_introduction.gif)
 
 ## Examples
 ### Hello, World! program
