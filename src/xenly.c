@@ -652,7 +652,9 @@ double evaluate_condition(const char* condition) {
             case '/':
                 if (right_value != 0) {
                     return left_value / right_value;
-                } else {
+                }
+                
+                else {
                     error("Division by zero");
                 }
             default:
@@ -727,7 +729,9 @@ void execute_set(const char* array_name, int index, double value) {
         if (strcmp(arrays[i].name, array_name) == 0) {
             if (index >= 0 && index < arrays[i].size) {
                 arrays[i].elements[index] = value;
-            } else {
+            }
+            
+            else {
                 error("Array index out of bounds");
             }
             return;
