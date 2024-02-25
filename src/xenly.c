@@ -40,9 +40,8 @@ bool evaluately_condition(const char* condition) {
 // Error
 void error(const char* message) {
     red();
-    printf("Error: ");
+    fprintf(stderr, "Error: %s\n", message);
     resetColor();
-    fprintf(stderr, "%s\n", message);
     exit(1);
 }
 
@@ -141,13 +140,13 @@ int parse_numeric_value(const char* value, double* result) {
 void execute_var(const char* name, const char* val) {
 
     if (num_variables >= MAX_VARIABLES) {
-        fprintf(stderr, "Error: maximum number of variables exceeded\n");
+        fprintf(stderr, "maximum number of variables exceeded\n");
         return;
     }
 
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
-            fprintf(stderr, "Error: variable already declared\n");
+            fprintf(stderr, "variable already declared\n");
             return;
         }
     }
@@ -234,9 +233,12 @@ void execute_for(FILE* input_file, const char* loop_variable, int start_value, i
             // Example: Assuming each line in the loop body contains an arithmetic operation
             int result;
             if (parse_and_execute_arithmetic_operation(line, &result)) {
+                // Result of operation
                 printf("Result of operation: %d\n", result);
-            } else {
-                printf("Error: Invalid operation\n");
+            }
+
+            else {
+                error("Invalid operation\n");
             }
         }
     }
@@ -261,11 +263,33 @@ void execute_int(const char* name, const char* value) {
     }
 }
 
+// Square root function
+double xe_sqrt(double x) {
+    if (x < 0) return -1; // Return error for negative numbers
+    if (x == 0 || x == 1) return x; // Return x for 0 and 1
+    double precision = 1.0e-7; // Define precision
+    double guess = x / 2.0; // Initial guess
+    while ((guess * guess - x) > precision || (x - guess * guess) > precision) {
+        guess = (guess + x / guess) / 2.0; // Newton's method
+    }
+    return guess;
+}
+
+// Cube root function
+double xe_cbrt(double x) {
+    double precision = 1.0e-7; // Define precision
+    double guess = x / 3.0; // Initial guess
+    while ((guess * guess * guess - x) > precision || (x - guess * guess * guess) > precision) {
+        guess = (2 * guess + x / (guess * guess)) / 3.0; // Newton's method
+    }
+    return guess;
+}
+
 // Square root
 double execute_sqrt(const char* arg) {
     double result = evaluate_condition(arg);
     if (result >= 0) {
-        return sqrt(result);
+        return xe_sqrt(result);
     }
 
     else {
@@ -283,7 +307,7 @@ double execute_cbrt(const char* arg) {
         return -1;
     }
     
-    return cbrt(result);
+    return xe_cbrt(result);
 }
 
 // Pow
@@ -639,7 +663,7 @@ double evaluate_condition(const char* condition) {
     else if (strncmp(condition, "sqrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
         double inner_result = evaluate_condition(condition + 5);
         if (inner_result >= 0) {
-            return sqrt(inner_result);
+            return xe_sqrt(inner_result);
         }
 
         else {
@@ -649,7 +673,7 @@ double evaluate_condition(const char* condition) {
 
     else if (strncmp(condition, "cbrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
         double inner_result = evaluate_condition(condition + 5);
-        return cbrt(inner_result);
+        return xe_cbrt(inner_result);
     }
     
     else {
@@ -929,7 +953,7 @@ int main(int argc, char* argv[]) {
         else if (strncmp(line, "sqrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
             double result = evaluate_condition(line + 5);
             if (result >= 0) {
-                printf("%lf\n", sqrt(result));
+                printf("%lf\n", xe_sqrt(result));
             }
 
             else {
@@ -940,7 +964,7 @@ int main(int argc, char* argv[]) {
         else if (strncmp(line, "cbrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
             double result = evaluate_condition(line + 5);
             if (result >= 0) {
-                printf("%lf\n", cbrt(result));
+                printf("%lf\n", xe_cbrt(result));
             }
             
             else {
