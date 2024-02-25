@@ -1,6 +1,6 @@
 @echo off
 
-set SOURCE_FILE=src\xenly.c src\print_info.c
+set SOURCE_FILE=src\xenly.c src\print_info.c src\color.c
 set OUTPUT_FILE=xenly.exe
 
 rem Check if GCC is installed

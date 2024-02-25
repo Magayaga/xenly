@@ -11,7 +11,3 @@ target/
 
 # files
 preinstall.py
-
-# waiting files
-src/*.c
-src/*.h

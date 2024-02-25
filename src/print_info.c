@@ -6,6 +6,7 @@
  *
  */
 #include <stdio.h>
+#include "color.h"
 #include "print_info.h"
 
 #define XENLY_RELEASEDATE "February 29, 2024"
@@ -30,7 +31,12 @@ void print_dumpreleasedate() {
 // Print help
 void print_help() {
     printf("Usage: xenly [input file]\n");
-    printf("Options:\n");
+    setBackgroundBlue();
+    white();
+    printf(" Options: ");
+    resetBackgroundColor();
+    resetColor();
+    printf("\n");
     printf("  -h, --help                   Display this information.\n");
     printf("  -v, --version                Display compiler version information.\n");
     printf("  -dv, --dumpversion           Display the version of the compiler.\n");
@@ -44,7 +50,13 @@ void print_help() {
 
 // Print author
 void print_author() {
-    printf("Copyright (c) 2023-2024 Cyril John Magayaga\n");
+    printf("Copyright (c) 2023-2024 ");
+    setBackgroundBlue();
+    white();
+    printf(" Cyril John Magayaga ");
+    resetBackgroundColor();
+    resetColor();
+    printf("\n");
 }
 
 // Print operating system

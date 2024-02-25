@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <math.h>
+#include "color.h"
 #include "xenly.h"
 #include "print_info.h"
 // #include "goxenly.h"
@@ -38,7 +39,10 @@ bool evaluately_condition(const char* condition) {
 
 // Error
 void error(const char* message) {
-    fprintf(stderr, "Error: %s\n", message);
+    red();
+    printf("Error: ");
+    resetColor();
+    fprintf(stderr, "%s\n", message);
     exit(1);
 }
 
