@@ -318,38 +318,22 @@ double execute_gamma(const char* arg) {
     return tgamma(result);
 }
 
-// Max
-double execute_max(const char* arg1, const char* arg2, ...) {
-    double max_value;
-    double current_value;
-    
-    // Evaluate first two arguments
-    double x = evaluate_condition(arg1);
-    double y = evaluate_condition(arg2);
-    max_value = (x > y) ? x : y;
-
-    va_list args;
-    va_start(args, arg2); // Start after arg2
-    
-    // Iterate through the rest of the arguments
-    const char* arg;
-    while ((arg = va_arg(args, const char*)) != NULL) {
-        current_value = evaluate_condition(arg);
-        if (current_value > max_value) {
-            max_value = current_value;
-        }
+// Max function
+double execute_max(const double* numbers, int count) {
+    double max_value = numbers[0];
+    for (int i = 1; i < count; i++) {
+        max_value = fmax(max_value, numbers[i]);
     }
-    
-    va_end(args);
-    
     return max_value;
 }
 
-// Min
-double execute_min(const char* arg1, const char* arg2) {
-    double x = evaluate_condition(arg1);
-    double y = evaluate_condition(arg2);
-    return (x < y) ? x : y;
+// Min function
+double execute_min(const double* numbers, int count) {
+    double min_value = numbers[0];
+    for (int i = 1; i < count; i++) {
+        min_value = fmin(min_value, numbers[i]);
+    }
+    return min_value;
 }
 
 // Abs
@@ -962,33 +946,27 @@ int main(int argc, char* argv[]) {
         }
 
         else if (strncmp(line, "max(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char arg1[MAX_TOKEN_SIZE];
-            char arg2[MAX_TOKEN_SIZE];
-
-            // Extract arguments from the line
-            if (sscanf(line + 4, "%[^,],%[^)]", arg1, arg2) == 2) {
-                double result = execute_max(arg1, arg2);
-                printf("%lf\n", result);
+            char *token = strtok(line + 4, ",");
+            int count = 0;
+            double numbers[100];
+            while (token != NULL) {
+                numbers[count++] = atof(token);
+                token = strtok(NULL, ",");
             }
-
-            else {
-                error("Invalid arguments for 'max'");
-            }
+            double result = execute_max(numbers, count);
+            printf("%lf\n", result);
         }
 
         else if (strncmp(line, "min(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char arg1[MAX_TOKEN_SIZE];
-            char arg2[MAX_TOKEN_SIZE];
-
-            // Extract arguments from the line
-            if (sscanf(line + 4, "%[^,],%[^)]", arg1, arg2) == 2) {
-                double result = execute_min(arg1, arg2);
-                printf("%lf\n", result);
+            char *token = strtok(line + 4, ",");
+            int count = 0;
+            double numbers[100];
+            while (token != NULL) {
+                numbers[count++] = atof(token);
+                token = strtok(NULL, ",");
             }
-
-            else {
-                error("Invalid arguments for 'min'");
-            }
+            double result = execute_min(numbers, count);
+            printf("%lf\n", result);
         }
 
         else if (strncmp(line, "abs(", 4) == 0 && line[strlen(line) - 1] == ')') {
