@@ -19,3 +19,5 @@
 * On January 30, 2024, He announced that the Xenly programming language was inspired by the **C** programming language and other influences including **Rust** programming language next year. Later, He announced that the Rust programming language is a command-line interface and the **C** programming language is mainly statements and functions.
 
 * On February 10, 2024, He announced that the Xenly programming language was written in **C** and **Rust** programming languages are the same.
+
+* On February 24, 2024, He wrote “I think beta version of the Xenly programming language next year”. Xenly programming language was worked on GCC compiler but not TinyCC and Clang compilers are all fixing warnings.
