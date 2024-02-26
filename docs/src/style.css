@@ -2,7 +2,7 @@
     padding-right: 8px;
 }
 
-a, p, h1 {
+a, p, h1, .time-font {
     font-family: "SF Pro Display";
     font-weight: 200;
 }
