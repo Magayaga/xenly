@@ -80,6 +80,7 @@ extern __declspec(dllexport) void print_dumpreleasedate();
 extern __declspec(dllexport) void print_help();
 extern __declspec(dllexport) void print_author();
 extern __declspec(dllexport) void print_operatingsystem();
+extern __declspec(dllexport) void execute_print(GoString arg);
 
 #ifdef __cplusplus
 }

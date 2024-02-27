@@ -9,7 +9,16 @@ package main
 
 import "C"
 import "fmt"
+import "strconv"
 import "runtime"
+
+type Variable struct {
+    name  string
+    value string
+}
+
+var variables []Variable
+var numVariables int // assuming num_variables is a global variable in C
 
 //export print_version
 func print_version() {
@@ -72,8 +81,27 @@ func print_operatingsystem() {
 }
 
 //export execute_print
-func execute_print() {
-    // coming soon!
+func execute_print(arg string) {
+    if arg[0] == '"' && arg[len(arg)-1] == '"' {
+        fmt.Println(arg[1 : len(arg)-1])
+    } else {
+        isVariable := false
+        for _, v := range variables {
+            if v.name == arg {
+                fmt.Println(v.value)
+                isVariable = true
+                break
+            }
+        }
+        if !isVariable {
+            result, err := strconv.Atoi(arg) // Assuming evaluate_condition returns an integer-like value
+            if err != nil {
+                fmt.Println("Error evaluating condition:", err)
+                return
+            }
+            fmt.Println(result)
+        }
+    }
 }
 
 func main() {}
