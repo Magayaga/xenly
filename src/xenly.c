@@ -136,6 +136,43 @@ int parse_numeric_value(const char* value, double* result) {
     return 1;  // Conversion successful
 }
 
+// Bool
+void execute_bool(const char* name, bool value) {
+    if (num_variables >= MAX_VARIABLES) {
+        error("Maximum number of variables exceeded");
+        return;
+    }
+
+    for (int i = 0; i < num_variables; i++) {
+        if (strcmp(variables[i].name, name) == 0) {
+            error("Variable already declared");
+            return;
+        }
+    }
+
+    strcpy(variables[num_variables].name, name);
+
+    // Store boolean value as string "true" or "false"
+    strcpy(variables[num_variables].value, value ? "true" : "false");
+
+    num_variables++;
+}
+
+bool evaluate_bool(const char* value) {
+    if (strcmp(value, "true") == 0) {
+        return true;
+    }
+    
+    else if (strcmp(value, "false") == 0) {
+        return false;
+    }
+    
+    else {
+        error("Invalid boolean value");
+        return false; // Return false by default in case of error
+    }
+}
+
 // Var
 void execute_var(const char* name, const char* val) {
 
@@ -922,6 +959,18 @@ int main(int argc, char* argv[]) {
             }
 
             execute_var(name, value);
+        }
+
+        else if (strncmp(line, "bool", 4) == 0) {
+            char name[MAX_TOKEN_SIZE];
+            char value[MAX_TOKEN_SIZE];
+            if (sscanf(line, "bool %s = %[^\n]", name, value) != 2) {
+                error("Invalid 'bool' line");
+            }
+            
+            // Parse boolean value and store the variable
+            bool bool_value = evaluate_bool(value);
+            execute_bool(name, bool_value);
         }
 
         else if (strncmp(line, "int", 3) == 0) {
