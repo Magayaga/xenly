@@ -8,6 +8,7 @@
 
 # folders
 target/
+xenly_project/
 
 # files
 preinstall.py

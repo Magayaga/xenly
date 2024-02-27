@@ -26,4 +26,7 @@ void print_author();
 // Print operating system
 void print_operatingsystem();
 
+// Project
+void initialize_project();
+
 #endif

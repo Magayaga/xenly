@@ -831,6 +831,11 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    else if (argc == 2 && (strcmp(argv[1], "--init") == 0)) {
+        initialize_project();
+        return 0;
+    }
+
     else if (strcmp(argv[1], "--author") == 0) {
         print_author();
         return 0;
