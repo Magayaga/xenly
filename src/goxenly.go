@@ -71,4 +71,9 @@ func print_operatingsystem() {
     }
 }
 
+//export execute_print
+func execute_print() {
+    // coming soon!
+}
+
 func main() {}

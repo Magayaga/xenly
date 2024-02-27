@@ -97,23 +97,41 @@ fn parse_program(input: &str) -> IResult<&str, Vec<Statement>> {
 fn print_operatingsystem() {
     if cfg!(target_os = "windows") {
         println!("Windows");
-    } else if cfg!(target_os = "linux") {
+    }
+    
+    else if cfg!(target_os = "linux") {
         println!("Linux");
-    } else if cfg!(target_os = "macos") {
+    }
+    
+    else if cfg!(target_os = "macos") {
         println!("macOS");
-    } else if cfg!(target_os = "ios") {
+    }
+    
+    else if cfg!(target_os = "ios") {
         println!("iOS");
-    } else if cfg!(target_os = "android") {
+    }
+    
+    else if cfg!(target_os = "android") {
         println!("Android");
-    } else if cfg!(target_os = "freebsd") {
+    }
+    
+    else if cfg!(target_os = "freebsd") {
         println!("FreeBSD");
-    } else if cfg!(target_os = "dragonfly") {
+    }
+    
+    else if cfg!(target_os = "dragonfly") {
         println!("DragonFlyBSD");
-    } else if cfg!(target_os = "openbsd") {
+    }
+    
+    else if cfg!(target_os = "openbsd") {
         println!("OpenBSD");
-    } else if cfg!(target_os = "netbsd") {
+    }
+    
+    else if cfg!(target_os = "netbsd") {
         println!("NetBSD");
-    } else {
+    }
+    
+    else {
         println!("Unknown/Segmentation fault");
     }
 }

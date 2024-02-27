@@ -15,7 +15,13 @@
 // Print version
 void print_version() {
     printf("Xenly %s (Pre-alpha release)\n", XENLY_VERSION);
-    printf("Copyright (c) 2023-2024 Cyril John Magayaga\n");
+    printf("Copyright (c) 2023-2024 ");
+    setBackgroundBlue();
+    white();
+    printf(" Cyril John Magayaga ");
+    resetBackgroundColor();
+    resetColor();
+    printf("\n");
 }
 
 // Print dump version

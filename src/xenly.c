@@ -949,7 +949,9 @@ int main(int argc, char* argv[]) {
                 char* binary_result = convert_decimal_to_binary(decimal_argument);
                 printf("%s\n", binary_result);
                 free(binary_result); // Remember to free allocated memory
-            } else {
+            }
+            
+            else {
                 error("Invalid argument for convert_decimal");
             }
         }

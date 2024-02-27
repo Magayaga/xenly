@@ -1,4 +1,2 @@
-var myBool = true
-print(myBool)
-var anotherBool = false
-print(anotherBool)
+bool a = true
+bool b = false
