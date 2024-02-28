@@ -156,6 +156,7 @@ fn main() {
         println!("  -dm, --dumpmachine           Display the compiler's target processor.");
         println!("  -os, --operatingsystem       Display the operating system.");
         println!("  --author                     Display the author information.");
+        println!("  --init                       Create a new xenly package.");
         println!("For bug reporting instructions, please see:");
         println!("<https://github.com/magayaga/xenly>");
         return;
@@ -184,6 +185,11 @@ fn main() {
 
     if args.len() == 2 && args[1] == "--author" {
         println!("Copyright (c) 2023-2024 Cyril John Magayaga");
+        return;
+    }
+
+    if args.len() == 2 && args[1] == "--init" {
+        println!("Coming soon!");
         return;
     }
 

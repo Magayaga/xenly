@@ -51,6 +51,7 @@ void print_help() {
     printf("  -dm, --dumpmachine           Display the compiler's target processor.\n");
     printf("  -os, --operatingsystem       Display the operating system.\n");
     printf("  --author                     Display the author information.\n");
+    printf("  --init                       Create a new xenly package.\n");
     printf("For bug reporting instructions, please see:\n");
     printf("<https://github.com/magayaga/xenly>\n");
 }
