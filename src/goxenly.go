@@ -12,6 +12,7 @@ import "fmt"
 // import "math"
 // import "strings"
 // import "strconv"
+import "os"
 import "runtime"
 // import "unicode"
 
@@ -81,6 +82,41 @@ func print_operatingsystem() {
     default:
         fmt.Println("Unknown")
     }
+}
+
+//export initialize_project
+func initialize_project() {
+    // Create a new folder for the project
+    err := os.Mkdir("xenly_project", 0755)
+    if err != nil {
+        fmt.Println("Unable to create project folder:", err)
+        return
+    }
+
+    // Change directory to the newly created folder
+    err = os.Chdir("xenly_project")
+    if err != nil {
+        fmt.Println("Unable to change directory:", err)
+        return
+    }
+
+    // Create a new Xenly source file
+    sourceFile, err := os.Create("main.xe")
+    if err != nil {
+        fmt.Println("Unable to create source file:", err)
+        return
+    }
+    defer sourceFile.Close()
+
+    // Write default "hello world" program to the source file
+    _, err = sourceFile.WriteString("print(\"Hello, World!\")\nprint(2*9-6/3*5)\n")
+    if err != nil {
+        fmt.Println("Unable to write to source file:", err)
+        return
+    }
+
+    // Inform the user that the project has been initialized
+    fmt.Println("New Xenly project initialized in 'xenly project' folder.")
 }
 
 /*
