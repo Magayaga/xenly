@@ -15,37 +15,6 @@
 #include <ctype.h>
 #include <math.h>
 
-#define MAX_TOKEN_SIZE 1000
-#define MAX_VARIABLES 1000
-#define MAX_OBJECTS 1000
-#define MAX_VALUE_LENGTH 256
-#define MAX_ARRAYS 100
-#define MAX_NUM_ARGS 10
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    char value[MAX_TOKEN_SIZE];
-} Variable;
-
-Variable variables[MAX_VARIABLES];
-int num_variables = 0;
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    int type; // 0 for variable, 1 for object, 2 for array
-    char value[MAX_TOKEN_SIZE];
-} Data;
-
-Data data_storage[MAX_VARIABLES + MAX_OBJECTS + MAX_ARRAYS];
-int num_data = 0;
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    int type; // 0 for variable, 1 for object, 2 for array
-    int size;
-    double* elements;
-} Array;
-
 bool evaluately_condition(const char* condition);
 void error(const char* message);
 void execute_comment(const char* comment);
