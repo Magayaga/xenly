@@ -10,7 +10,7 @@
 SRC_DIR="src"
 
 # Output directory for the shared library
-OUT_DIR="build"
+OUT_DIR="src"
 
 # Name of the shared library
 LIB_NAME="goxenly.dll"
