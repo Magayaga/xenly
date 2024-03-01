@@ -6,6 +6,7 @@
  *
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include "color.h"
 #include "print_info.h"
