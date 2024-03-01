@@ -155,26 +155,26 @@ fn main() {
         println!("  -drd, --dumpreleasedate      Display the release date of the compiler.");
         println!("  -dm, --dumpmachine           Display the compiler's target processor.");
         println!("  -os, --operatingsystem       Display the operating system.");
-        println!("  --init                       Create a new xenly package.");
         println!("  --author                     Display the author information.");
+        println!("  --init                       Create a new xenly package.");
         println!("For bug reporting instructions, please see:");
         println!("<https://github.com/magayaga/xenly>");
         return;
     }
 
     if args.len() == 2 && (args[1] == "-v" || args[1] == "--version") {
-        println!("Xenly 0.1.0-preview4 (Pre-alpha release)");
+        println!("Xenly 0.1.0-preview5 (Pre-alpha release)");
         println!("Copyright (c) 2023-2024 Cyril John Magayaga");
         return;
     }
 
     if args.len() == 2 && (args[1] == "-dv" || args[1] == "--dumpversion") {
-        println!("0.1.0-preview4");
+        println!("0.1.0-preview5");
         return;
     }
 
     if args.len() == 2 && (args[1] == "-drd" || args[1] == "--dumpreleasedate") {
-        println!("February 29, 2024");
+        println!("March 30, 2024");
         return;
     }
 

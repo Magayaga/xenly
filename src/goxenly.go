@@ -26,18 +26,18 @@ var numVariables int // assuming num_variables is a global variable in C
 
 //export print_version
 func print_version() {
-    fmt.Println("Xenly 0.1.0-preview4 (Pre-alpha release)")
+    fmt.Println("Xenly 0.1.0-preview5 (Pre-alpha release)")
     fmt.Println("Copyright (c) 2023-2024 Cyril John Magayaga")
 }
 
 //export print_dumpversion
 func print_dumpversion() {
-    fmt.Println("0.1.0-preview4")
+    fmt.Println("0.1.0-preview5")
 }
 
 //export print_dumpreleasedate
 func print_dumpreleasedate() {
-    fmt.Println("February 29, 2024")
+    fmt.Println("March 30, 2024")
 }
 
 //export print_help
@@ -51,6 +51,7 @@ func print_help() {
     fmt.Println("  -os, --operatingsystem       Display the operating system.")
     fmt.Println("  -p, --path                   Display the path to the Xenly compiler executable.")
     fmt.Println("  --author                     Display the author information.")
+    fmt.Println("  --init                       Create a new xenly package.")
     fmt.Println("\nFor bug reporting instructions, please see:")
     fmt.Println("<https://github.com/magayaga/xenly>")
 }

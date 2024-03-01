@@ -10,8 +10,8 @@
 #include "color.h"
 #include "print_info.h"
 
-#define XENLY_RELEASEDATE "February 29, 2024"
-#define XENLY_VERSION "0.1.0-preview4"
+#define XENLY_RELEASEDATE "March 30, 2024"
+#define XENLY_VERSION "0.1.0-preview5"
 
 // Print version
 void print_version() {
