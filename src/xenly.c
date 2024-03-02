@@ -342,24 +342,34 @@ void execute_int(const char* name, const char* value) {
 
 // Square root function
 double xe_sqrt(double x) {
-    if (x >= 0) {
-        return pow(x, 1.0 / 2);
+    if (x < 0) return -1; // Return error for negative numbers
+    if (x == 0 || x == 1) return x; // Return x for 0 and 1
+    double precision = 1.0e-7; // Define precision
+    double guess = x / 2.0; // Initial guess
+    while ((guess * guess - x) > precision || (x - guess * guess) > precision) {
+        guess = (guess + x / guess) / 2.0; // Newton's method
     }
-    
-    else {
-        error("Square root of a negative number is not supported");
-        return 0.0; // You can choose to return a default value here
-    }
+    return guess;
 }
 
 // Cube root function
 double xe_cbrt(double x) {
+    double precision = 1.0e-7; // Define precision
+    double guess = x / 3.0; // Initial guess
+    while ((guess * guess * guess - x) > precision || (x - guess * guess * guess) > precision) {
+        guess = (2 * guess + x / (guess * guess)) / 3.0; // Newton's method
+    }
+    return guess;
+}
+
+// Fifth root function
+double ffrt(double x) {
     if (x >= 0) {
-        return pow(x, 1.0 / 3);
+        return pow(x, 1.0 / 5);
     }
     
     else {
-        error("Cube root of a negative number is not supported");
+        error("Fifth root of a negative number is not supported");
         return 0.0; // You can choose to return a default value here
     }
 }
@@ -462,16 +472,6 @@ double xe_abs(double x) {
 double execute_abs(const char* arg) {
     double x = atoi(arg);
     return xe_abs(x);
-}
-
-// Fifth root
-double ffrt(double x) {
-    if (x >= 0) {
-        return pow(x, 1.0 / 5);
-    } else {
-        error("Fifth root of a negative number is not supported");
-        return 0.0; // You can choose to return a default value here
-    }
 }
 
 // Factorial function
