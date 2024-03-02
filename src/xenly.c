@@ -708,16 +708,22 @@ double evaluate_condition(const char* condition) {
         switch (operator) {
             case '<':
                 return left_value < right_value;
+            
             case '>':
                 return left_value > right_value;
+            
             case '=':
                 return left_value == right_value;
+            
             case '+':
                 return left_value + right_value;
+            
             case '-':
                 return left_value - right_value;
+            
             case '*':
                 return left_value * right_value;
+            
             case '/':
                 if (right_value != 0) {
                     return left_value / right_value;
@@ -726,6 +732,7 @@ double evaluate_condition(const char* condition) {
                 else {
                     error("Division by zero");
                 }
+            
             default:
                 error("Invalid operator in condition");
         }
