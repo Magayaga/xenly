@@ -444,9 +444,14 @@ double execute_min(const double* numbers, int count) {
 }
 
 // Abs
+double xe_abs(double x) {
+    return x < 0 ? -x : x;
+}
+
+// Abs function
 double execute_abs(const char* arg) {
     double x = atoi(arg);
-    return abs(x);
+    return xe_abs(x);
 }
 
 // Fifth root
@@ -630,6 +635,9 @@ double evaluate_arithmetic_expression(const char* expression) {
 
 // Evaluate condition
 double evaluate_condition(const char* condition) {
+    int left_value, right_value;
+    char operator;
+
     if (strcmp(condition, "true") == 0) {
         return 1.0;
     }
@@ -701,10 +709,7 @@ double evaluate_condition(const char* condition) {
         return evaluate_condition(expression);
     }
 
-    int left_value, right_value;
-    char operator;
-
-    if (sscanf(condition, "%d %c %d", &left_value, &operator, &right_value) == 3) {
+    else if (sscanf(condition, "%d %c %d", &left_value, &operator, &right_value) == 3) {
         switch (operator) {
             case '<':
                 return left_value < right_value;
@@ -732,6 +737,7 @@ double evaluate_condition(const char* condition) {
                 else {
                     error("Division by zero");
                 }
+                break;
             
             default:
                 error("Invalid operator in condition");
