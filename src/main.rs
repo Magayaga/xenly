@@ -151,12 +151,12 @@ fn main() {
         println!("Options:");
         println!("  -h, --help                   Display this information.");
         println!("  -v, --version                Display compiler version information.");
-        println!("  -dv, --dumpversion           Display the version of the compiler.");
-        println!("  -drd, --dumpreleasedate      Display the release date of the compiler.");
         println!("  -dm, --dumpmachine           Display the compiler's target processor.");
+        println!("  -drd, --dumpreleasedate      Display the release date of the compiler.");
+        println!("  -dv, --dumpversion           Display the version of the compiler.");
         println!("  -os, --operatingsystem       Display the operating system.");
         println!("  --author                     Display the author information.");
-        println!("  --init                       Create a new xenly package.");
+        println!("  --init                       Create a new xenly project.");
         println!("For bug reporting instructions, please see:");
         println!("<https://github.com/magayaga/xenly>");
         return;

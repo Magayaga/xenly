@@ -47,12 +47,12 @@ void print_help() {
     printf("\n");
     printf("  -h, --help                   Display this information.\n");
     printf("  -v, --version                Display compiler version information.\n");
-    printf("  -dv, --dumpversion           Display the version of the compiler.\n");
-    printf("  -drd, --dumpreleasedate      Display the release date of the compiler.\n");
     printf("  -dm, --dumpmachine           Display the compiler's target processor.\n");
+    printf("  -drd, --dumpreleasedate      Display the release date of the compiler.\n");
+    printf("  -dv, --dumpversion           Display the version of the compiler.\n");
     printf("  -os, --operatingsystem       Display the operating system.\n");
     printf("  --author                     Display the author information.\n");
-    printf("  --init                       Create a new xenly package.\n");
+    printf("  --init                       Create a new xenly project.\n");
     printf("For bug reporting instructions, please see:\n");
     printf("<https://github.com/magayaga/xenly>\n");
 }

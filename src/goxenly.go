@@ -44,15 +44,15 @@ func print_dumpreleasedate() {
 func print_help() {
     fmt.Println("Usage: xenly [input file]")
     fmt.Println("Options:")
-    fmt.Println("  -h, --help                   Display this information.")
-    fmt.Println("  -v, --version                Display compiler version information.")
-    fmt.Println("  -dv, --dumpversion           Display the version of the compiler.")
-    fmt.Println("  -dm, --dumpmachine           Display the compiler's target processor.")
-    fmt.Println("  -os, --operatingsystem       Display the operating system.")
-    fmt.Println("  -p, --path                   Display the path to the Xenly compiler executable.")
-    fmt.Println("  --author                     Display the author information.")
-    fmt.Println("  --init                       Create a new xenly package.")
-    fmt.Println("\nFor bug reporting instructions, please see:")
+    fmt.Println("  -h, --help                   Display this information.");
+    fmt.Println("  -v, --version                Display compiler version information.");
+    fmt.Println("  -dm, --dumpmachine           Display the compiler's target processor.");
+    fmt.Println("  -drd, --dumpreleasedate      Display the release date of the compiler.");
+    fmt.Println("  -dv, --dumpversion           Display the version of the compiler.");
+    fmt.Println("  -os, --operatingsystem       Display the operating system.");
+    fmt.Println("  --author                     Display the author information.");
+    fmt.Println("  --init                       Create a new xenly project.");
+    fmt.Println("For bug reporting instructions, please see:")
     fmt.Println("<https://github.com/magayaga/xenly>")
 }
 
@@ -110,7 +110,7 @@ func initialize_project() {
     defer sourceFile.Close()
 
     // Write default "hello world" program to the source file
-    _, err = sourceFile.WriteString("print(\"Hello, World!\")\nprint(2*9-6/3*5)\n")
+    _, err = sourceFile.WriteString("print(\"Hello, World!\")print(2*9-6/3*5)")
     if err != nil {
         fmt.Println("Unable to write to source file:", err)
         return
