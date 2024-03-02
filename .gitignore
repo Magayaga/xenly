@@ -5,7 +5,7 @@
 *.dll.lib
 *.pdb
 *.so
-*.a
+*.o
 
 # folders
 obj/
