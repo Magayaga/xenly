@@ -344,18 +344,21 @@ void execute_int(const char* name, const char* value) {
 double xe_sqrt(double x) {
     if (x >= 0) {
         return pow(x, 1.0 / 2);
-    } else {
+    }
+    
+    else {
         error("Square root of a negative number is not supported");
         return 0.0; // You can choose to return a default value here
     }
 }
 
 // Cube root function
-// Fifth root
 double xe_cbrt(double x) {
     if (x >= 0) {
         return pow(x, 1.0 / 3);
-    } else {
+    }
+    
+    else {
         error("Cube root of a negative number is not supported");
         return 0.0; // You can choose to return a default value here
     }
