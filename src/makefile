@@ -10,7 +10,8 @@ xenly: src/xenly.c
 test:
     # Add your test commands here
     # For example:
-    # ./xenly <input_file>
+    # ./xenly <input_file> or
+    # ./xenly -v
 
 clean:
 	rm -f xenly
