@@ -1,4 +1,4 @@
-name: Rust CI for Xenly programming language
+name: Rust CI for Xenly programming language (Linux)
 
 on:
   push:
