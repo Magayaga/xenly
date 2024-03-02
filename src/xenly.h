@@ -38,6 +38,7 @@ double max(double x, double y);
 double min(double x, double y);
 double execute_max(const double* numbers, int count);
 double execute_min(const double* numbers, int count);
+double xe_abs(double x);
 double execute_abs(const char* arg);
 double ffrt(double x);
 int factorial(int n);
