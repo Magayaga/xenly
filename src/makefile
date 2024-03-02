@@ -4,7 +4,7 @@
 # 
 # It is initially written in C programming language.
 #
-xenly: src/xenly.c
+xenly: xenly.c
 	cc xenly.c print_info.c color.c -o xenly -lm
 
 test:
