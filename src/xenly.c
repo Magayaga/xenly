@@ -96,8 +96,16 @@ void execute_print(const char* arg) {
     else if (strcmp(arg, "pi") == 0) {
         printf("%lf\n", MATH_PI);
     }
+
+    else if (strcmp(arg, "π") == 0) {
+        printf("%lf\n", MATH_PI);
+    }
     
     else if (strcmp(arg, "tau") == 0) {
+        printf("%lf\n", MATH_TAU);
+    }
+
+    else if (strcmp(arg, "τ") == 0) {
         printf("%lf\n", MATH_TAU);
     }
     
