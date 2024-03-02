@@ -8,7 +8,7 @@
 *.a
 
 # folders
-build/
+obj/
 target/
 xenly_project/
 
