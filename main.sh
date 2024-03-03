@@ -4,4 +4,4 @@
 # 
 # It is initially written in C programming language.
 #
-gcc sources/xenly.c -o xenly
+gcc src/xenly.c -o xenly
