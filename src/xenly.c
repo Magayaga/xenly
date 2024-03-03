@@ -80,6 +80,8 @@ void error(const char* message) {
 double evaluate_condition(const char* condition);
 double execute_sqrt(const char* arg);
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body);
+double evaluate_factor(const char** expression);
+double evaluate_term(const char** expression);
 double evaluate_arithmetic_expression(const char* expression);
 
 // Print
@@ -555,19 +557,19 @@ double evaluate_factor(const char** expression) {
     // Evaluate a factor in an arithmetic expression
     double result;
 
+    while (isspace(**expression)) {
+        (*expression)++; // Skip whitespace
+    }
+
     if (**expression == '(') {
         (*expression)++; // Move past the opening parenthesis
         result = evaluate_arithmetic_expression(*expression);
         if (**expression == ')') {
             (*expression)++; // Move past the closing parenthesis
-        }
-        
-        else {
+        } else {
             error("Mismatched parentheses");
         }
-    }
-    
-    else {
+    } else {
         result = atof(*expression);
         while (isdigit(**expression) || **expression == '.') {
             (*expression)++; // Move past digits and the decimal point
@@ -717,41 +719,6 @@ double evaluate_condition(const char* condition) {
         strncpy(expression, condition + 1, strlen(condition) - 2);
         expression[strlen(condition) - 2] = '\0';
         return evaluate_condition(expression);
-    }
-
-    else if (sscanf(condition, "%d %c %d", &left_value, &operator, &right_value) == 3) {
-        switch (operator) {
-            case '<':
-                return left_value < right_value;
-            
-            case '>':
-                return left_value > right_value;
-            
-            case '=':
-                return left_value == right_value;
-            
-            case '+':
-                return left_value + right_value;
-            
-            case '-':
-                return left_value - right_value;
-            
-            case '*':
-                return left_value * right_value;
-            
-            case '/':
-                if (right_value != 0) {
-                    return left_value / right_value;
-                }
-                
-                else {
-                    error("Division by zero");
-                }
-                break;
-            
-            default:
-                error("Invalid operator in condition");
-        }
     }
 
     else if (strncmp(condition, "sqrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
