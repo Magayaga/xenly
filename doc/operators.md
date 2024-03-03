@@ -8,10 +8,10 @@
 | `=`                   | assignment operator; used to specify default values for parameters |
 
 Upcoming:
-| Operators and Symbols | Description |
-|:---------------------:|:--------------:|
-| `>` | greater than |
-| `<` | less than | 
+| Operators and Symbols |   Description   |
+|:---------------------:|:---------------:|
+| `>`                   | greater than    |
+| `<`                   | less than       | 
 
 ## Copyright
 
