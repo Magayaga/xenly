@@ -290,20 +290,26 @@ int parse_and_execute_arithmetic_operation(const char* operation, int* result) {
 
 // For
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body) {
+    // Set loop variable outside the loop
+    char loop_variable_value[MAX_TOKEN_SIZE];
+    
     for (int i = start_value; i <= end_value; i++) {
-        // Set loop variable
-        char loop_variable_value[MAX_TOKEN_SIZE];
         snprintf(loop_variable_value, sizeof(loop_variable_value), "%d", i);
         execute_var(loop_variable, loop_variable_value);
 
         // Execute loop body
-        char line[MAX_TOKEN_SIZE + 10]; // Assuming the loop body can be up to MAX_TOKEN_SIZE characters
-        snprintf(line, sizeof(line), "%s", loop_body);
-        while (fgets(line, sizeof(line), input_file)) {
-            line[strcspn(line, "\n")] = '\0';
+        const char* line = loop_body;  // Point to the beginning of loop_body
+        while (*line != '\0') {  // Loop until the end of loop_body
+            char temp_line[MAX_TOKEN_SIZE + 10]; // Temporary buffer for line
+            size_t line_length = strcspn(line, "\n"); // Find the length of current line
+            strncpy(temp_line, line, line_length); // Copy the current line to temp_line
+            temp_line[line_length] = '\0'; // Null-terminate the string
+
+            // Move line pointer to the next line
+            line += line_length + 1;
 
             // End of the loop body
-            if (strncmp(line, "}", 1) == 0) {
+            if (strncmp(temp_line, "}", 1) == 0) {
                 break;
             }
 
@@ -311,11 +317,11 @@ void execute_for(FILE* input_file, const char* loop_variable, int start_value, i
             // Add relevant logic here
             // Example: Assuming each line in the loop body contains an arithmetic operation
             int result;
-            if (parse_and_execute_arithmetic_operation(line, &result)) {
+            if (parse_and_execute_arithmetic_operation(temp_line, &result)) {
                 // Result of operation
                 printf("Result of operation: %d\n", result);
             }
-
+            
             else {
                 error("Invalid operation\n");
             }
