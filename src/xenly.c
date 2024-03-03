@@ -86,7 +86,7 @@ double evaluate_arithmetic_expression(const char* expression);
 
 // Print
 void execute_print(const char* arg) {
-    if (arg[0] == '"' && arg[strlen(arg) - 1] == '"') {
+    if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
         printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
     }
     
