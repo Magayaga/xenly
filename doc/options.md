@@ -9,4 +9,4 @@
 * `-dv`, `--dumpversion` - This option provides more detailed version information about the program, possibly including additional metadata or build information beyond just the version number.
 * `-os`, `--operatingsystem` - This option displays information about the operating system environment in which the program is executing, assisting users in understanding the execution context of the program.
 * `--author` - When invoked, this option prints out information about the program's author(s) or creator(s), offering attribution and acknowledging the individuals responsible for its development.
-* `--init` - This option initiates a new project, suggesting that it might set up initial project files or directories, or perform other actions to kickstart a new project using the "xenly" program.
+* `--new-project` - This option initiates a new project, suggesting that it might set up initial project files or directories, or perform other actions to kickstart a new project using the "xenly" program.
