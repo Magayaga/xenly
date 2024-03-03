@@ -51,7 +51,7 @@ func print_help() {
     fmt.Println("  -dv, --dumpversion           Display the version of the compiler.");
     fmt.Println("  -os, --operatingsystem       Display the operating system.");
     fmt.Println("  --author                     Display the author information.");
-    fmt.Println("  --init                       Create a new xenly project.");
+    fmt.Println("  --new-project                Create a new xenly project.");
     fmt.Println("For bug reporting instructions, please see:")
     fmt.Println("<https://github.com/magayaga/xenly>")
 }

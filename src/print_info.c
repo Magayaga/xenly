@@ -52,9 +52,12 @@ void print_help() {
     printf("  -dv, --dumpversion           Display the version of the compiler.\n");
     printf("  -os, --operatingsystem       Display the operating system.\n");
     printf("  --author                     Display the author information.\n");
-    printf("  --init                       Create a new xenly project.\n");
+    printf("  --new-project                Create a new xenly project.\n");
     printf("For bug reporting instructions, please see:\n");
-    printf("<https://github.com/magayaga/xenly>\n");
+    blackAndOrange();
+    printf(" <https://github.com/magayaga/xenly> ");
+    resetColor();
+    printf("\n");
 }
 
 // Print author

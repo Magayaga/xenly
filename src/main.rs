@@ -8,6 +8,8 @@
 extern crate nom;
 use std::env;
 use std::fs;
+use std::io::Write;
+use std::path::Path;
 
 use nom::{
     branch::alt,
@@ -135,6 +137,39 @@ fn print_operatingsystem() {
         println!("Unknown/Segmentation fault");
     }
 }
+
+fn initialize_project() {
+    // Create a new folder for the project
+    if let Err(err) = fs::create_dir("xenly_project") {
+        eprintln!("Error creating directory: {}", err);
+        return;
+    }
+
+    // Change directory to the newly created folder
+    if let Err(err) = std::env::set_current_dir("xenly_project") {
+        eprintln!("Error changing directory: {}", err);
+        return;
+    }
+
+    // Create a new Xenly source file
+    let source_path = Path::new("main.xe");
+    let mut source_file = match fs::File::create(&source_path) {
+        Ok(file) => file,
+        Err(err) => {
+            eprintln!("Unable to create source file: {}", err);
+            return;
+        }
+    };
+
+    // Write default "hello world" program to the source file
+    if let Err(err) = writeln!(source_file, "print(\"Hello, World!\")\nprint(2*9-6/3*5)") {
+        eprintln!("Error writing to file: {}", err);
+        return;
+    }
+
+    // Inform the user that the project has been initialized
+    println!("New Xenly project initialized in 'xenly_project' folder.");
+}
  
 fn main() {
     // Get the command-line arguments
@@ -156,7 +191,7 @@ fn main() {
         println!("  -dv, --dumpversion           Display the version of the compiler.");
         println!("  -os, --operatingsystem       Display the operating system.");
         println!("  --author                     Display the author information.");
-        println!("  --init                       Create a new xenly project.");
+        println!("  --new-project                Create a new xenly project.");
         println!("For bug reporting instructions, please see:");
         println!("<https://github.com/magayaga/xenly>");
         return;
@@ -188,8 +223,8 @@ fn main() {
         return;
     }
 
-    if args.len() == 2 && args[1] == "--init" {
-        println!("Coming soon!");
+    if args.len() == 2 && args[1] == "--new-project" {
+        initialize_project();
         return;
     }
 
