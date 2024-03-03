@@ -27,7 +27,7 @@ test: $(TARGET)
 	# Add your test commands here
 	# For example:
 	# ./xenly <input_file> or
-        # ./xenly -v
+    # ./xenly -v
 
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
