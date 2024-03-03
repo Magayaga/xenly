@@ -653,8 +653,6 @@ double evaluate_arithmetic_expression(const char* expression) {
 
 // Evaluate condition
 double evaluate_condition(const char* condition) {
-    int left_value, right_value;
-    char operator;
 
     if (strcmp(condition, "true") == 0) {
         return 1.0;
