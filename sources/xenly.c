@@ -60,70 +60,29 @@ void execute_comment(const char* comment) {
     printf("// %s\n", comment);
 }
 
-double evaluate_condition(const char* condition);
-double execute_sqrt(const char* arg);
-
 void execute_print(const char* arg) {
-    if (arg[0] == '"' && arg[strlen(arg) - 1] == '"') {
-        printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
-    }
-    else if (strcmp(arg, "pi") == 0) {
-        printf("%lf\n", MATH_PI);
-    }
-
-    else if (strcmp(arg, "tau") == 0) {
-        printf("%lf\n", MATH_TAU);
-    }
-
-    else if (strcmp(arg, "e") == 0) {
-        printf("%lf\n", MATH_E);
-    }
-
-    else if (strcmp(arg, "goldenRatio") == 0) {
-        printf("%lf\n", MATH_GOLDEN_RATIO);
-    }
-
-    else if (strcmp(arg, "silverRatio") == 0) {
-        printf("%lf\n", MATH_SILVER_RATIO);
-    }
-
-    else if (strcmp(arg, "supergoldenRatio") == 0) {
-        printf("%lf\n", MATH_SUPERGOLDEN_RATIO);
-    }
-
-    else if (strncmp(arg, "sqrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
-        double result = evaluate_condition(arg + 5);
-        if (result >= 0) {
-            printf("%lf\n", sqrt(result));
-        }
-
-        else {
-            error("Square root of a negative number is not supported");
+    int is_variable = 0;
+    for (int i = 0; i < num_variables; i++) {
+        if (strcmp(variables[i].name, arg) == 0) {
+            printf("%s\n", variables[i].value);
+            is_variable = 1;
+            break;
         }
     }
-
-    else if (strncmp(arg, "cbrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
-        double result = evaluate_condition(arg + 5);
-        printf("%lf\n", cbrt(result));
-    }
-
-    else {
-        int is_variable = 0;
-        for (int i = 0; i < num_variables; i++) {
-            if (strcmp(variables[i].name, arg) == 0) {
-                printf("%s\n", variables[i].value);
-                is_variable = 1;
-                break;
-            }
-        }
-        if (!is_variable) {
-            int result = evaluate_condition(arg);
-            printf("%d\n", result);
-        }
+    if (!is_variable) {
+        // If the argument is not a variable, print it directly
+        printf("%s\n", arg);
     }
 }
 
-void execute_var(const char* name, const char* value) {
+void execute_var(const char* line) {
+    char name[MAX_TOKEN_SIZE];
+    char value[MAX_TOKEN_SIZE];
+    // Use sscanf to parse the input line
+    if (sscanf(line, "var %s = %[^\n]", name, value) != 2) {
+        error("Invalid 'var' line");
+    }
+
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
             error("Variable already declared");
@@ -134,367 +93,19 @@ void execute_var(const char* name, const char* value) {
         strcpy(variables[num_variables].name, name);
         strcpy(variables[num_variables].value, value);
         num_variables++;
-    }
-
-    else {
+    } else {
         error("Maximum number of variables exceeded");
     }
-}
-
-void execute_int(const char* name, const char* value) {
-    for (int i = 0; i < num_variables; i++) {
-        if (strcmp(variables[i].name, name) == 0) {
-            error("Variable already declared");
-        }
-    }
-
-    if (num_variables < MAX_VARIABLES) {
-        strcpy(variables[num_variables].name, name);
-        strcpy(variables[num_variables].value, value);
-        num_variables++;
-    }
-
-    else {
-        error("Maximum number of variables exceeded");
-    }
-}
-
-double execute_sqrt(const char* arg) {
-    double result = evaluate_condition(arg);
-    if (result >= 0) {
-        return sqrt(result);
-    }
-
-    else {
-        error("Square root of a negative number is not supported");
-    }
-    return 0;
-}
-
-double execute_cbrt(const char* arg) {
-    double result = evaluate_condition(arg);
-    return cbrt(result);
-}
-
-double execute_pow(const char* arg) {
-    double base, exponent;
-    if (sscanf(arg, "%lf, %lf", &base, &exponent) == 2) {
-        return pow(base, exponent);
-    }
-    else {
-        error("Invalid arguments for 'pow'");
-    }
-    return 0.0;
-}
-
-double execute_sin(const char* arg) {
-    double result = evaluate_condition(arg);
-    return sin(result);
-}
-
-double execute_cos(const char* arg) {
-    double result = evaluate_condition(arg);
-    return cos(result);
-}
-
-double execute_tan(const char* arg) {
-    double result = evaluate_condition(arg);
-    return tan(result);
-}
-
-double execute_gamma(const char* arg) {
-    double result = evaluate_condition(arg);
-    return tgamma(result);
-}
-
-double execute_max(const char* arg1, const char* arg2) {
-    double x = evaluate_condition(arg1);
-    double y = evaluate_condition(arg2);
-    return (x > y) ? x : y;
-}
-
-double execute_min(const char* arg1, const char* arg2) {
-    double x = evaluate_condition(arg1);
-    double y = evaluate_condition(arg2);
-    return (x < y) ? x : y;
-}
-
-double execute_abs(const char* arg) {
-    double x = atoi(arg);
-    return abs(x);
-}
-
-double ffrt(double x) {
-    if (x >= 0) {
-        return pow(x, 1.0 / 5);
-    } else {
-        error("Fifth root of a negative number is not supported");
-        return 0.0; // You can choose to return a default value here
-    }
-}
-
-int factorial(int n) {
-    if (n == 0 || n == 1) {
-        return 1;
-    }
-    return n * factorial(n - 1);
-}
-
-int execute_factorial(const char* arg) {
-    int result = evaluate_condition(arg);
-    if (result < 0) {
-        error("Factorial of a negative number is not supported");
-    }
-    return factorial(result);
-}
-
-int fibonacci(int n) {
-    if (n <= 0) {
-        return 0;
-    } else if (n == 1) {
-        return 1;
-    } else {
-        return fibonacci(n - 1) + fibonacci(n - 2);
-    }
-}
-
-int execute_fibonacci(const char* arg) {
-    int result = evaluate_condition(arg);
-    if (result < 0) {
-        error("Fibonacci of a negative number is not supported");
-    }
-    return fibonacci(result);
-}
-
-int convert_binary_to_decimal(const char* binary) {
-    int length = strlen(binary);
-    int decimal = 0;
-
-    for (int i = length - 1; i >= 0; i--) {
-        if (binary[i] == '1') {
-            decimal += pow(2, length - 1 - i);
-        }
-    }
-
-    return decimal;
-}
-
-char* convert_decimal_to_binary(int decimal) {
-    char binary[32]; // Assuming 32-bit integers
-    int index = 0;
-
-    while (decimal > 0) {
-        binary[index++] = (decimal % 2) + '0';
-        decimal /= 2;
-    }
-    binary[index] = '\0';
-
-    // Reverse the binary string
-    int left = 0;
-    int right = index - 1;
-    while (left < right) {
-        char temp = binary[left];
-        binary[left] = binary[right];
-        binary[right] = temp;
-        left++;
-        right--;
-    }
-
-    return strdup(binary);
 }
 
 double evaluate_condition(const char* condition) {
-    if (strcmp(condition, "pi") == 0) {
-        return MATH_PI;
-    }
-
-    if (strcmp(condition, "tau") == 0) {
-        return MATH_TAU;
-    }
-
-    if (strcmp(condition, "e") == 0) {
-        return MATH_E;
-    }
-
-    if (strcmp(condition, "goldenRatio") == 0) {
-        return MATH_GOLDEN_RATIO;
-    }
-
-    if (strcmp(condition, "silverRatio") == 0) {
-        return MATH_SILVER_RATIO;
-    }
-
-    if (strcmp(condition, "supergoldenRatio") == 0) {
-        return MATH_SUPERGOLDEN_RATIO;
-    }
-
-    if (strncmp(condition, "pow(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
-        // Extract the base and exponent values from the argument
-        char arguments[1000];
-        strncpy(arguments, condition + 4, strlen(condition) - 5);
-        arguments[strlen(condition) - 5] = '\0';
-
-        char* base_arg = strtok(arguments, ",");
-        char* exponent_arg = strtok(NULL, ",");
-
-        double base = evaluate_condition(base_arg);
-        double exponent = evaluate_condition(exponent_arg);
-
-        return pow(base, exponent);
-    }
-
-    if (strncmp(condition, "sin(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 4);
-        return sin(inner_result);
-    }
-
-    if (strncmp(condition, "cos(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 4);
-        return cos(inner_result);
-    }
-
-    if (strncmp(condition, "tan(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 4);
-        return tan(inner_result);
-    }
-
-    if (strncmp(condition, "gamma(", 6) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 6);
-        return tgamma(inner_result);
-    }
-
-    if (strncmp(condition, "fibonacci(", 10) == 0 && condition[strlen(condition) - 1] == ')') {
-        int inner_result = evaluate_condition(condition + 10);
-        if (inner_result < 0) {
-            error("Fibonacci of a negative number is not supported");
-        }
-        return fibonacci(inner_result);
-    }
-
-    if (strncmp(condition, "factorial(", 10) == 0 && condition[strlen(condition) - 1] == ')') {
-        int inner_result = evaluate_condition(condition + 10);
-        if (inner_result < 0) {
-            error("Factorial of a negative number is not supported");
-        }
-        return factorial(inner_result);
-    }
-
-    if (condition[0] == '(' && condition[strlen(condition) - 1] == ')') {
-        char expression[1000];
-        strncpy(expression, condition + 1, strlen(condition) - 2);
-        expression[strlen(condition) - 2] = '\0';
-        return evaluate_condition(expression);
-    }
-
-    int left_value, right_value;
-    char operator;
-
-    if (sscanf(condition, "%d %c %d", &left_value, &operator, &right_value) == 3) {
-        switch (operator) {
-            case '<':
-                return left_value < right_value;
-            case '>':
-                return left_value > right_value;
-            case '=':
-                return left_value == right_value;
-            case '+':
-                return left_value + right_value;
-            case '-':
-                return left_value - right_value;
-            case '*':
-                return left_value * right_value;
-            case '/':
-                if (right_value != 0) {
-                    return left_value / right_value;
-                } else {
-                    error("Division by zero");
-                }
-            default:
-                error("Invalid operator in condition");
-        }
-    } else {
-        for (int i = 0; i < num_variables; i++) {
-            if (strcmp(variables[i].name, condition) == 0) {
-                return strcmp(variables[i].value, "true") == 0 ? 1 : 0;
-            }
+    for (int i = 0; i < num_variables; i++) {
+        if (strcmp(variables[i].name, condition) == 0) {
+            return strcmp(variables[i].value, "true") == 0 ? 1 : 0;
         }
     }
 
-    if (strncmp(condition, "sqrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 5);
-        if (inner_result >= 0) {
-            return sqrt(inner_result);
-        }
-
-        else {
-            error("Square root of a negative number is not supported");
-        }
-    }
-
-    if (strncmp(condition, "cbrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 5);
-        return cbrt(inner_result);
-    }
-
-    return atoi(condition); // Convert string to integer
-}
-
-void execute_object(const char* name, const char* properties) {
-    // Create a new object with given properties
-    if (num_data < MAX_OBJECTS) {
-        strcpy(data_storage[num_data].name, name);
-        data_storage[num_data].type = 1; // 1 for object
-        strcpy(data_storage[num_data].value, properties);
-        num_data++;
-    } else {
-        error("Maximum number of objects exceeded");
-    }
-}
-
-void execute_array(const char* name, int size) {
-    if (num_arrays < MAX_ARRAYS) {
-        arrays[num_arrays].type = 2; // 2 for array
-        arrays[num_arrays].size = size;
-        arrays[num_arrays].elements = (double*)malloc(size * sizeof(double));
-
-        strcpy(data_storage[num_data].name, name);
-        data_storage[num_data].type = 2; // 2 for array
-        num_data++;
-
-        num_arrays++;
-    }
-    
-    else {
-        error("Maximum number of arrays exceeded");
-    }
-}
-
-void execute_set(const char* array_name, int index, double value) {
-    for (int i = 0; i < num_arrays; i++) {
-        if (strcmp(arrays[i].name, array_name) == 0) {
-            if (index >= 0 && index < arrays[i].size) {
-                arrays[i].elements[index] = value;
-            } else {
-                error("Array index out of bounds");
-            }
-            return;
-        }
-    }
-    error("Array not found");
-}
-
-double execute_get(const char* array_name, int index) {
-    for (int i = 0; i < num_arrays; i++) {
-        if (strcmp(arrays[i].name, array_name) == 0) {
-            if (index >= 0 && index < arrays[i].size) {
-                return arrays[i].elements[index];
-            } else {
-                error("Array index out of bounds");
-            }
-        }
-    }
-    error("Array not found");
-    return 0.0; // You can choose to return a default value here
+    return atof(condition); // Convert string to double
 }
 
 // Print version
@@ -517,245 +128,20 @@ int main(int argc, char* argv[]) {
         error("Unable to open input file");
     }
 
-    char line[1000];
+    char line[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
     while (fgets(line, sizeof(line), input_file)) {
         line[strcspn(line, "\n")] = '\0';
 
         if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char argument[1000];
+            char argument[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
             strncpy(argument, line + 6, strlen(line) - 7);
             argument[strlen(line) - 7] = '\0';
 
-            if (strncmp(argument, "sqrt", 4) == 0 && argument[4] == '(' && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument + 5);
-                if (result >= 0) {
-                    printf("%lf\n", sqrt(result));
-                }
-
-                else {
-                    error("Square root of a negative number is not supported");
-                }
-            }
-
-            else if (strncmp(argument, "cbrt", 4) == 0 && argument[4] == '(' && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument + 5);
-                if (result >= 0) {
-                    printf("%lf\n", cbrt(result));
-                }
-
-                else {
-                    error("Cube root of a negative number is not supported");
-                }
-            }
-
-            else if (strncmp(argument, "ffrt", 4) == 0 && argument[4] == '(' && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument + 5);
-                if (result >= 0) {
-                    printf("%lf\n", ffrt(result));
-                }
-
-                else {
-                    error("Fifth root of a negative number is not supported");
-                }
-            }
-
-            else if (strncmp(argument, "pow(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "sin(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "cos(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "tan(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "factorial(", 10) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "get(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                char array_name[MAX_TOKEN_SIZE];
-                int index;
-                
-                // Extract array name and index from the line
-                if (sscanf(argument + 4, "%[^,],%d)", array_name, &index) == 2) {
-                    double result = execute_get(array_name, index);
-                    printf("%lf\n", result);
-                }
-                
-                else {
-                    error("Invalid arguments for 'get'");
-                }
-            }
-
-            else {
-                execute_print(argument);
-            }
+            execute_print(argument);
         }
 
         else if (strncmp(line, "var", 3) == 0) {
-            char name[MAX_TOKEN_SIZE];
-            char value[MAX_TOKEN_SIZE];
-            if (sscanf(line, "var %s = %[^\n]", name, value) != 2) {
-                error("Invalid 'var' line");
-            }
-
-            execute_var(name, value);
-        }
-
-        else if (strncmp(line, "int", 3) == 0) {
-            char name[MAX_TOKEN_SIZE];
-            char value[MAX_TOKEN_SIZE];
-            if (sscanf(line, "int %s = %[^\n]", name, value) != 2) {
-                error("Invalid 'int' line");
-            }
-
-            execute_int(name, value);
-        }
-
-        else if (strncmp(line, "binary(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char binary_argument[1000];
-            strncpy(binary_argument, line + 6, strlen(line) - 7);
-            binary_argument[strlen(line) - 7] = '\0';
-
-            int decimal_result = convert_binary_to_decimal(binary_argument);
-            printf("%d\n", decimal_result);
-        }
-
-        else if (strncmp(line, "decimal(", 8) == 0 && line[strlen(line) - 1] == ')') {
-            int decimal_argument;
-            if (sscanf(line + 8, "%d", &decimal_argument) == 1) {
-                char* binary_result = convert_decimal_to_binary(decimal_argument);
-                printf("%s\n", binary_result);
-                free(binary_result); // Remember to free allocated memory
-            } else {
-                error("Invalid argument for convert_decimal");
-            }
-        }
-
-                else if (strncmp(line, "sqrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line + 5);
-            if (result >= 0) {
-                printf("%lf\n", sqrt(result));
-            }
-
-            else {
-                error("Square root of a negative number is not supported");
-            }
-        }
-
-        else if (strncmp(line, "cbrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line + 5);
-            if (result >= 0) {
-                printf("%lf\n", cbrt(result));
-            }
-            
-            else {
-                error("Cube root of a negative number is not supported");
-            }
-        }
-
-        else if (strncmp(line, "ffrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line + 5);
-            if (result >= 0) {
-                printf("%lf\n", ffrt(result));
-            }
-
-            else {
-                error("Fifth root of a negative number is not supported");
-            }
-        }
-
-        else if (strncmp(line, "max(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char arg1[MAX_TOKEN_SIZE];
-            char arg2[MAX_TOKEN_SIZE];
-
-            // Extract arguments from the line
-            if (sscanf(line + 4, "%[^,],%[^)]", arg1, arg2) == 2) {
-                double result = execute_max(arg1, arg2);
-                printf("%lf\n", result);
-            }
-
-            else {
-                error("Invalid arguments for 'max'");
-            }
-        }
-
-        else if (strncmp(line, "min(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char arg1[MAX_TOKEN_SIZE];
-            char arg2[MAX_TOKEN_SIZE];
-
-            // Extract arguments from the line
-            if (sscanf(line + 4, "%[^,],%[^)]", arg1, arg2) == 2) {
-                double result = execute_min(arg1, arg2);
-                printf("%lf\n", result);
-            }
-
-            else {
-                error("Invalid arguments for 'min'");
-            }
-        }
-
-        else if (strncmp(line, "abs(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char arg[MAX_TOKEN_SIZE];
-
-            // Extract argument from the line
-            if (sscanf(line + 4, "%[^)]", arg) == 1) {
-                int result = execute_abs(arg);
-                printf("%d\n", result);
-            } else {
-                error("Invalid argument for 'abs'");
-            }
-        }
-        
-        else if (strncmp(line, "gamma(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line);
-            printf("%lf\n", result);
-        }
-
-        else if (strncmp(line, "fibonacci(", 10) == 0 && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line);
-            printf("%lf\n", result);
-        }
-
-        else if (strncmp(line, "array", 5) == 0) {
-            char name[MAX_TOKEN_SIZE];
-            int size;
-
-            // Extract array name and size from the line
-            if (sscanf(line + 5, "%s %d", name, &size) == 2) {
-                execute_array(name, size);
-            }
-            
-            else {
-                error("Invalid 'array' line");
-            }
-        }
-
-        else if (strncmp(line, "set(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char array_name[MAX_TOKEN_SIZE];
-            int index;
-            double value;
-
-            // Extract array name, index, and value from the line
-            if (sscanf(line + 4, "%[^,],%d,%lf)", array_name, &index, &value) == 3) {
-                execute_set(array_name, index, value);
-            }
-            
-            else {
-                error("Invalid arguments for 'set'");
-            }
+            execute_var(line);
         }
 
         else if (strncmp(line, "//", 2) == 0) {
@@ -763,7 +149,7 @@ int main(int argc, char* argv[]) {
         }
 
         else {
-            error("Invalid sttatement");
+            error("Invalid statement");
         }
     }
 
