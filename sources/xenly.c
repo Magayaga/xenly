@@ -22,7 +22,7 @@
 #define MATH_SILVER_RATIO 2.41421356237309504880
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
 
-#define XENLY_VERSION "0.1.0-preview2"
+#define XENLY_VERSION "0.1.0-nanopreview1"
 
 typedef struct {
     char name[MAX_TOKEN_SIZE];
