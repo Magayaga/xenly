@@ -1,5 +1,5 @@
 xenly:
-        cc sources/xenly.c -o xenly -lm
+        cc src/xenly.c -o xenly -lm
 
 clean:
         rm xenly
