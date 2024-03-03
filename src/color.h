@@ -24,6 +24,7 @@ void setBackgroundBlue();
 void setBackgroundPurple();
 void setBackgroundWhite();
 void resetBackgroundColor();
+void blackAndOrange();
 
 
 #endif

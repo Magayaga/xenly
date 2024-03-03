@@ -853,7 +853,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    else if (argc == 2 && (strcmp(argv[1], "--init") == 0)) {
+    else if (argc == 2 && (strcmp(argv[1], "--new-project") == 0)) {
         initialize_project();
         return 0;
     }

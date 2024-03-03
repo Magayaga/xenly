@@ -156,7 +156,7 @@ fn main() {
         println!("  -dv, --dumpversion           Display the version of the compiler.");
         println!("  -os, --operatingsystem       Display the operating system.");
         println!("  --author                     Display the author information.");
-        println!("  --init                       Create a new xenly project.");
+        println!("  --new-project                Create a new xenly project.");
         println!("For bug reporting instructions, please see:");
         println!("<https://github.com/magayaga/xenly>");
         return;
@@ -188,7 +188,7 @@ fn main() {
         return;
     }
 
-    if args.len() == 2 && args[1] == "--init" {
+    if args.len() == 2 && args[1] == "--new-project" {
         println!("Coming soon!");
         return;
     }
