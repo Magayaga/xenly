@@ -4,6 +4,8 @@
  *
  * It is initially written in C programming language.
  *
+ * It is available for Linux and Windows operating systems.
+ *
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,6 +62,22 @@ void execute_comment(const char* comment) {
     printf("// %s\n", comment);
 }
 
+#ifdef _WIN32
+void execute_print(const char* arg) {
+    int is_variable = 0;
+    for (int i = 0; i < num_variables; i++) {
+        if (strcmp(variables[i].name, arg) == 0) {
+            printf("\"%s\"\n", variables[i].value);
+            is_variable = 1;
+            break;
+        }
+    }
+    if (!is_variable) {
+        // If the argument is not a variable, print it directly
+        printf("\"%s\"\n", arg);
+    }
+}
+#else
 void execute_print(const char* arg) {
     int is_variable = 0;
     for (int i = 0; i < num_variables; i++) {
@@ -74,6 +92,7 @@ void execute_print(const char* arg) {
         printf("%s\n", arg);
     }
 }
+#endif
 
 void execute_var(const char* line) {
     char name[MAX_TOKEN_SIZE];
