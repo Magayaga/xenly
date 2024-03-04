@@ -65,21 +65,41 @@ void execute_comment(const char* comment) {
 #ifdef _WIN32
 void execute_print(const char* arg) {
     int is_variable = 0;
+    char clean_arg[MAX_TOKEN_SIZE]; // New variable to store the cleaned argument
+
+    // Remove quotes if present
+    if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
+        (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
+        strncpy(clean_arg, arg + 1, strlen(arg) - 2);
+        clean_arg[strlen(arg) - 2] = '\0';
+        arg = clean_arg;
+    }
+
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, arg) == 0) {
-            printf("\"%s\"\n", variables[i].value);
+            printf("%s\n", variables[i].value);
             is_variable = 1;
             break;
         }
     }
     if (!is_variable) {
         // If the argument is not a variable, print it directly
-        printf("\"%s\"\n", arg);
+        printf("%s\n", arg);
     }
 }
 #else
 void execute_print(const char* arg) {
     int is_variable = 0;
+    char clean_arg[MAX_TOKEN_SIZE]; // New variable to store the cleaned argument
+
+    // Remove quotes if present
+    if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
+        (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
+        strncpy(clean_arg, arg + 1, strlen(arg) - 2);
+        clean_arg[strlen(arg) - 2] = '\0';
+        arg = clean_arg;
+    }
+
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, arg) == 0) {
             printf("%s\n", variables[i].value);
