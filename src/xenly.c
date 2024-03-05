@@ -63,29 +63,57 @@ void execute_comment(const char* comment) {
 }
 
 double evaluate_expression(const char* expr) {
-    char operator;
-    double operand1, operand2;
-    int scanned = sscanf(expr, "%lf %c %lf", &operand1, &operator, &operand2);
-    
-    if (scanned != 3) {
-        error("Invalid expression");
+    // Initialize variables
+    char operators[MAX_TOKEN_SIZE];
+    double operands[MAX_TOKEN_SIZE];
+    int num_operators = 0;
+    int num_operands = 0;
+
+    // Tokenize the expression
+    char* token = strtok((char*)expr, " ");
+    while (token != NULL) {
+        // Check if token is an operator
+        if (token[0] == '+' || token[0] == '-' || token[0] == '*' || token[0] == '/') {
+            operators[num_operators++] = token[0];
+        }
+            
+        // Otherwise, token is an operand
+        else {
+            operands[num_operands++] = atof(token);
+        }
+        // Get the next token
+        token = strtok(NULL, " ");
     }
-    
-    switch (operator) {
-        case '+':
-            return operand1 + operand2;
-        case '-':
-            return operand1 - operand2;
-        case '*':
-            return operand1 * operand2;
-        case '/':
-            if (operand2 == 0) {
-                error("Division by zero");
-            }
-            return operand1 / operand2;
-        default:
-            error("Invalid operator");
+
+    // Perform calculations
+    double result = operands[0];
+    for (int i = 0; i < num_operators; i++) {
+        switch (operators[i]) {
+            case '+':
+                result += operands[i + 1];
+                break;
+            
+            case '-':
+                result -= operands[i + 1];
+                break;
+            
+            case '*':
+                result *= operands[i + 1];
+                break;
+            
+            case '/':
+                if (operands[i + 1] == 0) {
+                    error("Division by zero");
+                }
+                result /= operands[i + 1];
+                break;
+            
+            default:
+                error("Invalid operator");
+        }
     }
+
+    return result;
 }
 
 #ifdef _WIN32
