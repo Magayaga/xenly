@@ -62,54 +62,63 @@ void execute_comment(const char* comment) {
     printf("// %s\n", comment);
 }
 
-#ifdef _WIN32
-void execute_print(const char* arg) {
-    int is_variable = 0;
-    char clean_arg[MAX_TOKEN_SIZE]; // New variable to store the cleaned argument
-
-    // Remove quotes if present
-    if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
-        (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
-        strncpy(clean_arg, arg + 1, strlen(arg) - 2);
-        clean_arg[strlen(arg) - 2] = '\0';
-        arg = clean_arg;
+double evaluate_expression(const char* expr) {
+    char operator;
+    double operand1, operand2;
+    int scanned = sscanf(expr, "%lf %c %lf", &operand1, &operator, &operand2);
+    
+    if (scanned != 3) {
+        error("Invalid expression");
     }
-
-    for (int i = 0; i < num_variables; i++) {
-        if (strcmp(variables[i].name, arg) == 0) {
-            printf("%s\n", variables[i].value);
-            is_variable = 1;
-            break;
-        }
-    }
-    if (!is_variable) {
-        // If the argument is not a variable, print it directly
-        printf("%s\n", arg);
+    
+    switch (operator) {
+        case '+':
+            return operand1 + operand2;
+        case '-':
+            return operand1 - operand2;
+        case '*':
+            return operand1 * operand2;
+        case '/':
+            if (operand2 == 0) {
+                error("Division by zero");
+            }
+            return operand1 / operand2;
+        default:
+            error("Invalid operator");
     }
 }
-#else
-void execute_print(const char* arg) {
-    int is_variable = 0;
-    char clean_arg[MAX_TOKEN_SIZE]; // New variable to store the cleaned argument
 
-    // Remove quotes if present
+#ifdef _WIN32
+// WINDOWS OPERATING SYSTEM
+void execute_print(const char* arg) {
+    // Check if the argument is a quoted string
     if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
         (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
-        strncpy(clean_arg, arg + 1, strlen(arg) - 2);
-        clean_arg[strlen(arg) - 2] = '\0';
-        arg = clean_arg;
+        // Print the string without quotes
+        printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
     }
+    
+    else {
+        // Evaluate and print the expression
+        double result = evaluate_expression(arg);
+        printf("%lf\n", result);
+    }
+}
 
-    for (int i = 0; i < num_variables; i++) {
-        if (strcmp(variables[i].name, arg) == 0) {
-            printf("%s\n", variables[i].value);
-            is_variable = 1;
-            break;
-        }
+#else
+// LINUX OPERATING SYSTEM
+void execute_print(const char* arg) {
+    // Check if the argument is a quoted string
+    if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
+        (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
+        // Print the string without quotes
+        printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
     }
-    if (!is_variable) {
-        // If the argument is not a variable, print it directly
-        printf("%s\n", arg);
+    
+    else {
+        // Evaluate and print the expression
+        double result = evaluate_expression(arg);
+        printf("%lf\n", result);
     }
 }
 #endif
