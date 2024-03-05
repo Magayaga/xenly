@@ -11,6 +11,9 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+mod color;
+use color::{Color, BackgroundColor};
+
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while1, is_not},
@@ -183,7 +186,7 @@ fn main() {
 
     if args.len() == 2 && (args[1] == "-h" || args[1] == "--help") {
         println!("Usage: xenly [input file]");
-        println!("Options:");
+        println!("{}{} Options: {}", Color::White.to_ansi_code(), BackgroundColor::Blue.to_ansi_code(), color::reset());
         println!("  -h, --help                   Display this information.");
         println!("  -v, --version                Display compiler version information.");
         println!("  -dm, --dumpmachine           Display the compiler's target processor.");
@@ -193,7 +196,7 @@ fn main() {
         println!("  --author                     Display the author information.");
         println!("  --new-project                Create a new xenly project.");
         println!("For bug reporting instructions, please see:");
-        println!("<https://github.com/magayaga/xenly>");
+        println!("{}{} <https://github.com/magayaga/xenly> {}", Color::Black.to_ansi_code(), BackgroundColor::OrangeBackground.to_ansi_code(), color::reset());
         return;
     }
 
@@ -219,7 +222,7 @@ fn main() {
     }
 
     if args.len() == 2 && args[1] == "--author" {
-        println!("Copyright (c) 2023-2024 Cyril John Magayaga");
+        println!("Copyright (c) 2023-2024 {}{} Cyril John Magayaga {}", Color::White.to_ansi_code(), BackgroundColor::Blue.to_ansi_code(), color::reset());
         return;
     }
 

@@ -1,10 +1,23 @@
 # Getting started
 
+You'll need to install our build dependencies (git, gcc) and check out the Xenly repository, for example on Windows:
+
+```bash
+# Xenly's source code
+$ git clone https://github.com/magayaga/xenly.git
+$ cd xenly
+```
+
+Build and run the application
+```bash
+$ ./make.bat
+```
+
 To run code in a file non-interactively, you can give it as the first argument to the **Xenly** command:
 
 ```shell
-$ xenly examples/print/main.xe
-$ xenly examples/math/operations.xe
+$ ./xenly examples/print/main.xe
+$ ./xenly examples/math/operations.xe
 ```
 
 You can pass additional arguments to **Xenly**, and to your program `main.xe` or `operations.xe`.

@@ -73,5 +73,5 @@ void resetBackgroundColor() {
 }
 
 void blackAndOrange() {
-  printf("\033[0;30;43m");
+  printf("\033[0;30;48;5;208m");
 }

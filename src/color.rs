@@ -15,6 +15,7 @@ pub enum Color {
     Magenta,
     Cyan,
     White,
+    Orange, // New color added
     // Add more colors as needed
 }
 
@@ -27,6 +28,7 @@ pub enum BackgroundColor {
     Magenta,
     Cyan,
     White,
+    OrangeBackground, // New background color added
     // Add more background colors as needed
 }
 
@@ -41,7 +43,7 @@ impl Color {
             Color::Magenta => "\x1b[35m",
             Color::Cyan => "\x1b[36m",
             Color::White => "\x1b[37m",
-            // Add more colors as needed
+            Color::Orange => "\x1b[38;5;208m", // Orange ANSI color code
         }
     }
 }
@@ -57,7 +59,7 @@ impl BackgroundColor {
             BackgroundColor::Magenta => "\x1b[45m",
             BackgroundColor::Cyan => "\x1b[46m",
             BackgroundColor::White => "\x1b[47m",
-            // Add more background colors as needed
+            BackgroundColor::OrangeBackground => "\x1b[48;5;208m", // Orange background ANSI code
         }
     }
 }
