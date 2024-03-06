@@ -1,4 +1,4 @@
-# Getting started
+# Getting started with Xenly
 
 You'll need to install our build dependencies (git, gcc) and check out the Xenly repository, for example on Windows:
 
@@ -10,7 +10,11 @@ $ cd xenly
 
 Build and run the application
 ```bash
+# Windows
 $ ./make.bat
+
+# Linux
+$ make install
 ```
 
 To run code in a file non-interactively, you can give it as the first argument to the **Xenly** command:
