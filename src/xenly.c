@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <math.h>
 
 #define MAX_TOKEN_SIZE 1000
@@ -62,57 +63,79 @@ void execute_comment(const char* comment) {
     printf("// %s\n", comment);
 }
 
-double evaluate_expression(const char* expr) {
-    // Initialize variables
-    char operators[MAX_TOKEN_SIZE];
-    double operands[MAX_TOKEN_SIZE];
-    int num_operators = 0;
-    int num_operands = 0;
+double evaluate_arithmetic_expression(const char** expression);
 
-    // Tokenize the expression
-    char* token = strtok((char*)expr, " ");
-    while (token != NULL) {
-        // Check if token is an operator
-        if (token[0] == '+' || token[0] == '-' || token[0] == '*' || token[0] == '/') {
-            operators[num_operators++] = token[0];
+// Factor
+double evaluate_factor(const char** expression) {
+    // Evaluate a factor in an arithmetic expression
+    double result;
+
+    if (**expression == '(') {
+        (*expression)++; // Move past the opening parenthesis
+        result = evaluate_arithmetic_expression(expression);
+        if (**expression == ')') {
+            (*expression)++; // Move past the closing parenthesis
+        } else {
+            error("Mismatched parentheses");
         }
-            
-        // Otherwise, token is an operand
-        else {
-            operands[num_operands++] = atof(token);
+    } else {
+        result = atof(*expression);
+        while (isdigit(**expression) || **expression == '.') {
+            (*expression)++; // Move past digits and the decimal point
         }
-        // Get the next token
-        token = strtok(NULL, " ");
     }
 
-    // Perform calculations
-    double result = operands[0];
-    for (int i = 0; i < num_operators; i++) {
-        switch (operators[i]) {
-            case '+':
-                result += operands[i + 1];
-                break;
-            
-            case '-':
-                result -= operands[i + 1];
-                break;
-            
+    return result;
+}
+
+// Term
+double evaluate_term(const char** expression) {
+    // Evaluate a term (factor) in an arithmetic expression
+    double result = evaluate_factor(expression);
+    while (**expression && (**expression == '*' || **expression == '/' || **expression == '%')) {
+        char op = **expression;
+        (*expression)++; // Move past the operator
+        double factor = evaluate_factor(expression);
+        switch (op) {
             case '*':
-                result *= operands[i + 1];
+                result *= factor;
                 break;
-            
             case '/':
-                if (operands[i + 1] == 0) {
+                if (factor != 0) {
+                    result /= factor;
+                } else {
                     error("Division by zero");
                 }
-                result /= operands[i + 1];
                 break;
-            
-            default:
-                error("Invalid operator");
+            case '%':
+                if (factor != 0) {
+                    result = fmod(result, factor);
+                } else {
+                    error("Modulo by zero");
+                }
+                break;
         }
     }
+    return result;
+}
 
+// Evaluate arithmetic expression
+double evaluate_arithmetic_expression(const char** expression) {
+    // Use a recursive descent parser to evaluate arithmetic expressions
+    double result = evaluate_term(expression);
+    while (**expression && (**expression == '+' || **expression == '-')) {
+        char op = **expression;
+        (*expression)++; // Move past the operator
+        double term = evaluate_term(expression);
+        switch (op) {
+            case '+':
+                result += term;
+                break;
+            case '-':
+                result -= term;
+                break;
+        }
+    }
     return result;
 }
 
@@ -128,7 +151,7 @@ void execute_print(const char* arg) {
     
     else {
         // Evaluate and print the expression
-        double result = evaluate_expression(arg);
+        double result = evaluate_arithmetic_expression((const char **)&arg);
         printf("%lf\n", result);
     }
 }
@@ -145,7 +168,7 @@ void execute_print(const char* arg) {
     
     else {
         // Evaluate and print the expression
-        double result = evaluate_expression(arg);
+        double result = evaluate_arithmetic_expression((const char **)&arg);
         printf("%lf\n", result);
     }
 }
