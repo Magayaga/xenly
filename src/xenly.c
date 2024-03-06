@@ -63,6 +63,7 @@ void execute_comment(const char* comment) {
     printf("// %s\n", comment);
 }
 
+double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
 
 // Factor
@@ -70,18 +71,66 @@ double evaluate_factor(const char** expression) {
     // Evaluate a factor in an arithmetic expression
     double result;
 
+    // Check for unary minus
+    int negate = 1;
+    if (**expression == '-') {
+        negate = -1;
+        (*expression)++; // Move past the unary minus
+    }
+
     if (**expression == '(') {
         (*expression)++; // Move past the opening parenthesis
         result = evaluate_arithmetic_expression(expression);
         if (**expression == ')') {
             (*expression)++; // Move past the closing parenthesis
-        } else {
+        }
+        
+        else {
             error("Mismatched parentheses");
         }
-    } else {
-        result = atof(*expression);
+    }
+    
+    else if (isdigit(**expression) || **expression == '.') {
+        result = atof(*expression) * negate;
         while (isdigit(**expression) || **expression == '.') {
             (*expression)++; // Move past digits and the decimal point
+        }
+    }
+    
+    else {
+        // Handle mathematical constants
+        if (strncmp(*expression, "pi", 2) == 0) {
+            result = MATH_PI * negate;
+            *expression += 2; // Move past the constant
+        }
+        
+        else if (strncmp(*expression, "tau", 3) == 0) {
+            result = MATH_TAU * negate;
+            *expression += 3; // Move past the constant
+        }
+        
+        else if (strncmp(*expression, "e", 1) == 0) {
+            result = MATH_E * negate;
+            (*expression)++; // Move past the constant
+        }
+        
+        else if (strncmp(*expression, "goldenRatio", 12) == 0) {
+            result = MATH_GOLDEN_RATIO * negate;
+            *expression += 12; // Move past the constant
+        }
+        
+        else if (strncmp(*expression, "silverRatio", 12) == 0) {
+            result = MATH_SILVER_RATIO * negate;
+            *expression += 12; // Move past the constant
+        }
+        
+        else if (strncmp(*expression, "supergoldenRatio", 17) == 0) {
+            result = MATH_SUPERGOLDEN_RATIO * negate;
+            *expression += 17; // Move past the constant
+        }
+        
+        else {
+            error("Invalid factor");
         }
     }
 
@@ -100,17 +149,23 @@ double evaluate_term(const char** expression) {
             case '*':
                 result *= factor;
                 break;
+            
             case '/':
                 if (factor != 0) {
                     result /= factor;
-                } else {
+                }
+                
+                else {
                     error("Division by zero");
                 }
                 break;
+            
             case '%':
                 if (factor != 0) {
                     result = fmod(result, factor);
-                } else {
+                }
+                
+                else {
                     error("Modulo by zero");
                 }
                 break;
@@ -192,7 +247,9 @@ void execute_var(const char* line) {
         strcpy(variables[num_variables].name, name);
         strcpy(variables[num_variables].value, value);
         num_variables++;
-    } else {
+    }
+    
+    else {
         error("Maximum number of variables exceeded");
     }
 }
