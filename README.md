@@ -69,43 +69,10 @@ The Xenly source code is organized as follows:
 
 ## Getting started
 
-If you do want to try out Xenly locally, you'll need to install our build dependencies (git, and compilers such as **Clang**, **GCC**, or **tcc**) and check out the Xenly repository, for example on Debian or Ubuntu, Windows, and macOS:
+If you do want to try out Xenly locally, you'll need to install our build dependencies (git, and compilers such as **Clang**, **GCC**, or **tcc**) and check out the Xenly repository, for example on Windows:
 
-1. **Debian or Ubuntu** operating systems:
-   ```shell
 
-   # Update sudo
-   $ sudo apt update
-
-   # Update sudo with fixing missing
-   $ sudo apt-get update --fix-missing
-
-   # Install tools; Choose the Clang, GCC, or tcc
-   $ sudo apt install gcc git
-   $ sudo apt install clang git
-
-   # Download Xenly's code
-   $ git clone https://github.com/magayaga/xenly.git
-   $ cd xenly
-   ```
-
-   Then you can build and run the code:
-   ```shell
-   # Makefile
-   $ make
-
-   # Bash
-   $ bash main.sh
-   ```
-
-   Last, Open the application:
-   ```shell
-   ./xenly
-   ```
-
-2. **Windows** operating system:
-
-   Choose the [**Microsoft Visual Studio**](https://visualstudio.microsoft.com/), [**MinGW Installer**](https://sourceforge.net/projects/mingw-w64/), [**Cygwin**](https://www.cygwin.com/), [**MSYS2**](https://www.msys2.org/), [**tcc**](https://bellard.org/tcc/) on Windows operating system. Then, the download the [Git on Windows](https://git-scm.com/).
+* Choose the [**Microsoft Visual Studio**](https://visualstudio.microsoft.com/), [**MinGW Installer**](https://sourceforge.net/projects/mingw-w64/), [**Cygwin**](https://www.cygwin.com/), [**MSYS2**](https://www.msys2.org/), [**tcc**](https://bellard.org/tcc/) on Windows operating system. Then, the download the [Git on Windows](https://git-scm.com/).
 
    ```shell
    # Download Xenly's code
@@ -113,45 +80,16 @@ If you do want to try out Xenly locally, you'll need to install our build depend
    $ cd xenly
    ```
 
-   Then you can build and run the code:
+* Then you can build and run the code:
    ```shell
    # Make.bat
    $ ./make.bat
 
    # Python
    $ py install.py
-   ```
 
-   Last, Open the application:
-   ```shell
-   ./xenly
-   ```
-
-3. **macOS** operating system:
-
-   ```shell
-   # Install tools; Choose the Clang, GCC, or tcc
-   $ brew install gcc git
-   $ brew install clang git
-
-   # Download Xenly's code
-   $ git clone https://github.com/magayaga/xenly.git
-   $ cd xenly
-   ```
-
-   Then you can build and run the code:
-   ```shell
-   # Bash
+   # Bash Script
    $ bash main.sh
-
-   # Python
-   $ py install.py
-   ```
-
-   Last, Open the Application:
-   
-   ```shell
-   ./xenly
    ```
 
 ## Copyright
