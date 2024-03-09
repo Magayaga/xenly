@@ -1,9 +1,7 @@
 /*
    Xenly programming language
    Copyright 2024 Cyril John Magayaga
-
-   This is mathematical constants
 */
-print(pi)
-print(e)
-print(goldenRatio)
+print("Hi!")
+input()
+input("How are you? ")

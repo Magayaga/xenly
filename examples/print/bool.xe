@@ -1,2 +1,6 @@
+/*
+   Xenly programming language
+   Copyright 2024 Cyril John Magayaga
+*/
 bool a = true
 bool b = false
