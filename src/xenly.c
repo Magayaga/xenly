@@ -253,6 +253,8 @@ int parse_and_execute_arithmetic_operation(const char* operation, int* result) {
     return 1; // Operation executed successfully
 }
 
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 // For
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body) {
     // Set loop variable outside the loop
@@ -293,6 +295,8 @@ void execute_for(FILE* input_file, const char* loop_variable, int start_value, i
         }
     }
 }
+
+#pragma GCC diagnostic warning "-Wunused-parameter"
 
 // Int
 void execute_int(const char* name, const char* value) {
