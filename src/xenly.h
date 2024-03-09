@@ -72,6 +72,8 @@ double evaluate_arithmetic_expression(const char* expression);
 
 void execute_print(const char* arg);
 
+void execute_input(const char* message, char* buffer, int buffer_size);
+
 int parse_numeric_value(const char* value, double* result);
 
 void execute_bool(const char* name, bool value);
