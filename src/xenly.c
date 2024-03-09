@@ -130,6 +130,7 @@ void execute_print(const char* arg) {
     }
 }
 
+// Input
 void execute_input(const char* message, char* buffer, int buffer_size) {
     // Skip leading whitespace
     while (isspace(*message)) {
