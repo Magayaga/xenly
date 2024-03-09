@@ -2,7 +2,15 @@
     padding-right: 8px;
 }
 
-a, p, h1, .time-font {
+a, p, h1, h3, .time-font {
     font-family: "SF Pro Display";
     font-weight: 200;
+}
+
+.tab-content {
+    padding: 20px;
+}
+
+.bg-white {
+    background-color: white;
 }
