@@ -1,3 +1,7 @@
+/*
+   Xenly programming language
+   Copyright 2023-2024 Cyril John Magayaga
+*/
 var x = "Good Morning"
 var y = "Good Afternoon"
 var z = "Good Evening"

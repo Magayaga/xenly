@@ -130,6 +130,12 @@ void execute_print(const char* arg) {
     }
 }
 
+void execute_input(const char* message, char* buffer, int buffer_size) {
+    printf("%s", message);
+    fgets(buffer, buffer_size, stdin);
+    buffer[strcspn(buffer, "\n")] = '\0'; // Remove trailing newline character
+}
+
 // Parse numeric value
 int parse_numeric_value(const char* value, double* result) {
     char* endptr;
@@ -949,6 +955,14 @@ int main(int argc, char* argv[]) {
             else {
                 execute_print(argument);
             }
+        }
+
+        else if (strncmp(line, "input(", 6) == 0 && line[strlen(line) - 1] == ')') {
+            char message[MAX_TOKEN_SIZE];
+            sscanf(line + 6, "%[^)]", message);
+            char input_buffer[100]; // Adjust buffer size as needed
+            execute_input(message, input_buffer, sizeof(input_buffer));
+            printf("%s\n", input_buffer);
         }
 
         else if (strncmp(line, "var", 3) == 0) {
