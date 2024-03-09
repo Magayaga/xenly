@@ -131,7 +131,35 @@ void execute_print(const char* arg) {
 }
 
 void execute_input(const char* message, char* buffer, int buffer_size) {
-    printf("%s", message);
+    // Skip leading whitespace
+    while (isspace(*message)) {
+        message++;
+    }
+    
+    // Check if the message starts with a quote
+    if (*message == '"') {
+        // Find the end of the quoted message
+        const char* end_quote = strchr(message + 1, '"');
+        if (end_quote == NULL) {
+            error("Invalid input message: missing closing quote");
+        }
+        
+        // Copy the quoted message to the buffer
+        int length = end_quote - message - 1; // Exclude the quotes
+        if (length >= buffer_size) {
+            error("Input message is too long for the buffer");
+        }
+        strncpy(buffer, message + 1, length);
+        buffer[length] = '\0'; // Null-terminate the string
+    } else {
+        // No quotes found, copy the entire message to the buffer
+        if (strlen(message) >= buffer_size) {
+            error("Input message is too long for the buffer");
+        }
+        strcpy(buffer, message);
+    }
+
+    printf("%s", buffer);
     fgets(buffer, buffer_size, stdin);
     buffer[strcspn(buffer, "\n")] = '\0'; // Remove trailing newline character
 }
