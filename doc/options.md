@@ -10,3 +10,7 @@
 * `-os`, `--operatingsystem` - This option displays information about the operating system environment in which the program is executing, assisting users in understanding the execution context of the program.
 * `--author` - When invoked, this option prints out information about the program's author(s) or creator(s), offering attribution and acknowledging the individuals responsible for its development.
 * `--new-project` - This option initiates a new project, suggesting that it might set up initial project files or directories, or perform other actions to kickstart a new project using the "xenly" program.
+
+## Copyright
+
+Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
