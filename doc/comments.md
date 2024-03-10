@@ -24,3 +24,7 @@ Multi-line comments start with `/*` and ends with `*/`. Any text between `/*` an
 */
 print("Hello, World!")
 ```
+
+## Copyright
+
+Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
