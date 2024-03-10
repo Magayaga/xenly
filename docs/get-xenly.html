@@ -58,11 +58,9 @@
       <li class="nav-item">
         <a class="nav-link" id="linux-tab" data-bs-toggle="tab" href="#linux" role="tab" aria-controls="linux" aria-selected="false">Linux</a>
       </li>
-    <!--
       <li class="nav-item">
         <a class="nav-link" id="macos-tab" data-bs-toggle="tab" href="#macos" role="tab" aria-controls="macos" aria-selected="false">macOS</a>
       </li>
-    -->
     </ul>
     <div class="tab-content bg-white" id="osTabsContent">
       <div class="tab-pane fade show active" id="windows" role="tabpanel" aria-labelledby="windows-tab">
@@ -153,6 +151,46 @@
 
       </div>
       <div class="tab-pane fade" id="macos" role="tabpanel" aria-labelledby="macos-tab">
+        <h3>Install using Git</h3>
+        <p>To download the Xenly's source code. Install Git, then run a GNU Bash.</p>
+        <pre class="highlight"><code>
+        <span class="c"># Download the Xenly's source code</span>
+        <span class="nv">$ </span>git clone https://github.com/Magayaga/xenly.git
+        <span class="nv">$ </span>cd xenly
+        </code></pre>
+
+        <h3>Compile the code</h3>
+        <p>To build the Xenly programming language, open a GNU Bash in the directory containing the <code>makefile</code> or <code>main.sh</code> file and run the following command:</p>
+
+        <pre class="highlight"><code>
+        <span class="c"># Run the program in Shell</span>
+        <span class="nv">$ </span>bash main.sh
+
+        <span class="c"># or Makefile</span>
+        <span class="nv">$ </span>make
+        </code></pre>
+
+        <h3>Verify your PATH includes Xenly</h3>
+        <p>1. Open the <code>~/.bash_profile</code> file in a text editor. You can do this using the <code>vim</code> or <code>nano</code> text editor with the following command:</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>vim ~/.bash_profile
+        </code></pre>
+
+        <p>2. Add the following line to the file to include the directory where Xenly is installed in your PATH:</p>
+        <pre class="highlight"><code>
+        export PATH="/usr/local/bin:$PATH"
+        </code></pre>
+        <p>Replace <code>/usr/local/bin</code> with the actual directory where Xenly is installed if you chose a different location.</p>
+        
+        <p>3. Save the changes and exit the text editor. After saving the changes, you need to apply them to your current shell session. You can do this by running:</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>source ~/.bash_profile
+        </code></pre>
+        
+        <p>You can copy the executable file to a directory that is in your PATH.</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>sudo cp xenly /usr/local/bin
+        </code></pre>
       </div>
     </div>
   </div>
@@ -164,7 +202,7 @@
       <li class="nav-item"><a href="#" class="nav-link px-2 text-light">Download</a></li>
       <li class="nav-item"><a href="about.html" class="nav-link px-2 text-light">About</a></li>
     </ul>
-    <p class="text-center text-light">© 2023-2024 Cyril John Magayaga</p>
+    <p class="text-center text-light">© 2023-2024 <a href="https://github.com/magayaga">Cyril John Magayaga</a></p>
   </footer>
 </div>
     <script src="src/time.js"></script>
