@@ -21,8 +21,8 @@
 <nav class="navbar navbar-expand-lg bg-body-tertiary">
   <div class="container-fluid">
     <a class="navbar-brand" href="index.html">
-    <img src="src/xenly.svg" alt="Logo" width="90" height="25" class="d-inline-block align-text-top">
-</a>
+      <img src="src/xenly.svg" alt="Logo" width="90" height="25" class="d-inline-block align-text-top">
+    </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -107,6 +107,10 @@
         <pre class="highlight"><code>
         <span class="nv">$ </span>sudo apt-get update
         </code></pre>
+        <p>After, to install the <b>Git</b> and <b>GCC</b>.</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>sudo apt-get install gcc git
+        </code></pre>
 
         <h3>Install using Git</h3>
         <p>To download the Xenly's source code. Install Git, then run a GNU Bash.</p>
@@ -144,13 +148,20 @@
         <span class="nv">$ </span>source ~/.bash_profile
         </code></pre>
         
-        <p>You can copy the executable file to a directory that is in your PATH.</p>
+        <p>4. You can copy the executable file to a directory that is in your PATH.</p>
         <pre class="highlight"><code>
         <span class="nv">$ </span>sudo cp xenly /usr/local/bin
         </code></pre>
 
       </div>
       <div class="tab-pane fade" id="macos" role="tabpanel" aria-labelledby="macos-tab">
+        <h3>Install using Homebrew</h3>
+        <p>To install the <b>Git</b> and <b>GCC</b>, use <a href="https://brew.sh">Homebrew</a>.</p>
+        <pre class="highlight"><code>
+        <span class="c"># Install the Git and GCC</span>
+        <span class="nv">$ </span>brew install gcc git
+        </code></pre>
+
         <h3>Install using Git</h3>
         <p>To download the Xenly's source code. Install Git, then run a GNU Bash.</p>
         <pre class="highlight"><code>
