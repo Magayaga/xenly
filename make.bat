@@ -21,11 +21,12 @@ rem Compile each source file separately into object files
 gcc -c %SOURCE_DIR%\xenly.c -o %OBJ_DIR%\xenly.o
 gcc -c %SOURCE_DIR%\print_info.c -o %OBJ_DIR%\print_info.o
 gcc -c %SOURCE_DIR%\color.c -o %OBJ_DIR%\color.o
+gcc -c %SOURCE_DIR%\project.c -o %OBJ_DIR%\project.o
 
 rem Check if compilation was successful
 if %errorlevel% equ 0 (
     rem Link object files to create the executable
-    gcc -o %OUTPUT_FILE% %OBJ_DIR%\xenly.o %OBJ_DIR%\print_info.o %OBJ_DIR%\color.o
+    gcc -o %OUTPUT_FILE% %OBJ_DIR%\xenly.o %OBJ_DIR%\print_info.o %OBJ_DIR%\color.o %OBJ_DIR%\project.o
     if %errorlevel% equ 0 (
         echo Compilation successful. Running xenly programming language.
     ) else (

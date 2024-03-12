@@ -6,8 +6,6 @@
  *
  */
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include "color.h"
 #include "print_info.h"
 
@@ -52,7 +50,8 @@ void print_help() {
     printf("  -dv, --dumpversion           Display the version of the compiler.\n");
     printf("  -os, --operatingsystem       Display the operating system.\n");
     printf("  --author                     Display the author information.\n");
-    printf("  --new-project                Create a new xenly project.\n");
+    printf("  --new-project                Create a default Xenly project.\n");
+    printf("  --create-project             Create a new Xenly project.\n");
     printf("For bug reporting instructions, please see:\n");
     blackAndOrange();
     printf(" <https://github.com/magayaga/xenly> ");
@@ -71,7 +70,7 @@ void print_author() {
     printf("\n");
 }
 
-// Print operating system
+// Print operating systems
 void print_operatingsystem() {
     // Print the compiler's operating system
     #if defined(_WIN32)
@@ -104,21 +103,4 @@ void print_operatingsystem() {
     #else
         printf("Unknown/Segmentation fault\n");
     #endif
-}
-
-void initialize_project() {
-    // Create a new folder for the project
-    system("mkdir xenly_project");
-    // Change directory to the newly created folder
-    chdir("xenly_project");
-    // Create a new Xenly source file
-    FILE *source_file = fopen("main.xe", "w");
-    if (source_file == NULL) {
-        perror("Unable to create source file");
-    }
-    // Write default "hello world" program to the source file
-    fprintf(source_file, "print(\"Hello, World!\")\nprint(2*9-6/3*5)\n");
-    fclose(source_file);
-    // Inform the user that the project has been initialized
-    printf("New Xenly project initialized in 'xenly project' folder.\n");
 }

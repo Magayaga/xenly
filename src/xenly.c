@@ -15,6 +15,7 @@
 #include <math.h>
 #include "color.h"
 #include "xenly.h"
+#include "project.h"
 #include "print_info.h"
 // #include "goxenly.h"
 
@@ -863,6 +864,11 @@ int main(int argc, char* argv[]) {
 
     else if (argc == 2 && (strcmp(argv[1], "--new-project") == 0)) {
         initialize_project();
+        return 0;
+    }
+
+    else if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
+        create_project();
         return 0;
     }
 
