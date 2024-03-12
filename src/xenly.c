@@ -334,7 +334,7 @@ void execute_for(FILE* input_file, const char* loop_variable, int start_value, i
 #pragma GCC diagnostic warning "-Wunused-parameter"
 
 // Int
-void execute_int(const char* name, const char* value) {
+void execute_let(const char* name, const char* value) {
     for (int i = 0; i < num_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
             error("Variable already declared");
@@ -1016,14 +1016,14 @@ int main(int argc, char* argv[]) {
             execute_bool(name, bool_value);
         }
 
-        else if (strncmp(line, "int", 3) == 0) {
+        else if (strncmp(line, "let", 3) == 0) {
             char name[MAX_TOKEN_SIZE];
             char value[MAX_TOKEN_SIZE];
-            if (sscanf(line, "int %s = %[^\n]", name, value) != 2) {
-                error("Invalid 'int' line");
+            if (sscanf(line, "let %s = %[^\n]", name, value) != 2) {
+                error("Invalid 'let' line");
             }
 
-            execute_int(name, value);
+            execute_let(name, value);
         }
 
         else if (strncmp(line, "binary(", 6) == 0 && line[strlen(line) - 1] == ')') {
