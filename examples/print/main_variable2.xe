@@ -1,10 +1,12 @@
 /*
    Xenly programming language
    Copyright 2023-2024 Cyril John Magayaga
+
+   let - declaring a variable
 */
-int x = "Good Morning"
-int y = "Good Afternoon"
-int z = "Good Evening"
+let x = "Good Morning"
+let y = "Good Afternoon"
+let z = "Good Evening"
 print(x)
 print(y)
 print(z)
