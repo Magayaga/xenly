@@ -67,30 +67,10 @@ The Xenly source code is organized as follows:
 | `examples/`                  | Example code for the Xenly programming language             |
 | `src/`                       | Source for the Xenly programming language                   |
 
-## Getting started
+If you are new to Swift, you may want to check out these additional resources.
 
-If you do want to try out Xenly locally, you'll need to install our build dependencies (git, and compilers such as **Clang**, **GCC**, or **tcc**) and check out the Xenly repository, for example on Windows:
-
-
-* Choose the [**Microsoft Visual Studio**](https://visualstudio.microsoft.com/), [**MinGW Installer**](https://sourceforge.net/projects/mingw-w64/), [**Cygwin**](https://www.cygwin.com/), [**MSYS2**](https://www.msys2.org/), [**tcc**](https://bellard.org/tcc/) on Windows operating system. Then, the download the [Git on Windows](https://git-scm.com/).
-
-   ```shell
-   # Download Xenly's code
-   $ git clone https://github.com/magayaga/xenly.git
-   $ cd xenly
-   ```
-
-* Then you can build and run the code:
-   ```shell
-   # Make.bat
-   $ ./make.bat
-
-   # Python
-   $ py install.py
-
-   # Bash Script
-   $ bash main.sh
-   ```
+* [Official website of Xenly (Getting Started)](https://magayaga.github.io/xenly/get-xenly.html)
+* [Documentation of Xenly (Getting Started)](doc/getting-started.md)
 
 ## Copyright
 
