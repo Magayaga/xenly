@@ -1,6 +1,8 @@
 /*
    Xenly programming language
    Copyright 2024 Cyril John Magayaga
+
+   (bool) true and false values
 */
 bool a = true
 bool b = false

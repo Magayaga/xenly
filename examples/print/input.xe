@@ -1,7 +1,0 @@
-/*
-   Xenly programming language
-   Copyright 2024 Cyril John Magayaga
-*/
-print("Hi!")
-input()
-input("How are you? ")

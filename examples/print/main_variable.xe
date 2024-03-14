@@ -1,6 +1,8 @@
 /*
    Xenly programming language
    Copyright 2023-2024 Cyril John Magayaga
+
+   var - declaring a variable
 */
 var x = "Good Morning"
 var y = "Good Afternoon"

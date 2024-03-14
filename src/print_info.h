@@ -23,10 +23,7 @@ void print_help();
 // Print author
 void print_author();
 
-// Print operating system
+// Print operating systems
 void print_operatingsystem();
-
-// Project
-void initialize_project();
 
 #endif

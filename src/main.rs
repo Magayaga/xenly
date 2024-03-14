@@ -99,6 +99,7 @@ fn parse_program(input: &str) -> IResult<&str, Vec<Statement>> {
     Ok((input, statements))
 }
 
+// Print operating systems
 fn print_operatingsystem() {
     if cfg!(target_os = "windows") {
         println!("Windows");
@@ -141,6 +142,7 @@ fn print_operatingsystem() {
     }
 }
 
+// Initialize project
 fn initialize_project() {
     // Create a new folder for the project
     if let Err(err) = fs::create_dir("xenly_project") {
@@ -173,7 +175,8 @@ fn initialize_project() {
     // Inform the user that the project has been initialized
     println!("New Xenly project initialized in 'xenly_project' folder.");
 }
- 
+
+// Main function
 fn main() {
     // Get the command-line arguments
     let args: Vec<String> = env::args().collect();

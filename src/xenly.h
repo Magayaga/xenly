@@ -82,7 +82,7 @@ bool evaluate_bool(const char* value);
 
 void execute_var(const char* name, const char* value);
 
-void execute_int(const char* name, const char* value);
+void execute_let(const char* name, const char* value);
 
 double execute_pow(const char* arg);
 
