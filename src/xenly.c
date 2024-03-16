@@ -197,34 +197,76 @@ double evaluate_arithmetic_expression(const char** expression) {
 #ifdef _WIN32
 // WINDOWS OPERATING SYSTEM
 void execute_print(const char* arg) {
-    // Check if the argument is a quoted string
-    if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
-        (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
-        // Print the string without quotes
-        printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
+    // Check if the argument is a variable reference
+    if (arg[0] == '$') {
+        // Look for the variable referenced by arg
+        char var_name[MAX_TOKEN_SIZE];
+        sscanf(arg, "$%s", var_name);
+        int found = 0;
+        for (int i = 0; i < num_variables; i++) {
+            if (strcmp(variables[i].name, var_name) == 0) {
+                printf("%s\n", variables[i].value);
+                found = 1;
+                break;
+            }
+        }
+        
+        if (!found) {
+            error("Referenced variable not found");
+        }
     }
     
     else {
-        // Evaluate and print the expression
-        double result = evaluate_arithmetic_expression((const char **)&arg);
-        printf("%lf\n", result);
+        // Check if the argument is a quoted string
+        if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
+            (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
+            // Print the string without quotes
+            printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
+        }
+        
+        else {
+            // Evaluate and print the expression
+            double result = evaluate_arithmetic_expression(&arg);
+            printf("%lf\n", result);
+        }
     }
 }
 
 #else
 // LINUX OPERATING SYSTEM
 void execute_print(const char* arg) {
-    // Check if the argument is a quoted string
-    if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
-        (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
-        // Print the string without quotes
-        printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
+    // Check if the argument is a variable reference
+    if (arg[0] == '$') {
+        // Look for the variable referenced by arg
+        char var_name[MAX_TOKEN_SIZE];
+        sscanf(arg, "$%s", var_name);
+        int found = 0;
+        for (int i = 0; i < num_variables; i++) {
+            if (strcmp(variables[i].name, var_name) == 0) {
+                printf("%s\n", variables[i].value);
+                found = 1;
+                break;
+            }
+        }
+        
+        if (!found) {
+            error("Referenced variable not found");
+        }
     }
     
     else {
-        // Evaluate and print the expression
-        double result = evaluate_arithmetic_expression((const char **)&arg);
-        printf("%lf\n", result);
+        // Check if the argument is a quoted string
+        if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
+            (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
+            // Print the string without quotes
+            printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
+        }
+        
+        else {
+            // Evaluate and print the expression
+            double result = evaluate_arithmetic_expression(&arg);
+            printf("%lf\n", result);
+        }
     }
 }
 #endif
@@ -245,6 +287,23 @@ void execute_var(const char* line) {
 
     if (num_variables < MAX_VARIABLES) {
         strcpy(variables[num_variables].name, name);
+        // Check if value is another variable
+        if (value[0] == '$') {
+            // Look for the variable referenced by value
+            char var_name[MAX_TOKEN_SIZE];
+            sscanf(value, "$%s", var_name);
+            int found = 0;
+            for (int i = 0; i < num_variables; i++) {
+                if (strcmp(variables[i].name, var_name) == 0) {
+                    strcpy(value, variables[i].value);
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                error("Referenced variable not found");
+            }
+        }
         strcpy(variables[num_variables].value, value);
         num_variables++;
     }
