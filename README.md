@@ -67,7 +67,7 @@ The Xenly source code is organized as follows:
 | `examples/`                  | Example code for the Xenly programming language             |
 | `src/`                       | Source for the Xenly programming language                   |
 
-If you are new to Swift, you may want to check out these additional resources.
+If you are new to the **Xenly**, you may want to check out these additional resources.
 
 * [Official website of Xenly (Getting Started)](https://magayaga.github.io/xenly/get-xenly.html)
 * [Documentation of Xenly (Getting Started)](doc/getting-started.md)
