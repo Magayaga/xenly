@@ -4,4 +4,22 @@
 # 
 # It is initially written in C programming language.
 #
-gcc src/xenly.c -o xenly
+if command -v gcc >/dev/null 2>&1; then
+    compiler="gcc"
+elif command -v clang >/dev/null 2>&1; then
+    compiler="clang"
+else
+    echo "Error: No suitable C compiler found (gcc, tcc, or clang)"
+    exit 1
+fi
+
+# Compile xenly.c with the selected compiler
+$compiler src/xenly.c -o xenly -lm
+
+# Check if compilation was successful
+if [ $? -eq 0 ]; then
+    echo "Compilation successful. Running xenly programming language"
+    ./xenly
+else
+    echo "Compilation failed."
+fi
