@@ -28,8 +28,8 @@ Here is the Hyzero programming language that was initially written in Python pro
 ```bash
 # Download the Xenly's source code
 $ git clone https://github.com/xenly xenly-pre-linux
-$ git checkout pre-linux
 $ cd xenly-pre-linux
+$ git checkout pre-linux
 ```
 
 ## Copyright
