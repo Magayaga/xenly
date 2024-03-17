@@ -1,8 +1,16 @@
+/*
+ * XENLY - high-level and general-purpose programming language
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in C programming language.
+ *
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "color.h"
 
+// Initialize project
 void initialize_project() {
     // Create a new folder for the project
     system("mkdir xenly_project");
@@ -30,6 +38,7 @@ void initialize_project() {
     printf(" folder.\n");
 }
 
+// Create project
 void create_project(const char *project_name) {
     // Create a new folder for the project
     char mkdir_command[100];
@@ -61,6 +70,7 @@ void create_project(const char *project_name) {
     // Inform the user that the project has been initialized
     printf("New Xenly project initialized in ");
     setBackgroundGreen();
+    white();
     printf(" '%s_project' ", project_name);
     resetColor();
     resetBackgroundColor();
