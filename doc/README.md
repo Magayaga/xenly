@@ -1,6 +1,6 @@
 # Xenly's documentation
 
-Official documentation of **Xenly** programming language.
+Official documentation of **Xenly** programming language was written in **Markdown**.
 
 ## Copyright
 
