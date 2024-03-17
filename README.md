@@ -30,6 +30,10 @@ Here is the Hyzero programming language that was initially written in Python pro
 $ git clone https://github.com/xenly xenly-pre-linux
 $ cd xenly-pre-linux
 $ git checkout pre-linux
+
+# Compile and run
+$ make
+$ bash main.sh
 ```
 
 ## Copyright
