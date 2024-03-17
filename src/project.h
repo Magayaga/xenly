@@ -1,10 +1,10 @@
 #ifndef PROJECT_H
 #define PROJECT_H
 
-// Project
+// Initialize project
 void initialize_project();
 
-// New project
+// Create project
 void create_project();
 
 #endif
