@@ -5,7 +5,7 @@
 # It is initially written in C programming language.
 #
 xenly: xenly.c
-	cc xenly.c print_info.c color.c -o xenly -lm
+	cc xenly.c print_info.c color.c project.c -o xenly -lm
 
 test:
     # Add your test commands here
