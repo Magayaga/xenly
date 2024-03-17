@@ -1,11 +1,10 @@
-# applications
+# executables
 *.exe
-*.dll
-*.dll.exp
-*.dll.lib
-*.pdb
-*.so
-*.o
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
 
 # folders
 obj/
