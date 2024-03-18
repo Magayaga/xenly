@@ -11,7 +11,7 @@
 // Initialize project
 void initialize_project();
 
-// Create project
-void create_project();
+// Create initialize project
+void create_initialize_project(const char *project_name);
 
 #endif
