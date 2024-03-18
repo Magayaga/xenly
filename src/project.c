@@ -38,11 +38,11 @@ void initialize_project() {
     printf(" folder.\n");
 }
 
-// Create project
-void create_project(const char *project_name) {
+// Create initialize project
+void create_initialize_project(const char *project_name) {
     // Create a new folder for the project
     char mkdir_command[100];
-    sprintf(mkdir_command, "mkdir %s_project", project_name);
+    sprintf(mkdir_command, "mkdir %s", project_name);
     if (system(mkdir_command) != 0) {
         perror("Unable to create project directory");
         return;
@@ -71,7 +71,7 @@ void create_project(const char *project_name) {
     printf("New Xenly project initialized in ");
     setBackgroundGreen();
     white();
-    printf(" '%s_project' ", project_name);
+    printf(" '%s' ", project_name);
     resetColor();
     resetBackgroundColor();
     printf(" folder.\n");
