@@ -153,7 +153,9 @@ void execute_input(const char* message, char* buffer, int buffer_size) {
         }
         strncpy(buffer, message + 1, length);
         buffer[length] = '\0'; // Null-terminate the string
-    } else {
+    }
+    
+    else {
         // No quotes found, copy the entire message to the buffer
         if (strlen(message) >= buffer_size) {
             error("Input message is too long for the buffer");
@@ -827,7 +829,12 @@ double execute_get(const char* array_name, int index) {
 
 // Main function
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
+    
+    if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
+        create_initialize_project(argv[2]);
+    }
+
+    else if (argc != 4) {
         error("Usage: xenly [input file]");
     }
 
@@ -864,11 +871,6 @@ int main(int argc, char* argv[]) {
 
     else if (argc == 2 && (strcmp(argv[1], "--new-project") == 0)) {
         initialize_project();
-        return 0;
-    }
-
-    else if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
-        create_project();
         return 0;
     }
 
@@ -952,7 +954,9 @@ int main(int argc, char* argv[]) {
 
                 // Execute the 'for' loop
                 execute_for(input_file, loop_variable, start_value, end_value, loop_body);
-            } else {
+            }
+
+            else {
                 error("Invalid 'for' loop");
             }
         }
