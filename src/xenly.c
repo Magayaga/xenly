@@ -829,12 +829,13 @@ double execute_get(const char* array_name, int index) {
 
 // Main function
 int main(int argc, char* argv[]) {
-    
+
     if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
+        // Create initialize project
         create_initialize_project(argv[2]);
     }
 
-    else if (argc != 4) {
+    else if (argc != 2) {
         error("Usage: xenly [input file]");
     }
 
