@@ -34,6 +34,9 @@ $ git checkout pre-linux
 # Compile and run
 $ make
 $ bash main.sh
+
+# Open the xenly programming language compiler
+$ ./xenly examples/print/main.xe
 ```
 
 ## Copyright
