@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <math.h>
 #include "color.h"
+#include "error.h"
 #include "xenly.h"
 #include "project.h"
 #include "print_info.h"
@@ -33,14 +34,6 @@ bool evaluately_condition(const char* condition) {
     // This is a simplified example
     return atoi(condition) != 0;
     return true;
-}
-
-// Error
-void error(const char* message) {
-    red();
-    fprintf(stderr, "Error: %s\n", message);
-    resetColor();
-    exit(1);
 }
 
 double evaluate_condition(const char* condition);
