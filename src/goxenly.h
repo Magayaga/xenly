@@ -84,6 +84,7 @@ extern __declspec(dllexport) void initialize_project();
 extern __declspec(dllexport) void create_initialize_project(GoString projectName);
 extern __declspec(dllexport) GoUint8 evaluately_condition(GoString condition);
 extern __declspec(dllexport) void error(GoString message);
+extern __declspec(dllexport) void execute_print(GoString arg);
 
 #ifdef __cplusplus
 }
