@@ -9,8 +9,8 @@ package main
 
 import "C"
 import "fmt"
-// import "math"
-// import "strings"
+import "math"
+import "strings"
 import "strconv"
 import "os"
 import "runtime"
@@ -183,10 +183,121 @@ func evaluately_condition(condition string) bool {
     return result != 0
 }
 
+/******************************************/
+/******************************************/
+/*                 ERROR                  */
+/******************************************/
+/******************************************/
+
 //export error
 func error(message string) {
     fmt.Fprintf(os.Stderr, "\x1b[31mError: %s\x1b[0m\n", message)
     os.Exit(1)
+}
+
+/******************************************/
+/******************************************/
+/*               CONSTANTS                */
+/******************************************/
+/******************************************/
+
+// Constants
+const (
+    mathPi            = 3.14159265358979323846
+    mathTau           = 6.28318530717958647692
+    mathE             = 2.71828182845904523536
+    mathGoldenRatio   = 1.61803398874989484820
+    mathSilverRatio   = 2.41421356237309504880
+    mathSupergolden   = 1.46557123187676802665
+)
+
+/******************************************/
+/******************************************/
+/*                 PRINT                  */
+/******************************************/
+/******************************************/
+
+//export execute_print
+func execute_print(arg string) {
+    arg = strings.TrimSpace(arg)
+
+    // Handle quoted strings
+    if (arg[0] == '"' && arg[len(arg)-1] == '"') || (arg[0] == '\'' && arg[len(arg)-1] == '\'') {
+        fmt.Println(arg[1 : len(arg)-1])
+        return
+    }
+
+    // Handle arithmetic expressions
+    /* if strings.ContainsAny(arg, "+-*\/%^") {
+        result, err := evaluate_arithmetic_expression(arg)
+        if err != nil {
+            fmt.Println("Error:", err)
+            return
+        }
+        fmt.Println(result)
+        return
+    } */
+
+    // Handle constants
+    switch arg {
+    case "pi", "π":
+        fmt.Println(mathPi)
+    case "tau", "τ":
+        fmt.Println(mathTau)
+    case "e":
+        fmt.Println(mathE)
+    case "goldenRatio":
+        fmt.Println(mathGoldenRatio)
+    case "silverRatio":
+        fmt.Println(mathSilverRatio)
+    case "supergoldenRatio":
+        fmt.Println(mathSupergolden)
+    }
+
+    // Handle functions
+    if strings.HasPrefix(arg, "sqrt(") && arg[len(arg)-1] == ')' {
+        expr := arg[5 : len(arg)-1]
+        value, err := strconv.ParseFloat(expr, 64)
+        if err != nil {
+            fmt.Println("Error:", err)
+            return
+        }
+        
+        if value < 0 {
+            fmt.Println("Error: Square root of a negative number is not supported")
+            return
+        }
+        
+        fmt.Println(math.Sqrt(value))
+        return
+    }
+
+    if strings.HasPrefix(arg, "cbrt(") && arg[len(arg)-1] == ')' {
+        expr := arg[5 : len(arg)-1]
+        value, err := strconv.ParseFloat(expr, 64)
+        if err != nil {
+            fmt.Println("Error:", err)
+            return
+        }
+
+        if value < 0 {
+            fmt.Println("Error: Cube root of a negative number is not supported")
+            return
+        }
+        
+        fmt.Println(math.Cbrt(value))
+        return
+    }
+
+    // Handle numeric constants or expressions
+    value, err := strconv.ParseFloat(arg, 64)
+    if err == nil {
+        fmt.Println(value)
+        return
+    }
+
+    // Handle other cases as error
+    fmt.Println("Error: Invalid input")
 }
 
 func main() {}
