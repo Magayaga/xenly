@@ -572,10 +572,14 @@ double evaluate_factor(const char** expression) {
         result = evaluate_arithmetic_expression(*expression);
         if (**expression == ')') {
             (*expression)++; // Move past the closing parenthesis
-        } else {
+        }
+        
+        else {
             error("Mismatched parentheses");
         }
-    } else {
+    }
+    
+    else {
         result = atof(*expression);
         while (isdigit(**expression) || **expression == '.') {
             (*expression)++; // Move past digits and the decimal point
