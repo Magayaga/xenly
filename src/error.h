@@ -5,13 +5,10 @@
  * It is initially written in C programming language.
  *
  */
-#ifndef PROJECT_H
-#define PROJECT_H
+#ifndef ERROR_H
+#define ERROR_H
 
-// Initialize project
-void initialize_project();
+// Error
+void error(const char* message);
 
-// Create initialize project
-void create_initialize_project(const char *project_name);
-
-#endif
+#endif // MATH_H

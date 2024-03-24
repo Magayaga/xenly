@@ -52,19 +52,9 @@ int multiline_comment = 0;
 
 bool evaluately_condition(const char* condition);
 
-void error(const char* message);
-
 void execute_comment(const char* comment);
 
 double evaluate_condition(const char* condition);
-
-double xe_sqrt(double x);
-
-double xe_cbrt(double x);
-
-double execute_sqrt(const char* arg);
-
-double execute_cbrt(const char* arg);
 
 void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body);
 
@@ -83,42 +73,6 @@ bool evaluate_bool(const char* value);
 void execute_var(const char* name, const char* value);
 
 void execute_let(const char* name, const char* value);
-
-double execute_pow(const char* arg);
-
-double execute_sin(const char* arg);
-
-double execute_cos(const char* arg);
-
-double execute_tan(const char* arg);
-
-double execute_gamma(const char* arg);
-
-double max(double x, double y);
-
-double min(double x, double y);
-
-double execute_max(const double* numbers, int count);
-
-double execute_min(const double* numbers, int count);
-
-double xe_abs(double x);
-
-double execute_abs(const char* arg);
-
-double ffrt(double x);
-
-int factorial(int n);
-
-int execute_factorial(const char* arg);
-
-int fibonacci(int n);
-
-int execute_fibonacci(const char* arg);
-
-int convert_binary_to_decimal(const char* binary);
-
-char* convert_decimal_to_binary(int decimal);
 
 double evaluate_factor(const char** expression);
 

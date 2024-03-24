@@ -176,10 +176,50 @@ fn initialize_project() {
     println!("New Xenly project initialized in 'xenly_project' folder.");
 }
 
+// Create initialize project
+fn create_initialize_project(project_name: &str) {
+    // Create a new folder for the project
+    if let Err(err) = fs::create_dir(project_name) {
+        eprintln!("Unable to create project directory: {}", err);
+        return;
+    }
+
+    // Change directory to the newly created folder
+    if let Err(err) = std::env::set_current_dir(project_name) {
+        eprintln!("Unable to change directory to project folder: {}", err);
+        return;
+    }
+
+    // Create a new Xenly source file
+    let source_file_path = Path::new("main.xe");
+    let mut source_file = match fs::File::create(&source_file_path) {
+        Ok(file) => file,
+        Err(err) => {
+            eprintln!("Unable to create source file: {}", err);
+            return;
+        }
+    };
+
+    // Write default "hello world" program to the source file
+    if let Err(err) = writeln!(source_file, "print(\"Hello, World!\")\nprint(2*9-6/3*5)\n") {
+        eprintln!("Error writing to source file: {}", err);
+        return;
+    }
+
+    // Inform the user that the project has been initialized
+    println!("New Xenly project initialized in '{}'", project_name);
+}
+
 // Main function
 fn main() {
     // Get the command-line arguments
     let args: Vec<String> = env::args().collect();
+
+    if args.len() == 3 && args[1] == "--create-project" {
+        // Call create_initialize_project with the project name specified in the command line argument
+        create_initialize_project(&args[2]);
+        return;
+    }
 
     // Check if a filename is provided as an argument
     if args.len() != 2 {
@@ -198,6 +238,7 @@ fn main() {
         println!("  -os, --operatingsystem       Display the operating system.");
         println!("  --author                     Display the author information.");
         println!("  --new-project                Create a new xenly project.");
+        println!("  --create-project             Create a new Xenly project.");
         println!("For bug reporting instructions, please see:");
         println!("{}{} <https://github.com/magayaga/xenly> {}", Color::Black.to_ansi_code(), BackgroundColor::OrangeBackground.to_ansi_code(), color::reset());
         return;

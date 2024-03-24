@@ -5,13 +5,14 @@
  * It is initially written in C programming language.
  *
  */
-#ifndef PROJECT_H
-#define PROJECT_H
+#include <stdio.h>
+#include <stdlib.h>
+#include "color.h"
 
-// Initialize project
-void initialize_project();
-
-// Create initialize project
-void create_initialize_project(const char *project_name);
-
-#endif
+// Error
+void error(const char* message) {
+    red();
+    fprintf(stderr, "Error: %s\n", message);
+    resetColor();
+    exit(1);
+}
