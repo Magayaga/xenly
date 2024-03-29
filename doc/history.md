@@ -20,12 +20,12 @@
 
 * On February 10, 2024, He announced that the Xenly programming language was written in **C** and **Rust** programming languages are the same.
 
-* On February 24, 2024, He wrote **“I think beta version of the Xenly programming language next year”**. Xenly programming language was worked on GCC compiler but not TinyCC and Clang compilers are all fixing warnings.
+* On February 24, 2024, He wrote **“I think a beta version of the Xenly programming language next year”**. Xenly programming language was worked on GCC compiler but not TinyCC and Clang compilers are all fixing warnings.
 
-* On February 29, 2024, He announced that the updates and features of Xenly programming language is the first leap day of the following compiled high-level programming language.
+* On February 29, 2024, He announced that the updates and features of the Xenly programming language are the first leap day of the following compiled high-level programming language.
 
-* On March 2, 2024, He announced that the fixing errors and bugs of the Xenly programming language but checking compilers and interpreters.
+* On March 2, 2024, He announced the fixing errors and bugs of the Xenly programming language but checking compilers and interpreters.
 
-* On March 9, 2024, He announced that the Xenly programming language for fixing features of **Linux** and **Windows** operating systems.
+* On March 9, 2024, He announced the Xenly programming language for fixing features of **Linux** and **Windows** operating systems.
 
-* On March 27, 2024, He was sick due to cough, headache, and dry nose.
+* On March 27, 2024, He was sick due to a cough, headache, and dry nose.
