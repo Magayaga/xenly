@@ -6,6 +6,7 @@
  *
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include "color.h"
 #include "print_info.h"
 
@@ -103,4 +104,23 @@ void print_operatingsystem() {
     #else
         printf("Unknown/Segmentation fault\n");
     #endif
+}
+
+// Print source code of lines
+void print_code_of_lines(const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        fprintf(stderr, "Error: Unable to open file %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    int lines = 0;
+    char buffer[BUFSIZ];
+    while (fgets(buffer, sizeof(buffer), file) != NULL) {
+        lines++;
+    }
+
+    printf("Number of lines in %s: %d\n", filename, lines);
+
+    fclose(file);
 }

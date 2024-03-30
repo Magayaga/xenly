@@ -26,4 +26,7 @@ void print_author();
 // Print operating systems
 void print_operatingsystem();
 
+// Print source code of lines
+void print_code_of_lines(const char *filename);
+
 #endif
