@@ -32,18 +32,18 @@ var numVariables int // assuming num_variables is a global variable in C
 
 //export print_version
 func print_version() {
-    fmt.Println("Xenly 0.1.0-preview5 (Pre-alpha release)")
+    fmt.Println("Xenly 0.1.0-preview6 (Pre-alpha release)")
     fmt.Println("Copyright (c) 2023-2024 Cyril John Magayaga")
 }
 
 //export print_dumpversion
 func print_dumpversion() {
-    fmt.Println("0.1.0-preview5")
+    fmt.Println("0.1.0-preview6")
 }
 
 //export print_dumpreleasedate
 func print_dumpreleasedate() {
-    fmt.Println("March 30, 2024")
+    fmt.Println("April 29, 2024")
 }
 
 //export print_help
