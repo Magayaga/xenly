@@ -392,6 +392,7 @@ double execute_sqrt(const char* arg) {
     else {
         error("Square root of a negative number is not supported");
     }
+    
     return 0;
 }
 
@@ -487,6 +488,7 @@ int factorial(int n) {
     if (n == 0 || n == 1) {
         return 1;
     }
+
     return n * factorial(n - 1);
 }
 
@@ -496,6 +498,7 @@ int execute_factorial(const char* arg) {
     if (result < 0) {
         error("Factorial of a negative number is not supported");
     }
+
     return factorial(result);
 }
 
@@ -503,9 +506,13 @@ int execute_factorial(const char* arg) {
 int fibonacci(int n) {
     if (n <= 0) {
         return 0;
-    } else if (n == 1) {
+    }
+    
+    else if (n == 1) {
         return 1;
-    } else {
+    }
+    
+    else {
         return fibonacci(n - 1) + fibonacci(n - 2);
     }
 }
@@ -830,6 +837,12 @@ int main(int argc, char* argv[]) {
     if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
         // Create initialize project
         create_initialize_project(argv[2]);
+    }
+
+    if (argc == 2 && (strcmp(argv[1], "--numbercodeline") == 0 || strcmp(argv[1], "-ncl") == 0)) {
+        // Assuming the argument is a filename
+        print_code_of_lines(argv[1]);
+        return EXIT_FAILURE;
     }
 
     else if (argc != 2) {
