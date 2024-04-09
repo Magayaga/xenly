@@ -53,6 +53,7 @@ typedef struct {
 
 Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
+int multiline_comment = 0;
 
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
@@ -361,6 +362,31 @@ int main(int argc, char* argv[]) {
 
         else if (strncmp(line, "//", 2) == 0) {
             continue;
+        }
+
+        else if (multiline_comment == 0) {
+            // Check if the line starts with "/*"
+            if (strncmp(line, "/*", 2) == 0) {
+                multiline_comment = 0;
+                // If the line contains both "/*" and "*/" on the same line
+                if (strstr(line, "*/") != NULL) {
+                    multiline_comment = 0;
+                }
+                
+                continue;
+            }
+        }
+
+        else if (multiline_comment == 1) {
+            // Check if the line contains "*/"
+            if (strstr(line, "*/") != NULL) {
+                multiline_comment = 0;
+                continue;
+            }
+            
+            else {
+                continue;
+            }
         }
 
         else {
