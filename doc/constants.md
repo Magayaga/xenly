@@ -1,4 +1,4 @@
-# mathematical constants in Xenly
+# mathematical and physical constants in Xenly
 
 > [!NOTE]
 > A mathematical constant is a key number whose value is fixed by an unambiguous definition,
@@ -15,6 +15,13 @@
 | `goldenRatio`      | The golden ratio, also known as the golden number, golden proportion, or the divine proportion, is a ratio between two numbers that equals approximately 1.618. |
 | `silverRatio`      | The numerical value of the silver ratio is approximately 2.414                                                                                                  |
 | `supergoldenRatio` | A geometrical proportion close to 85/58. Its true value is the real solution of the equation x³ = x² + 1.                                                       |
+
+> [!NOTE]
+> A physical constant, sometimes fundamental physical constant or universal constant,
+> is a physical quantity that cannot be explained by a theory and
+> therefore must be measured experimentally. It is distinct from a mathematical
+> constant, which has a fixed numerical value,
+> but does not directly involve any physical measurement.
 
 ## Copyright
 Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
