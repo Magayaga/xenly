@@ -245,18 +245,18 @@ fn main() {
     }
 
     if args.len() == 2 && (args[1] == "-v" || args[1] == "--version") {
-        println!("Xenly 0.1.0-preview6 (Pre-alpha release)");
+        println!("Xenly 0.1.0-preview7 (Pre-alpha release)");
         println!("Copyright (c) 2023-2024 Cyril John Magayaga");
         return;
     }
 
     if args.len() == 2 && (args[1] == "-dv" || args[1] == "--dumpversion") {
-        println!("0.1.0-preview6");
+        println!("0.1.0-preview7");
         return;
     }
 
     if args.len() == 2 && (args[1] == "-drd" || args[1] == "--dumpreleasedate") {
-        println!("April 29, 2024");
+        println!("May 28, 2024");
         return;
     }
 
