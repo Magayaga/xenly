@@ -25,7 +25,7 @@
 #define MATH_SILVER_RATIO 2.41421356237309504880
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
 
-#define XENLY_VERSION "0.1.0-nanopreview1"
+#define XENLY_VERSION "0.1.0-nanopreview2"
 
 typedef struct {
     char name[MAX_TOKEN_SIZE];
@@ -55,6 +55,12 @@ Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
 int multiline_comment = 0;
 
+typedef struct {
+    char name[MAX_TOKEN_SIZE];
+    char version[MAX_TOKEN_SIZE];
+    // Add more fields as needed
+} Module;
+
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
     exit(1);
@@ -66,6 +72,36 @@ void execute_comment(const char* comment) {
 
 double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
+
+// Function to load a module
+void load_module(const char* module_name) {
+    // Construct the filename based on the module name
+    char filename[MAX_TOKEN_SIZE];
+    sprintf(filename, "%s.xen", module_name);
+
+    // Open the module file
+    FILE* module_file = fopen(filename, "r");
+    if (module_file == NULL) {
+        fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
+        return;
+    }
+
+    // Read and execute the module contents
+    char line[MAX_TOKEN_SIZE];
+    while (fgets(line, sizeof(line), module_file)) {
+        // Execute module code
+        // This may involve parsing and interpreting the module's content
+        // Execute each line of the module code as Xenly code
+        // Handle errors if any occur
+    }
+
+    fclose(module_file);
+}
+
+// import module name
+void execute_import(const char* module_name) {
+    load_module(module_name);
+}
 
 // Factor
 double evaluate_factor(const char** expression) {
@@ -358,6 +394,10 @@ int main(int argc, char* argv[]) {
 
         else if (strncmp(line, "var", 3) == 0) {
             execute_var(line);
+        }
+
+        else if (strncmp(line, "import ", 7) == 0) {
+            execute_import(line + 7); // Skip "import" and pass module name to load_module function
         }
 
         else if (strncmp(line, "//", 2) == 0) {
