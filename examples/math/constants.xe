@@ -2,8 +2,17 @@
    Xenly programming language
    Copyright 2024 Cyril John Magayaga
 
-   This is mathematical constants
+   This is constants
 */
+
+// Mathematical constants
 print(pi)
 print(e)
 print(goldenRatio)
+print(silverRatio)
+print(supergoldenRatio)
+
+// Physical constants
+print(speedOfLight)
+print(speedOfLight.kmh)
+print(speedOfLight.mih)
