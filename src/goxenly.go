@@ -57,7 +57,8 @@ func print_help() {
     fmt.Println("  -dv, --dumpversion           Display the version of the compiler.");
     fmt.Println("  -os, --operatingsystem       Display the operating system.");
     fmt.Println("  --author                     Display the author information.");
-    fmt.Println("  --new-project                Create a new xenly project.");
+    fmt.Println("  --new-project                Create a default Xenly project.");
+    fmt.Println("  --create-project             Create a new Xenly project.");
     fmt.Println("For bug reporting instructions, please see:")
     fmt.Println("<https://github.com/magayaga/xenly>")
 }
@@ -203,12 +204,16 @@ func error(message string) {
 
 // Constants
 const (
-    mathPi            = 3.14159265358979323846
-    mathTau           = 6.28318530717958647692
-    mathE             = 2.71828182845904523536
-    mathGoldenRatio   = 1.61803398874989484820
-    mathSilverRatio   = 2.41421356237309504880
-    mathSupergolden   = 1.46557123187676802665
+    mathPi                 = 3.14159265358979323846
+    mathTau                = 6.28318530717958647692
+    mathE                  = 2.71828182845904523536
+    mathGoldenRatio        = 1.61803398874989484820
+    mathSilverRatio        = 2.41421356237309504880
+    mathSupergoldenRatio   = 1.46557123187676802665
+    speedOfLight_ms        = 299792458
+    speedOfLight_kmh       = 1080000000
+    speedOfLight_mileS     = 186000
+
 )
 
 /******************************************/
@@ -251,7 +256,13 @@ func execute_print(arg string) {
     case "silverRatio":
         fmt.Println(mathSilverRatio)
     case "supergoldenRatio":
-        fmt.Println(mathSupergolden)
+        fmt.Println(mathSupergoldenRatio)
+    case "speedOfLight":
+        fmt.Println(speedOfLight_ms)
+    case "speedOfLight.kmh":
+        fmt.Println(speedOfLight_kmh)
+    case "speedOfLight.mih":
+        fmt.Println(speedOfLight_mileS)
     }
 
     // Handle functions

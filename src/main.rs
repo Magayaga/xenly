@@ -237,7 +237,7 @@ fn main() {
         println!("  -dv, --dumpversion           Display the version of the compiler.");
         println!("  -os, --operatingsystem       Display the operating system.");
         println!("  --author                     Display the author information.");
-        println!("  --new-project                Create a new xenly project.");
+        println!("  --new-project                Create a default Xenly project.\n");
         println!("  --create-project             Create a new Xenly project.");
         println!("For bug reporting instructions, please see:");
         println!("{}{} <https://github.com/magayaga/xenly> {}", Color::Black.to_ansi_code(), BackgroundColor::OrangeBackground.to_ansi_code(), color::reset());

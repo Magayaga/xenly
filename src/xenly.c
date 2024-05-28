@@ -28,6 +28,11 @@
 #define MATH_SILVER_RATIO 2.41421356237309504880
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
 
+// Physical constants
+#define PHYSICAL_SPEED_OF_LIGHT_MS 299792458
+#define PHYSICAL_SPEED_OF_LIGHT_KMH 1080000000
+#define PHYSICAL_SPEED_OF_LIGHT_MileS 186000
+
 // Evaluately condition
 bool evaluately_condition(const char* condition) {
     // Implement a more comprehensive logic for evaluating conditions
@@ -84,6 +89,18 @@ void execute_print(const char* arg) {
     
     else if (strcmp(arg, "supergoldenRatio") == 0) {
         printf("%lf\n", MATH_SUPERGOLDEN_RATIO);
+    }
+
+    else if (strcmp(arg, "speedOfLight") == 0) {
+        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MS);
+    }
+
+    else if (strcmp(arg, "speedOfLight.kmh") == 0) {
+        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_KMH);
+    }
+
+    else if (strcmp(arg, "speedOfLight.mih") == 0) {
+        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MileS);
     }
     
     else if (strncmp(arg, "sqrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {

@@ -2,8 +2,20 @@
     "configurations": [
         {
             "type": "python",
-            "name": "Python configuration",
-            "file": "install.py",
+            "name": "Python configuration with Clang",
+            "file": "install-clang.py",
+            "arguments": [],
+        },
+        {
+            "type": "python",
+            "name": "Python configuration with GCC",
+            "file": "install-gcc.py",
+            "arguments": [],
+        },
+        {
+            "type": "python",
+            "name": "Python configuration with Go",
+            "file": "install-go.py",
             "arguments": [],
         },
         {

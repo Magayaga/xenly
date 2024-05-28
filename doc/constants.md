@@ -23,5 +23,11 @@
 > constant, which has a fixed numerical value,
 > but does not directly involve any physical measurement.
 
+| Constant           | Description                                                                                                                                                     |
+|:-------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `speedOfLight`     | The speed of light in vacuum is a universal physical constant that is exactly equal to 299,792,458 metres per second.
+| `speedOfLight.kmh` | The speed of light in vacuum is a universal physical constant that is exactly equal to 1,080,000,000 kilometres per hour.
+| `speedOfLight.mih` | The speed of light in vacuum is a universal physical constant that is exactly equal to 186,000 miles per second.
+
 ## Copyright
 Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
