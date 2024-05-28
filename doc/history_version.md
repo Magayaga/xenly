@@ -8,7 +8,7 @@
 | `v0.1.0-preview4` | February 29, 2024  | [`29fb752`](https://github.com/Magayaga/xenly/commit/29fb7528a046d7c81263e10a604dce4455ecea22) |
 | `v0.1.0-preview5` | March 30, 2024     | [`2282292`](https://github.com/Magayaga/xenly/commit/228229200a6b3d15c44eb2a631c5eca556084457) |
 | `v0.1.0-preview6` | April 29, 2024     | [`8fdca6e`](https://github.com/Magayaga/xenly/commit/8fdca6e66b0f15e73e4e8689a2522ec6b4c6695a) |
-| `v0.1.0-preview7` | May 28, 2024 | TBA |
+| `v0.1.0-preview7` | May 28, 2024       | [`0a23548`](https://github.com/Magayaga/xenly/commit/0a235485c1a9f9097a42105d4e6e72231c8f8f16) |
 
 ## Copyright
 Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
