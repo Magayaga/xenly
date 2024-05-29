@@ -4,6 +4,7 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
 
 1. ## Windows operating system:
 
+   You can download the `GCC` compiler (version 9 or above) and `Git` for the Windows operating system.
    ```bash
    # Download the Git and GCC
    $ winget install --id Git.Git -e --source winget
@@ -33,8 +34,9 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
 
    You can pass additional arguments to **Xenly**, and to your program `main.xe` or `operations.xe`.
 
-2. ## Linux or macOS operating systems:
+1. ## Linux or macOS operating systems:
 
+   You can download the `GCC` compiler (version 9 or above), `Clang` compiler (version 13 or above), and `Git` for the Linux and macOS operating systems.
    ```bash
    # Download the Git and GCC
    $ sudo apt-get install git gcc
