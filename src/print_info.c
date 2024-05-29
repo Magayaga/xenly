@@ -10,8 +10,9 @@
 #include "color.h"
 #include "print_info.h"
 
-#define XENLY_RELEASEDATE "May 28, 2024"
-#define XENLY_VERSION "0.1.0-preview6"
+#define XENLY_RELEASEDATE "June 27, 2024"
+#define XENLY_VERSION "0.1.0-preview8"
+#define XENLY_AUTHORS "Cyril John Magayaga"
 
 // Print version
 void print_version() {
@@ -19,7 +20,7 @@ void print_version() {
     printf("Copyright (c) 2023-2024 ");
     setBackgroundBlue();
     white();
-    printf(" Cyril John Magayaga ");
+    printf(" %s ", XENLY_AUTHORS);
     resetBackgroundColor();
     resetColor();
     printf("\n");
@@ -65,7 +66,7 @@ void print_author() {
     printf("Copyright (c) 2023-2024 ");
     setBackgroundBlue();
     white();
-    printf(" Cyril John Magayaga ");
+    printf(" %s ", XENLY_AUTHORS);
     resetBackgroundColor();
     resetColor();
     printf("\n");
