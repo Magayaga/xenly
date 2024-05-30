@@ -19,6 +19,7 @@
 #include "xenly.h"
 #include "project.h"
 #include "print_info.h"
+#include "math_binary.h"
 // #include "goxenly.h"
 
 // Evaluately condition
@@ -533,45 +534,6 @@ int execute_fibonacci(const char* arg) {
         error("Fibonacci of a negative number is not supported");
     }
     return fibonacci(result);
-}
-
-// Binary numbers to decimal
-int convert_binary_to_decimal(const char* binary) {
-    int length = strlen(binary);
-    int decimal = 0;
-
-    for (int i = length - 1; i >= 0; i--) {
-        if (binary[i] == '1') {
-            decimal += pow(2, length - 1 - i);
-        }
-    }
-
-    return decimal;
-}
-
-// Decimal to Binary number
-char* convert_decimal_to_binary(int decimal) {
-    char binary[32]; // Assuming 32-bit integers
-    int index = 0;
-
-    while (decimal > 0) {
-        binary[index++] = (decimal % 2) + '0';
-        decimal /= 2;
-    }
-    binary[index] = '\0';
-
-    // Reverse the binary string
-    int left = 0;
-    int right = index - 1;
-    while (left < right) {
-        char temp = binary[left];
-        binary[left] = binary[right];
-        binary[right] = temp;
-        left++;
-        right--;
-    }
-
-    return strdup(binary);
 }
 
 // Factor
