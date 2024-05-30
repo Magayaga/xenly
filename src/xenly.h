@@ -86,4 +86,5 @@ void execute_set(const char* array_name, int index, double value);
 
 double execute_get(const char* array_name, int index);
 
-#endif // XENLY_H
+
+#endif
