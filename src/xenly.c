@@ -33,6 +33,8 @@
 #define PHYSICAL_SPEED_OF_LIGHT_KMH 1080000000
 #define PHYSICAL_SPEED_OF_LIGHT_MileS 186000
 
+#define PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2_KG2 0.0000000000667430
+
 // Evaluately condition
 bool evaluately_condition(const char* condition) {
     // Implement a more comprehensive logic for evaluating conditions
@@ -102,7 +104,11 @@ void execute_print(const char* arg) {
     else if (strcmp(arg, "speedOfLight.mih") == 0) {
         printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MileS);
     }
-    
+
+    else if (strcmp(arg, "gravitationalConstant") == 0) {
+	printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2_KG2);
+    }
+
     else if (strncmp(arg, "sqrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
         double result = evaluate_condition(arg + 5);
         if (result >= 0) {
