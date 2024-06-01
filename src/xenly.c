@@ -73,29 +73,38 @@ void execute_comment(const char* comment) {
 double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
 
+#ifdef _WIN32
+#define IMPORT_SUFFIX ".dll"
+#else
+#define IMPORT_SUFFIX ".so"
+#endif
+
 // Function to load a module
 void load_module(const char* module_name) {
     // Construct the filename based on the module name
     char filename[MAX_TOKEN_SIZE];
-    sprintf(filename, "%s.xen", module_name);
+    sprintf(filename, "%s" IMPORT_SUFFIX, module_name);
 
-    // Open the module file
-    FILE* module_file = fopen(filename, "r");
-    if (module_file == NULL) {
+    // Attempt to open the shared library
+    void* handle = dlopen(filename, RTLD_LAZY);
+    if (!handle) {
         fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
         return;
     }
 
-    // Read and execute the module contents
-    char line[MAX_TOKEN_SIZE];
-    while (fgets(line, sizeof(line), module_file)) {
-        // Execute module code
-        // This may involve parsing and interpreting the module's content
-        // Execute each line of the module code as Xenly code
-        // Handle errors if any occur
-    }
+    // Attempt to load the symbols
+    // Note: Update with actual function pointers based on the module
+    void (*xenly_sqrt)(double) = dlsym(handle, "xenly_sqrt");
+    void (*xenly_pow)(double, double) = dlsym(handle, "xenly_pow");
+    void (*xenly_sin)(double) = dlsym(handle, "xenly_sin");
+    void (*xenly_cos)(double) = dlsym(handle, "xenly_cos");
+    void (*xenly_tan)(double) = dlsym(handle, "xenly_tan");
 
-    fclose(module_file);
+    // Add these function pointers to your module or interpreter context as needed
+    // Example: modules[num_modules++].sqrt = xenly_sqrt;
+
+    // Close the library when done
+    // dlclose(handle);
 }
 
 // import module name
