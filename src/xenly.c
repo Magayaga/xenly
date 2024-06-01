@@ -117,7 +117,7 @@ void execute_import(const char* module_name) {
 // Factor
 double evaluate_factor(const char** expression) {
     // Evaluate a factor in an arithmetic expression
-    double result;
+    double result = 0.0;
 
     // Check for unary minus
     int negate = 1;
