@@ -13,7 +13,6 @@
 #include <ctype.h>
 #include <math.h>
 #include <dlfcn.h>
-#include "xenly_math.h"
 
 #define MAX_TOKEN_SIZE 1000
 #define MAX_VARIABLES 1000
