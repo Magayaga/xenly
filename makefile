@@ -1,25 +1,35 @@
-# Compiler
 CC = gcc
-
-# Source files
-SRCS = src/xenly.c src/xenly_math.c
-
-# Executable name
-EXEC = xenly
-
-# Compiler flags
 CFLAGS = -Wall -Wextra -g
+SRC_DIR = src
+OBJ_DIR = obj
+BIN_DIR = bin
+LIB_DIR = lib
 
-# Linker flags
-LDFLAGS = -lm
+MAIN_SRC = $(SRC_DIR)/xenly.c
+LIB_SRC = $(SRC_DIR)/xenly_math.c
 
-# Targets and rules
-.PHONY: all clean
+MAIN_OBJ = $(OBJ_DIR)/xenly.o
+LIB_OBJ = $(OBJ_DIR)/xenly_math.o
 
-all: $(EXEC)
+MAIN_BIN = $(BIN_DIR)/xenly
+LIB_SO = $(LIB_DIR)/math.so
 
-$(EXEC): $(SRCS)
-	$(CC) $(CFLAGS) $(SRCS) -o $(EXEC) $(LDFLAGS)
+all: $(MAIN_BIN) $(LIB_SO)
+
+$(MAIN_BIN): $(MAIN_OBJ) $(LIB_SO)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $(MAIN_OBJ) -ldl
+
+$(LIB_SO): $(LIB_OBJ)
+	@mkdir -p $(LIB_DIR)
+	$(CC) $(CFLAGS) -shared -o $@ $^
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -fPIC -c $< -o $@
 
 clean:
-	rm -f $(EXEC)
+	rm -rf $(OBJ_DIR) $(BIN_DIR) $(LIB_DIR)
+
+.PHONY: all clean
+
