@@ -9,6 +9,7 @@
  */
 #include <stdio.h>
 #include <math.h>
+#include "xenly_math.h"
 
 // Define a function to calculate the square root
 void xenly_sqrt(double x) {
