@@ -20,7 +20,7 @@ OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 CFLAGS = -Wall -Wextra -g
 
 # Linker flags
-LDFLAGS =
+LDFLAGS = -lm
 
 # Targets and rules
 .PHONY: all clean
