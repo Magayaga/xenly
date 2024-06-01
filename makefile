@@ -1,20 +1,11 @@
 # Compiler
 CC = gcc
 
-# Source files directory
-SRC_DIR = src
-
-# Object files directory
-OBJ_DIR = obj
+# Source files
+SRCS = src/xenly.c src/xenly_math.c
 
 # Executable name
 EXEC = xenly
-
-# Source files
-SRCS = $(wildcard $(SRC_DIR)/*.c)
-
-# Object files
-OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 # Compiler flags
 CFLAGS = -Wall -Wextra -g
@@ -27,14 +18,8 @@ LDFLAGS = -lm
 
 all: $(EXEC)
 
-$(EXEC): $(OBJS)
-	$(CC) $(LDFLAGS) $^ -o $@
-
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
+$(EXEC): $(SRCS)
+	$(CC) $(CFLAGS) $(SRCS) -o $(EXEC) $(LDFLAGS)
 
 clean:
-	rm -rf $(OBJ_DIR) $(EXEC)
+	rm -f $(EXEC)
