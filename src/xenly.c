@@ -93,7 +93,11 @@ void execute_print(const char* arg) {
     }
 
     else if (strcmp(arg, "gravitationalConstant") == 0) {
-	printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2_KG2);
+        printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2);
+    }
+
+    else if (strcmp(arg, "gravitationalConstant.dyncm2.g2") == 0) {
+        printf("%.14f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_DYN_CM2__G2);
     }
 
     else if (strncmp(arg, "sqrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
