@@ -12,19 +12,19 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
+
+#include "xenly_math.h"
 
 #define MAX_TOKEN_SIZE 1000
 #define MAX_VARIABLES 1000
 #define MAX_OBJECTS 1000
 #define MAX_ARRAYS 100
-
-#define MATH_PI 3.14159265358979323846
-#define MATH_TAU 6.28318530717958647692
-#define MATH_E 2.71828182845904523536
-#define MATH_GOLDEN_RATIO 1.61803398874989484820
-#define MATH_SILVER_RATIO 2.41421356237309504880
-#define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
 
 #define XENLY_VERSION "0.1.0-nanopreview2"
 
@@ -74,38 +74,52 @@ void execute_comment(const char* comment) {
 double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
 
-#ifdef _WIN32
-#define IMPORT_SUFFIX ".dll"
+#if defined(_WIN32) || defined(_WIN64)
+#define IMPORT_SUFFIX "dll"
 #else
-#define IMPORT_SUFFIX ".so"
+#define IMPORT_SUFFIX "so"
 #endif
 
-// Function to load a module
 void load_module(const char* module_name) {
-    // Construct the filename based on the module name
     char filename[MAX_TOKEN_SIZE];
-    sprintf(filename, "%s" IMPORT_SUFFIX, module_name);
 
-    // Attempt to open the shared library
+#if defined(_WIN32) || defined(_WIN64)
+    sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
+    HMODULE handle = LoadLibrary(filename);
+    if (!handle) {
+        fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
+        return;
+    }
+
+    // Load function pointers using GetProcAddress
+    void (*xenly_sqrt)(double) = (void (*)(double))GetProcAddress(handle, "xenly_sqrt");
+    void (*xenly_pow)(double, double) = (void (*)(double, double))GetProcAddress(handle, "xenly_pow");
+    void (*xenly_sin)(double) = (void (*)(double))GetProcAddress(handle, "xenly_sin");
+    void (*xenly_cos)(double) = (void (*)(double))GetProcAddress(handle, "xenly_cos");
+    void (*xenly_tan)(double) = (void (*)(double))GetProcAddress(handle, "xenly_tan");
+
+#else
+    sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
     void* handle = dlopen(filename, RTLD_LAZY);
     if (!handle) {
         fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
         return;
     }
 
-    // Attempt to load the symbols
-    // Note: Update with actual function pointers based on the module
-    void (*xenly_sqrt)(double) = dlsym(handle, "xenly_sqrt");
-    void (*xenly_pow)(double, double) = dlsym(handle, "xenly_pow");
-    void (*xenly_sin)(double) = dlsym(handle, "xenly_sin");
-    void (*xenly_cos)(double) = dlsym(handle, "xenly_cos");
-    void (*xenly_tan)(double) = dlsym(handle, "xenly_tan");
+    // Load function pointers using dlsym
+    void (*xenly_sqrt)(double) = (void (*)(double))dlsym(handle, "xenly_sqrt");
+    void (*xenly_pow)(double, double) = (void (*)(double, double))dlsym(handle, "xenly_pow");
+    void (*xenly_sin)(double) = (void (*)(double))dlsym(handle, "xenly_sin");
+    void (*xenly_cos)(double) = (void (*)(double))dlsym(handle, "xenly_cos");
+    void (*xenly_tan)(double) = (void (*)(double))dlsym(handle, "xenly_tan");
 
-    // Add these function pointers to your module or interpreter context as needed
-    // Example: modules[num_modules++].sqrt = xenly_sqrt;
-
-    // Close the library when done
-    // dlclose(handle);
+    char *error;
+    if ((error = dlerror()) != NULL) {
+        fprintf(stderr, "Error: %s\n", error);
+        dlclose(handle);
+        return;
+    }
+#endif
 }
 
 // import module name

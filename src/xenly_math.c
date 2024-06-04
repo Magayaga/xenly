@@ -11,27 +11,34 @@
 #include <math.h>
 #include "xenly_math.h"
 
+#define MATH_PI 3.14159265358979323846
+#define MATH_TAU 6.28318530717958647692
+#define MATH_E 2.71828182845904523536
+#define MATH_GOLDEN_RATIO 1.61803398874989484820
+#define MATH_SILVER_RATIO 2.41421356237309504880
+#define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
+
 // Define a function to calculate the square root
-void xenly_sqrt(double x) {
-    printf("%lf\n", sqrt(x));
+double xenly_sqrt(double x) {
+    return sqrt(x);
 }
 
 // Define a function to calculate the power
-void xenly_pow(double base, double exponent) {
-    printf("%lf\n", pow(base, exponent));
+double xenly_pow(double base, double exp) {
+    return pow(base, exp);
 }
 
 // Define a function to calculate the sine
-void xenly_sin(double x) {
-    printf("%lf\n", sin(x));
+double xenly_sin(double x) {
+    return sin(x);
 }
 
 // Define a function to calculate the cosine
-void xenly_cos(double x) {
-    printf("%lf\n", cos(x));
+double xenly_cos(double x) {
+    return cos(x);
 }
 
 // Define a function to calculate the tangent
-void xenly_tan(double x) {
-    printf("%lf\n", tan(x));
+double xenly_tan(double x) {
+    return tan(x);
 }

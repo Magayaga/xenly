@@ -10,19 +10,26 @@
 #ifndef XENLY_MATH_H
 #define XENLY_MATH_H
 
+#define MATH_PI 3.14159265358979323846
+#define MATH_TAU 6.28318530717958647692
+#define MATH_E 2.71828182845904523536
+#define MATH_GOLDEN_RATIO 1.61803398874989484820
+#define MATH_SILVER_RATIO 2.41421356237309504880
+#define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
+
 // Define a function to calculate the square root
-void xenly_sqrt(double x);
+double xenly_sqrt(double x);
 
 // Define a function to calculate the power
-void xenly_pow(double base, double exponent);
+double xenly_pow(double base, double exponent);
 
 // Define a function to calculate the sine
-void xenly_sin(double x);
+double xenly_sin(double x);
 
 // Define a function to calculate the cosine
-void xenly_cos(double x);
+double xenly_cos(double x);
 
 // Define a function to calculate the tangent
-void xenly_tan(double x);
+double xenly_tan(double x);
 
 #endif
