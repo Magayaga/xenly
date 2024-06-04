@@ -84,6 +84,10 @@ void execute_print(const char* arg) {
         printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MS);
     }
 
+    else if (strcmp(arg, "c") == 0) {
+        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MS);
+    }
+
     else if (strcmp(arg, "speedOfLight.kmh") == 0) {
         printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_KMH);
     }
@@ -93,6 +97,10 @@ void execute_print(const char* arg) {
     }
 
     else if (strcmp(arg, "gravitationalConstant") == 0) {
+        printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2);
+    }
+
+    else if (strcmp(arg, "G") == 0) {
         printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2);
     }
 
