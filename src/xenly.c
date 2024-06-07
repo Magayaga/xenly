@@ -12,6 +12,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include "print_info.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -23,8 +24,6 @@
 #define MAX_VARIABLES 1000
 #define MAX_OBJECTS 1000
 #define MAX_ARRAYS 100
-
-#define XENLY_VERSION "0.1.0-nanopreview2"
 
 typedef struct {
     char name[MAX_TOKEN_SIZE];
@@ -247,7 +246,7 @@ double evaluate_arithmetic_expression(const char** expression) {
     return result;
 }
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(_WIN64)
 // WINDOWS OPERATING SYSTEM
 void execute_print(const char* arg) {
     // Check if the argument is a variable reference
@@ -376,18 +375,23 @@ double evaluate_condition(const char* condition) {
     return atof(condition); // Convert string to double
 }
 
-// Print version
-void print_version() {
-    printf("Xenly %s (Pre-alpha release)\n", XENLY_VERSION);
-}
-
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         error("Usage: xenly [input file]");
     }
 
-    if (strcmp(argv[1], "--version") == 0) {
+    else if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
         print_version();
+        return 0;
+    }
+
+    else if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
+        print_dumpversion();
+        return 0;
+    }
+
+    else if (strcmp(argv[1], "--author") == 0) {
+        print_author();
         return 0;
     }
 
