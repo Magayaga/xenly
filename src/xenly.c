@@ -19,8 +19,6 @@
 #include <dlfcn.h>
 #endif
 
-#include "xenly_math.h"
-
 #define MAX_TOKEN_SIZE 1000
 #define MAX_VARIABLES 1000
 #define MAX_OBJECTS 1000
@@ -62,6 +60,10 @@ typedef struct {
     // Add more fields as needed
 } Module;
 
+typedef double (*xenly_sqrt_t)(double);
+
+xenly_sqrt_t xenly_sqrt;
+
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
     exit(1);
@@ -92,12 +94,12 @@ void load_module(const char* module_name) {
     }
 
     // Load function pointers using GetProcAddress
-    void (*xenly_sqrt)(double) = (void (*)(double))GetProcAddress(handle, "xenly_sqrt");
-    void (*xenly_pow)(double, double) = (void (*)(double, double))GetProcAddress(handle, "xenly_pow");
-    void (*xenly_sin)(double) = (void (*)(double))GetProcAddress(handle, "xenly_sin");
-    void (*xenly_cos)(double) = (void (*)(double))GetProcAddress(handle, "xenly_cos");
-    void (*xenly_tan)(double) = (void (*)(double))GetProcAddress(handle, "xenly_tan");
-
+    xenly_sqrt = (xenly_sqrt_t)(void*)GetProcAddress(handle, "xenly_sqrt");
+    if (!xenly_sqrt) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_sqrt' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 #else
     sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
     void* handle = dlopen(filename, RTLD_LAZY);
@@ -106,13 +108,7 @@ void load_module(const char* module_name) {
         return;
     }
 
-    // Load function pointers using dlsym
-    void (*xenly_sqrt)(double) = (void (*)(double))dlsym(handle, "xenly_sqrt");
-    void (*xenly_pow)(double, double) = (void (*)(double, double))dlsym(handle, "xenly_pow");
-    void (*xenly_sin)(double) = (void (*)(double))dlsym(handle, "xenly_sin");
-    void (*xenly_cos)(double) = (void (*)(double))dlsym(handle, "xenly_cos");
-    void (*xenly_tan)(double) = (void (*)(double))dlsym(handle, "xenly_tan");
-
+    xenly_sqrt = (xenly_sqrt_t)dlsym(handle, "xenly_sqrt");
     char *error;
     if ((error = dlerror()) != NULL) {
         fprintf(stderr, "Error: %s\n", error);
@@ -120,11 +116,6 @@ void load_module(const char* module_name) {
         return;
     }
 #endif
-}
-
-// import module name
-void execute_import(const char* module_name) {
-    load_module(module_name);
 }
 
 // Factor
@@ -157,7 +148,7 @@ double evaluate_factor(const char** expression) {
             (*expression)++; // Move past digits and the decimal point
         }
     }
-    
+    /*
     else {
         // Handle mathematical constants
         if (strncmp(*expression, "pi", 2) == 0) {
@@ -194,6 +185,7 @@ double evaluate_factor(const char** expression) {
             error("Invalid factor");
         }
     }
+    */
 
     return result;
 }
@@ -408,6 +400,10 @@ int main(int argc, char* argv[]) {
     while (fgets(line, sizeof(line), input_file)) {
         line[strcspn(line, "\n")] = '\0';
 
+        if (strncmp(line, "import ", 7) == 0) {
+            load_module(line + 7);
+        }
+        
         if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
             char argument[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
             strncpy(argument, line + 6, strlen(line) - 7);
@@ -418,10 +414,6 @@ int main(int argc, char* argv[]) {
 
         else if (strncmp(line, "var", 3) == 0) {
             execute_var(line);
-        }
-
-        else if (strncmp(line, "import ", 7) == 0) {
-            execute_import(line + 7); // Skip "import" and pass module name to load_module function
         }
 
         else if (strncmp(line, "//", 2) == 0) {
@@ -452,13 +444,19 @@ int main(int argc, char* argv[]) {
                 continue;
             }
         }
+        
+        else if (strncmp(line, "xenly_sqrt(", 11) == 0) {
+            double num = atof(line + 11);
+            printf("%f\n", xenly_sqrt(num));
+        }
 
         else {
             error("Invalid statement");
         }
+        // Handle other function calls similarly...
     }
 
     fclose(input_file);
-
+    
     return 0;
 }
