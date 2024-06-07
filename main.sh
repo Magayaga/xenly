@@ -1,5 +1,5 @@
 #
-# XENON - high-level and general-purpose programming language
+# XENLY - high-level and general-purpose programming language
 # created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
 # 
 # It is initially written in C programming language.
@@ -14,7 +14,8 @@ else
 fi
 
 # Compile xenly.c with the selected compiler
-$compiler src/xenly.c src/xenly_math.c -o xenly -lm
+$compiler src/xenly.c src/color.c src/print_info.c -o xenly -lm
+$compiler src/xenly_math.c -shared -o math.so -fPIC -lm
 
 # Check if compilation was successful
 if [ $? -eq 0 ]; then
