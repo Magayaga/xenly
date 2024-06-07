@@ -1,35 +1,44 @@
+# Compiler and flags
 CC = gcc
 CFLAGS = -Wall -Wextra -g
-SRC_DIR = src
-OBJ_DIR = obj
-BIN_DIR = bin
-LIB_DIR = lib
 
-MAIN_SRC = $(SRC_DIR)/xenly.c
+# Source directory
+SRC_DIR = src
+
+# Source files for the main program and shared library
+MAIN_SRC = $(SRC_DIR)/xenly.c $(SRC_DIR)/color.c $(SRC_DIR)/print_info.c
 LIB_SRC = $(SRC_DIR)/xenly_math.c
 
-MAIN_OBJ = $(OBJ_DIR)/xenly.o
-LIB_OBJ = $(OBJ_DIR)/xenly_math.o
+# Object files corresponding to the source files
+MAIN_OBJ = $(MAIN_SRC:.c=.o)
+LIB_OBJ = $(LIB_SRC:.c=.o)
 
-MAIN_BIN = $(BIN_DIR)/xenly
-LIB_SO = $(LIB_DIR)/math.so
+# Output binary and shared library names
+MAIN_BIN = xenly
+LIB_SO = math.so
 
-all: $(MAIN_BIN) $(LIB_SO)
+# Default target: build the main binary and then clean object files
+all: $(MAIN_BIN) clean_objs
 
+# Link the main binary from object files and shared library
 $(MAIN_BIN): $(MAIN_OBJ) $(LIB_SO)
-	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $(MAIN_OBJ) -ldl
+	$(CC) $(CFLAGS) -o $@ $(MAIN_OBJ) -ldl -lm
 
+# Create the shared library from its object file
 $(LIB_SO): $(LIB_OBJ)
-	@mkdir -p $(LIB_DIR)
-	$(CC) $(CFLAGS) -shared -o $@ $^
+	$(CC) $(CFLAGS) -shared -o $@ $^ -lm
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(OBJ_DIR)
+# Compile source files to object files in the same directory
+$(SRC_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) -fPIC -c $< -o $@
 
+# Remove object files after building the main binary and shared library
+clean_objs:
+	rm -f $(SRC_DIR)/*.o
+
+# Clean all generated files: object files, binary, and shared library
 clean:
-	rm -rf $(OBJ_DIR) $(BIN_DIR) $(LIB_DIR)
+	rm -f $(SRC_DIR)/*.o $(MAIN_BIN) $(LIB_SO)
 
-.PHONY: all clean
-
+# Mark these targets as not corresponding to actual files
+.PHONY: all clean clean_objs
