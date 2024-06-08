@@ -408,12 +408,17 @@ int main(int argc, char* argv[]) {
             load_module(line + 7);
         }
         
-        if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
+        else if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
             char argument[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
             strncpy(argument, line + 6, strlen(line) - 7);
             argument[strlen(line) - 7] = '\0';
 
             execute_print(argument);
+        }
+
+        else if (strncmp(line, "xenly_sqrt(", 11) == 0) {
+            double num = atof(line + 11);
+            printf("%f\n", xenly_sqrt(num));
         }
 
         else if (strncmp(line, "var", 3) == 0) {
@@ -448,11 +453,6 @@ int main(int argc, char* argv[]) {
                 continue;
             }
         }
-        
-        else if (strncmp(line, "xenly_sqrt(", 11) == 0) {
-            double num = atof(line + 11);
-            printf("%f\n", xenly_sqrt(num));
-        }
 
         else {
             error("Invalid statement");
@@ -461,6 +461,5 @@ int main(int argc, char* argv[]) {
     }
 
     fclose(input_file);
-    
     return 0;
 }
