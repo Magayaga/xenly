@@ -85,6 +85,7 @@ void load_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     
 #if defined(_WIN32) || defined(_WIN64)
+// WINDOWS OPERATING SYSTEM
     sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
     HMODULE handle = LoadLibrary(filename);
     if (!handle) {
@@ -100,6 +101,7 @@ void load_module(const char* module_name) {
         return;
     }
 #else
+// LINUX OPERATING SYSTEM
     snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
 
     void* handle = dlopen(filename, RTLD_LAZY);
