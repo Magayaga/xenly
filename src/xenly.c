@@ -147,44 +147,6 @@ double evaluate_factor(const char** expression) {
             (*expression)++; // Move past digits and the decimal point
         }
     }
-    /*
-    else {
-        // Handle mathematical constants
-        if (strncmp(*expression, "pi", 2) == 0) {
-            result = MATH_PI * negate;
-            *expression += 2; // Move past the constant
-        }
-        
-        else if (strncmp(*expression, "tau", 3) == 0) {
-            result = MATH_TAU * negate;
-            *expression += 3; // Move past the constant
-        }
-        
-        else if (strncmp(*expression, "e", 1) == 0) {
-            result = MATH_E * negate;
-            (*expression)++; // Move past the constant
-        }
-        
-        else if (strncmp(*expression, "goldenRatio", 12) == 0) {
-            result = MATH_GOLDEN_RATIO * negate;
-            *expression += 12; // Move past the constant
-        }
-        
-        else if (strncmp(*expression, "silverRatio", 12) == 0) {
-            result = MATH_SILVER_RATIO * negate;
-            *expression += 12; // Move past the constant
-        }
-        
-        else if (strncmp(*expression, "supergoldenRatio", 17) == 0) {
-            result = MATH_SUPERGOLDEN_RATIO * negate;
-            *expression += 17; // Move past the constant
-        }
-        
-        else {
-            error("Invalid factor");
-        }
-    }
-    */
 
     return result;
 }
