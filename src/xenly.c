@@ -83,7 +83,7 @@ double evaluate_arithmetic_expression(const char** expression);
 
 void load_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
-
+    
 #if defined(_WIN32) || defined(_WIN64)
     sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
     HMODULE handle = LoadLibrary(filename);
@@ -100,19 +100,19 @@ void load_module(const char* module_name) {
         return;
     }
 #else
-    sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
+    snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
+
     void* handle = dlopen(filename, RTLD_LAZY);
     if (!handle) {
-        fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
-        return;
+        fprintf(stderr, "Error: Unable to open module file '%s'; %s\n", filename, dlerror());
+        exit(1);
     }
 
     xenly_sqrt = (xenly_sqrt_t)dlsym(handle, "xenly_sqrt");
-    char *error;
-    if ((error = dlerror()) != NULL) {
-        fprintf(stderr, "Error: %s\n", error);
+    if (!xenly_sqrt) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_sqrt' from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
-        return;
+        exit(1);
     }
 #endif
 }
