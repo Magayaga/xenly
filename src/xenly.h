@@ -57,7 +57,7 @@ bool evaluately_condition(const char* condition);
 void execute_print(const char* arg);
 
 // Input
-void execute_input(const char* message, char* buffer, int buffer_size);
+void execute_input(const char* message, char* buffer, size_t buffer_size);
 
 // Parse numeric value
 int parse_numeric_value(const char* value, double* result);

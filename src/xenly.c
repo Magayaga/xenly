@@ -156,7 +156,7 @@ void execute_print(const char* arg) {
 }
 
 // Input
-void execute_input(const char* message, char* buffer, int buffer_size) {
+void execute_input(const char* message, char* buffer, size_t buffer_size) {
     // Skip leading whitespace
     while (isspace(*message)) {
         message++;
@@ -171,25 +171,31 @@ void execute_input(const char* message, char* buffer, int buffer_size) {
         }
         
         // Copy the quoted message to the buffer
-        int length = end_quote - message - 1; // Exclude the quotes
+        size_t length = end_quote - message - 1; // Exclude the quotes
         if (length >= buffer_size) {
             error("Input message is too long for the buffer");
         }
         strncpy(buffer, message + 1, length);
         buffer[length] = '\0'; // Null-terminate the string
-    }
-    
-    else {
+    } else {
         // No quotes found, copy the entire message to the buffer
-        if (strlen(message) >= buffer_size) {
+        size_t message_length = strlen(message);
+        if (message_length >= buffer_size) {
             error("Input message is too long for the buffer");
         }
-        strcpy(buffer, message);
+        strncpy(buffer, message, buffer_size - 1);
+        buffer[buffer_size - 1] = '\0'; // Ensure null-termination
     }
 
+    // Print the prompt message
     printf("%s", buffer);
-    fgets(buffer, buffer_size, stdin);
-    buffer[strcspn(buffer, "\n")] = '\0'; // Remove trailing newline character
+
+    // Read input from stdin
+    if (fgets(buffer, buffer_size, stdin) != NULL) {
+        buffer[strcspn(buffer, "\n")] = '\0'; // Remove trailing newline character
+    } else {
+        error("Error reading input");
+    }
 }
 
 // Parse numeric value
