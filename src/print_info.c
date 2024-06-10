@@ -7,8 +7,19 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 #include "color.h"
 #include "print_info.h"
+
+// Define platform-specific includes and methods
+#if defined(_WIN32) || defined(_WIN64)
+    #include <windows.h>
+#elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    #include <sys/utsname.h>
+#else
+    #error "Unsupported platform"
+#endif
 
 #define XENLY_RELEASEDATE "June 27, 2024"
 #define XENLY_VERSION "0.1.0-preview8"
