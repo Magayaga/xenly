@@ -23,6 +23,9 @@ void print_help();
 // Print author
 void print_author();
 
+// Print dumpmachines
+void print_dumpmachines();
+
 // Print operating systems
 void print_operatingsystem();
 

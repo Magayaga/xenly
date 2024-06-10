@@ -22,6 +22,15 @@
 #include "math_binary.h"
 // #include "goxenly.h"
 
+// Define platform-specific includes and methods
+#if defined(_WIN32) || defined(_WIN64)
+    #include <windows.h>
+#elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    #include <sys/utsname.h>
+#else
+    #error "Unsupported platform"
+#endif
+
 // Evaluately condition
 bool evaluately_condition(const char* condition) {
     // Implement a more comprehensive logic for evaluating conditions
@@ -274,6 +283,7 @@ void execute_var(const char* name, const char* val) {
     num_variables++;
 }
 
+// Parse and Execute Arithmetic operation
 int parse_and_execute_arithmetic_operation(const char* operation, int* result) {
     // Assuming the operation is in the format "operand1 operator operand2"
     int operand1, operand2;
@@ -467,12 +477,12 @@ double execute_gamma(const char* arg) {
 }
 
 // Max
-double max(double x, double y) {
+double xe_max(double x, double y) {
     return (x > y) ? x : y;
 }
 
 // Min
-double min(double x, double y) {
+double xe_min(double x, double y) {
     return (x < y) ? x : y;
 }
 
@@ -480,7 +490,7 @@ double min(double x, double y) {
 double execute_max(const double* numbers, int count) {
     double max_value = numbers[0];
     for (int i = 1; i < count; i++) {
-        max_value = max(max_value, numbers[i]);
+        max_value = xe_max(max_value, numbers[i]);
     }
     return max_value;
 }
@@ -489,7 +499,7 @@ double execute_max(const double* numbers, int count) {
 double execute_min(const double* numbers, int count) {
     double min_value = numbers[0];
     for (int i = 1; i < count; i++) {
-        min_value = min(min_value, numbers[i]);
+        min_value = xe_min(min_value, numbers[i]);
     }
     return min_value;
 }
@@ -663,7 +673,7 @@ double evaluate_condition(const char* condition) {
 
     else if (strncmp(condition, "pow(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
         // Extract the base and exponent values from the argument
-        char arguments[1000];
+        char arguments[MAX_TOKEN_SIZE];
         strncpy(arguments, condition + 4, strlen(condition) - 5);
         arguments[strlen(condition) - 5] = '\0';
 
@@ -713,7 +723,7 @@ double evaluate_condition(const char* condition) {
     }
 
     else if (condition[0] == '(' && condition[strlen(condition) - 1] == ')') {
-        char expression[1000];
+        char expression[MAX_TOKEN_SIZE];
         strncpy(expression, condition + 1, strlen(condition) - 2);
         expression[strlen(condition) - 2] = '\0';
         return evaluate_condition(expression);
@@ -822,7 +832,7 @@ int main(int argc, char* argv[]) {
         create_initialize_project(argv[2]);
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--numbercodeline") == 0 || strcmp(argv[1], "-ncl") == 0)) {
+    if (argc == 2 && (strcmp(argv[1], "--numberingline") == 0 || strcmp(argv[1], "-nl") == 0)) {
         // Assuming the argument is a filename
         print_code_of_lines(argv[1]);
         return EXIT_FAILURE;
@@ -847,9 +857,8 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    else if (argc == 2 && (strcmp(argv[1], "--dumpmachine" ) == 0 || strcmp(argv[1], "-dm") == 0)) {
-        // Print the compiler's target processor
-        printf("%s\n", getenv("PROCESSOR_ARCHITECTURE"));
+    else if (argc == 2 && (strcmp(argv[1], "--dumpmachine") == 0 || strcmp(argv[1], "-dm") == 0)) {
+        print_dumpmachines();
         return 0;
     }
 
@@ -878,7 +887,7 @@ int main(int argc, char* argv[]) {
         error("Unable to open input file");
     }
 
-    char line[1000];
+    char line[MAX_TOKEN_SIZE];
     bool in_condition_block = false;
     bool condition_met = false;
     while (fgets(line, sizeof(line), input_file)) {
@@ -956,7 +965,7 @@ int main(int argc, char* argv[]) {
         }
 
         else if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char argument[1000];
+            char argument[MAX_TOKEN_SIZE];
             strncpy(argument, line + 6, strlen(line) - 7);
             argument[strlen(line) - 7] = '\0';
 
@@ -1031,7 +1040,7 @@ int main(int argc, char* argv[]) {
         }
 
         else if (strncmp(line, "binary(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char binary_argument[1000];
+            char binary_argument[MAX_TOKEN_SIZE];
             strncpy(binary_argument, line + 6, strlen(line) - 7);
             binary_argument[strlen(line) - 7] = '\0';
 

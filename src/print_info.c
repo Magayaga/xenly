@@ -72,6 +72,34 @@ void print_author() {
     printf("\n");
 }
 
+// Print dumpmachines
+void print_dumpmachines() {
+    #if defined(_WIN32) || defined(_WIN64)
+        // Windows-specific code
+        const char *arch = getenv("PROCESSOR_ARCHITECTURE");
+        if (arch != NULL) {
+            printf("%s\n", arch);
+        }
+        
+        else {
+            printf("Environment variable PROCESSOR_ARCHITECTURE is not set.\n");
+        }
+        
+    #elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+        // Unix-like system-specific code
+        struct utsname buffer;
+        if (uname(&buffer) == 0) {
+            printf("%s\n", buffer.machine); // Print the machine hardware name
+        }
+        
+        else {
+            perror("uname");
+        }
+    #else
+        printf("Unsupported platform\n");
+    #endif
+}
+
 // Print operating systems
 void print_operatingsystem() {
     // Print the compiler's operating system
