@@ -5,14 +5,14 @@
  * It is initially written in C programming language.
  *
  */
-#ifndef PROJECT_H
-#define PROJECT_H
+#ifndef MATH_BINARY_H
+#define MATH_BINARY_H
 
-// Initialize project
-void initialize_project();
+// Binary numbers to decimal
+int convert_binary_to_decimal(const char* binary);
 
-// Create initialize project
-void create_initialize_project(const char *project_name);
+// Decimal to Binary number
+char* convert_decimal_to_binary(int decimal);
 
 
 #endif

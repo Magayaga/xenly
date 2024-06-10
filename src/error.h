@@ -11,4 +11,5 @@
 // Error
 void error(const char* message);
 
-#endif // MATH_H
+
+#endif

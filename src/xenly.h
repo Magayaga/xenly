@@ -50,40 +50,116 @@ Array arrays[MAX_ARRAYS];
 int num_arrays = 0;
 int multiline_comment = 0;
 
+// Evaluately condition
 bool evaluately_condition(const char* condition);
 
-void execute_comment(const char* comment);
-
-double evaluate_condition(const char* condition);
-
-void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body);
-
-double evaluate_arithmetic_expression(const char* expression);
-
+// Print
 void execute_print(const char* arg);
 
-void execute_input(const char* message, char* buffer, int buffer_size);
+// Input
+void execute_input(const char* message, char* buffer, size_t buffer_size);
 
+// Parse numeric value
 int parse_numeric_value(const char* value, double* result);
 
+// Bool
 void execute_bool(const char* name, bool value);
-
 bool evaluate_bool(const char* value);
 
-void execute_var(const char* name, const char* value);
+// Var
+void execute_var(const char* name, const char* val);
 
+// Parse and Execute Arithmetic operation
+int parse_and_execute_arithmetic_operation(const char* operation, int* result);
+
+// For
+void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body);
+
+// Int
 void execute_let(const char* name, const char* value);
 
+// Square root function
+double xe_sqrt(double x);
+
+// Cube root function
+double xe_cbrt(double x);
+
+// Fifth root function
+double ffrt(double x);
+
+// Square root
+double execute_sqrt(const char* arg);
+
+// Cube root
+double execute_cbrt(const char* arg);
+
+// Pow
+double execute_pow(const char* arg);
+
+// Sin
+double execute_sin(const char* arg);
+
+// Cos
+double execute_cos(const char* arg);
+
+// Tan
+double execute_tan(const char* arg);
+
+// Gamma
+double execute_gamma(const char* arg);
+
+// Max
+double xe_max(double x, double y);
+
+// Min
+double xe_min(double x, double y);
+
+// Max function
+double execute_max(const double* numbers, int count);
+
+// Min function
+double execute_min(const double* numbers, int count);
+
+// Abs
+double xe_abs(double x);
+
+// Abs function
+double execute_abs(const char* arg);
+
+// Factorial function
+int factorial(int n);
+
+// Factorial numbers
+int execute_factorial(const char* arg);
+
+// Fibonacci function
+int fibonacci(int n);
+
+// Fibonacci numbers
+int execute_fibonacci(const char* arg);
+
+// Factor
 double evaluate_factor(const char** expression);
 
+// Term
 double evaluate_term(const char** expression);
 
+// Evaluate arithmetic expression
+double evaluate_arithmetic_expression(const char* expression);
+
+// Evaluate condition
+double evaluate_condition(const char* condition);
+
+// Object
 void execute_object(const char* name, const char* properties);
 
+// Array
 void execute_array(const char* name, int size);
 
+// Set
 void execute_set(const char* array_name, int index, double value);
 
+// Get
 double execute_get(const char* array_name, int index);
 
-#endif // XENLY_H
+#endif

@@ -13,25 +13,23 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <math.h>
+#include "constants.h"
 #include "color.h"
 #include "error.h"
 #include "xenly.h"
 #include "project.h"
 #include "print_info.h"
+#include "math_binary.h"
 // #include "goxenly.h"
 
-// Mathematical constants
-#define MATH_PI 3.14159265358979323846
-#define MATH_TAU 6.28318530717958647692
-#define MATH_E 2.71828182845904523536
-#define MATH_GOLDEN_RATIO 1.61803398874989484820
-#define MATH_SILVER_RATIO 2.41421356237309504880
-#define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
-
-// Physical constants
-#define PHYSICAL_SPEED_OF_LIGHT_MS 299792458
-#define PHYSICAL_SPEED_OF_LIGHT_KMH 1080000000
-#define PHYSICAL_SPEED_OF_LIGHT_MileS 186000
+// Define platform-specific includes and methods
+#if defined(_WIN32) || defined(_WIN64)
+    #include <windows.h>
+#elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    #include <sys/utsname.h>
+#else
+    #error "Unsupported platform"
+#endif
 
 // Evaluately condition
 bool evaluately_condition(const char* condition) {
@@ -95,6 +93,10 @@ void execute_print(const char* arg) {
         printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MS);
     }
 
+    else if (strcmp(arg, "c") == 0) {
+        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MS);
+    }
+
     else if (strcmp(arg, "speedOfLight.kmh") == 0) {
         printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_KMH);
     }
@@ -102,7 +104,19 @@ void execute_print(const char* arg) {
     else if (strcmp(arg, "speedOfLight.mih") == 0) {
         printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MileS);
     }
-    
+
+    else if (strcmp(arg, "gravitationalConstant") == 0) {
+        printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2);
+    }
+
+    else if (strcmp(arg, "G") == 0) {
+        printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2);
+    }
+
+    else if (strcmp(arg, "gravitationalConstant.dyncm2.g2") == 0) {
+        printf("%.14f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_DYN_CM2__G2);
+    }
+
     else if (strncmp(arg, "sqrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
         double result = evaluate_condition(arg + 5);
         if (result >= 0) {
@@ -142,7 +156,7 @@ void execute_print(const char* arg) {
 }
 
 // Input
-void execute_input(const char* message, char* buffer, int buffer_size) {
+void execute_input(const char* message, char* buffer, size_t buffer_size) {
     // Skip leading whitespace
     while (isspace(*message)) {
         message++;
@@ -157,25 +171,31 @@ void execute_input(const char* message, char* buffer, int buffer_size) {
         }
         
         // Copy the quoted message to the buffer
-        int length = end_quote - message - 1; // Exclude the quotes
+        size_t length = end_quote - message - 1; // Exclude the quotes
         if (length >= buffer_size) {
             error("Input message is too long for the buffer");
         }
         strncpy(buffer, message + 1, length);
         buffer[length] = '\0'; // Null-terminate the string
-    }
-    
-    else {
+    } else {
         // No quotes found, copy the entire message to the buffer
-        if (strlen(message) >= buffer_size) {
+        size_t message_length = strlen(message);
+        if (message_length >= buffer_size) {
             error("Input message is too long for the buffer");
         }
-        strcpy(buffer, message);
+        strncpy(buffer, message, buffer_size - 1);
+        buffer[buffer_size - 1] = '\0'; // Ensure null-termination
     }
 
+    // Print the prompt message
     printf("%s", buffer);
-    fgets(buffer, buffer_size, stdin);
-    buffer[strcspn(buffer, "\n")] = '\0'; // Remove trailing newline character
+
+    // Read input from stdin
+    if (fgets(buffer, buffer_size, stdin) != NULL) {
+        buffer[strcspn(buffer, "\n")] = '\0'; // Remove trailing newline character
+    } else {
+        error("Error reading input");
+    }
 }
 
 // Parse numeric value
@@ -269,6 +289,7 @@ void execute_var(const char* name, const char* val) {
     num_variables++;
 }
 
+// Parse and Execute Arithmetic operation
 int parse_and_execute_arithmetic_operation(const char* operation, int* result) {
     // Assuming the operation is in the format "operand1 operator operand2"
     int operand1, operand2;
@@ -462,12 +483,12 @@ double execute_gamma(const char* arg) {
 }
 
 // Max
-double max(double x, double y) {
+double xe_max(double x, double y) {
     return (x > y) ? x : y;
 }
 
 // Min
-double min(double x, double y) {
+double xe_min(double x, double y) {
     return (x < y) ? x : y;
 }
 
@@ -475,7 +496,7 @@ double min(double x, double y) {
 double execute_max(const double* numbers, int count) {
     double max_value = numbers[0];
     for (int i = 1; i < count; i++) {
-        max_value = max(max_value, numbers[i]);
+        max_value = xe_max(max_value, numbers[i]);
     }
     return max_value;
 }
@@ -484,7 +505,7 @@ double execute_max(const double* numbers, int count) {
 double execute_min(const double* numbers, int count) {
     double min_value = numbers[0];
     for (int i = 1; i < count; i++) {
-        min_value = min(min_value, numbers[i]);
+        min_value = xe_min(min_value, numbers[i]);
     }
     return min_value;
 }
@@ -541,45 +562,6 @@ int execute_fibonacci(const char* arg) {
         error("Fibonacci of a negative number is not supported");
     }
     return fibonacci(result);
-}
-
-// Binary numbers to decimal
-int convert_binary_to_decimal(const char* binary) {
-    int length = strlen(binary);
-    int decimal = 0;
-
-    for (int i = length - 1; i >= 0; i--) {
-        if (binary[i] == '1') {
-            decimal += pow(2, length - 1 - i);
-        }
-    }
-
-    return decimal;
-}
-
-// Decimal to Binary number
-char* convert_decimal_to_binary(int decimal) {
-    char binary[32]; // Assuming 32-bit integers
-    int index = 0;
-
-    while (decimal > 0) {
-        binary[index++] = (decimal % 2) + '0';
-        decimal /= 2;
-    }
-    binary[index] = '\0';
-
-    // Reverse the binary string
-    int left = 0;
-    int right = index - 1;
-    while (left < right) {
-        char temp = binary[left];
-        binary[left] = binary[right];
-        binary[right] = temp;
-        left++;
-        right--;
-    }
-
-    return strdup(binary);
 }
 
 // Factor
@@ -697,7 +679,7 @@ double evaluate_condition(const char* condition) {
 
     else if (strncmp(condition, "pow(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
         // Extract the base and exponent values from the argument
-        char arguments[1000];
+        char arguments[MAX_TOKEN_SIZE];
         strncpy(arguments, condition + 4, strlen(condition) - 5);
         arguments[strlen(condition) - 5] = '\0';
 
@@ -747,7 +729,7 @@ double evaluate_condition(const char* condition) {
     }
 
     else if (condition[0] == '(' && condition[strlen(condition) - 1] == ')') {
-        char expression[1000];
+        char expression[MAX_TOKEN_SIZE];
         strncpy(expression, condition + 1, strlen(condition) - 2);
         expression[strlen(condition) - 2] = '\0';
         return evaluate_condition(expression);
@@ -856,14 +838,14 @@ int main(int argc, char* argv[]) {
         create_initialize_project(argv[2]);
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--numbercodeline") == 0 || strcmp(argv[1], "-ncl") == 0)) {
+    if (argc == 2 && (strcmp(argv[1], "--numberingline") == 0 || strcmp(argv[1], "-nl") == 0)) {
         // Assuming the argument is a filename
         print_code_of_lines(argv[1]);
         return EXIT_FAILURE;
     }
 
     else if (argc != 2) {
-        error("Usage: xenly [input file]");
+        error("xenly [input files]");
     }
 
     else if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
@@ -881,9 +863,8 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    else if (argc == 2 && (strcmp(argv[1], "--dumpmachine" ) == 0 || strcmp(argv[1], "-dm") == 0)) {
-        // Print the compiler's target processor
-        printf("%s\n", getenv("PROCESSOR_ARCHITECTURE"));
+    else if (argc == 2 && (strcmp(argv[1], "--dumpmachine") == 0 || strcmp(argv[1], "-dm") == 0)) {
+        print_dumpmachines();
         return 0;
     }
 
@@ -912,7 +893,7 @@ int main(int argc, char* argv[]) {
         error("Unable to open input file");
     }
 
-    char line[1000];
+    char line[MAX_TOKEN_SIZE];
     bool in_condition_block = false;
     bool condition_met = false;
     while (fgets(line, sizeof(line), input_file)) {
@@ -990,7 +971,7 @@ int main(int argc, char* argv[]) {
         }
 
         else if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char argument[1000];
+            char argument[MAX_TOKEN_SIZE];
             strncpy(argument, line + 6, strlen(line) - 7);
             argument[strlen(line) - 7] = '\0';
 
@@ -1065,7 +1046,7 @@ int main(int argc, char* argv[]) {
         }
 
         else if (strncmp(line, "binary(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char binary_argument[1000];
+            char binary_argument[MAX_TOKEN_SIZE];
             strncpy(binary_argument, line + 6, strlen(line) - 7);
             binary_argument[strlen(line) - 7] = '\0';
 

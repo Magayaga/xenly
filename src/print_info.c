@@ -7,11 +7,23 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 #include "color.h"
 #include "print_info.h"
 
-#define XENLY_RELEASEDATE "May 28, 2024"
-#define XENLY_VERSION "0.1.0-preview6"
+// Define platform-specific includes and methods
+#if defined(_WIN32) || defined(_WIN64)
+    #include <windows.h>
+#elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    #include <sys/utsname.h>
+#else
+    #error "Unsupported platform"
+#endif
+
+#define XENLY_RELEASEDATE "June 27, 2024"
+#define XENLY_VERSION "0.1.0-preview8"
+#define XENLY_AUTHORS "Cyril John Magayaga"
 
 // Print version
 void print_version() {
@@ -19,7 +31,7 @@ void print_version() {
     printf("Copyright (c) 2023-2024 ");
     setBackgroundBlue();
     white();
-    printf(" Cyril John Magayaga ");
+    printf(" %s ", XENLY_AUTHORS);
     resetBackgroundColor();
     resetColor();
     printf("\n");
@@ -65,10 +77,38 @@ void print_author() {
     printf("Copyright (c) 2023-2024 ");
     setBackgroundBlue();
     white();
-    printf(" Cyril John Magayaga ");
+    printf(" %s ", XENLY_AUTHORS);
     resetBackgroundColor();
     resetColor();
     printf("\n");
+}
+
+// Print dumpmachines
+void print_dumpmachines() {
+    #if defined(_WIN32) || defined(_WIN64)
+        // Windows-specific code
+        const char *arch = getenv("PROCESSOR_ARCHITECTURE");
+        if (arch != NULL) {
+            printf("%s\n", arch);
+        }
+        
+        else {
+            printf("Environment variable PROCESSOR_ARCHITECTURE is not set.\n");
+        }
+        
+    #elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+        // Unix-like system-specific code
+        struct utsname buffer;
+        if (uname(&buffer) == 0) {
+            printf("%s\n", buffer.machine); // Print the machine hardware name
+        }
+        
+        else {
+            perror("uname");
+        }
+    #else
+        printf("Unsupported platform\n");
+    #endif
 }
 
 // Print operating systems

@@ -29,3 +29,5 @@
 * On March 9, 2024, He announced the Xenly programming language for fixing features of **Linux** and **Windows** operating systems.
 
 * On March 27, 2024, He was sick due to a cough, headache, and dry nose.
+
+* On May 28, 2024, He announced that the upcoming features of the Xenly programming language are web development, embedded system, and graphical user interface but the next 10 years.

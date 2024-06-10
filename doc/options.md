@@ -13,7 +13,7 @@
 * `--create-project` (followed by a folder name) - This option might be used to specify the creation of a new project and provide a name for the folder where the project will be stored. The folder name is typically the name of the project or a descriptive name related to its purpose.
 
 Upcoming options:
-* `-ncl`, `--numbercodeline`
+* `-nl`, `--numberingline` (formerly `-ncl`, `--numbercodeline`) like the similar to the `nl` command for the Unix operating system.
 
 ## Copyright
 
