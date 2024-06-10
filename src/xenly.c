@@ -15,9 +15,23 @@
 #include "print_info.h"
 
 #if defined(_WIN32) || defined(_WIN64)
+// WINDOWS OPERATING SYSTEM
 #include <windows.h>
+
+// DYNAMIC-LINK LIBRARY - is a shared library in the Windows operating system.
+#define IMPORT_SUFFIX "dll"
+
 #else
+// LINUX OPERATING SYSTEM
 #include <dlfcn.h>
+
+/*
+ * SHARED OBJECT - is a shared library in the Linux operating system because
+ * Linux distributions (Examples: Ubuntu, Fedora, Debian, Kali Linux, and more)
+ * and Mobile operating systems based on Linux kernel (Examples: Android, and more)
+ *
+ */
+#define IMPORT_SUFFIX "so"
 #endif
 
 #define MAX_TOKEN_SIZE 1000
@@ -75,12 +89,6 @@ void execute_comment(const char* comment) {
 double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
 
-#if defined(_WIN32) || defined(_WIN64)
-#define IMPORT_SUFFIX "dll"
-#else
-#define IMPORT_SUFFIX "so"
-#endif
-
 void load_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     
@@ -110,6 +118,7 @@ void load_module(const char* module_name) {
         exit(1);
     }
 
+    // Load function pointers using dlsym
     xenly_sqrt = (xenly_sqrt_t)dlsym(handle, "xenly_sqrt");
     if (!xenly_sqrt) {
         fprintf(stderr, "Error: Unable to load function 'xenly_sqrt' from module '%s'; %s\n", filename, dlerror());
