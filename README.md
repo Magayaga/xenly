@@ -71,6 +71,16 @@ $ chmod +rx math.so
 
 Confirm that `math.so` is in the same directory as xenly or in a directory listed in `LD_LIBRARY_PATH`.
 
+### 5. Testing programs
+
+```bash
+# Xenly's version information
+./xenly -v
+
+# Running xenly's examples
+./xenly examples/print/main.xe
+```
+
 ## Copyright
 
 Copyright (c) 2023-2024 Cyril John Magayaga. All rights reserved.
