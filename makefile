@@ -26,6 +26,8 @@ LIB_SO = math.so
 
 # Default target: build the main binary and then clean object files
 all: $(MAIN_BIN) clean_objs
+	@echo "Adding current directory to LD_LIBRARY_PATH"
+	@export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:.
 
 # Link the main binary from object files and shared library
 $(MAIN_BIN): $(MAIN_OBJ) $(LIB_SO)
@@ -34,6 +36,7 @@ $(MAIN_BIN): $(MAIN_OBJ) $(LIB_SO)
 # Create the shared library from its object file
 $(LIB_SO): $(LIB_OBJ)
 	$(CC) $(CFLAGS) -shared -o $@ $^ -lm
+	@chmod +rx $@
 
 # Compile source files to object files in the same directory
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.c
