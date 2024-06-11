@@ -88,13 +88,12 @@ void execute_comment(const char* comment) {
 
 double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
-
-void load_module(const char* module_name) {
-    char filename[MAX_TOKEN_SIZE];
     
 #if defined(_WIN32) || defined(_WIN64)
 // WINDOWS OPERATING SYSTEM
-    sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
+void load_module(const char* module_name) {
+    char filename[MAX_TOKEN_SIZE];
+    sprintf(filename, "%s.dll", module_name);
     HMODULE handle = LoadLibrary(filename);
     if (!handle) {
         fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
@@ -102,13 +101,16 @@ void load_module(const char* module_name) {
     }
 
     // Load function pointers using GetProcAddress
-    xenly_sqrt = (xenly_sqrt_t)(void*)GetProcAddress(handle, "xenly_sqrt");
+    xenly_sqrt = (xenly_sqrt_t)GetProcAddress(handle, "xenly_sqrt");
     if (!xenly_sqrt) {
         fprintf(stderr, "Error: Unable to load function 'xenly_sqrt' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
+}
 #else
+void load_module(const char* module_name) {
+    char filename[MAX_TOKEN_SIZE];
 // LINUX OPERATING SYSTEM
     snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
 
@@ -125,8 +127,8 @@ void load_module(const char* module_name) {
         dlclose(handle);
         exit(1);
     }
-#endif
 }
+#endif
 
 // Factor
 double evaluate_factor(const char** expression) {
