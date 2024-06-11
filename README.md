@@ -25,19 +25,40 @@ Here is the Hyzero programming language that was initially written in Python pro
 
 ## Getting Started
 
+### 1. Download the Xenly's source code
+
+You can download the git clone of the `xenly` programming language. It is the available for the **Windows** and **Linux** operating systems.
+
+
 ```bash
 # Download the Xenly's source code
 $ git clone https://github.com/xenly xenly-pre-linux
 $ cd xenly-pre-linux
 $ git checkout pre-linux
-
-# Compile and run
-$ make
-$ bash main.sh
-
-# Open the xenly programming language compiler
-$ ./xenly examples/print/main.xe
 ```
+### 2. Set the Library paths
+
+Make sure the shared library path is correctly set so that the system can find the libraries. Set the `LD_LIBRARY_PATH` environment variable to include the directory containing libraries (`math.so`, `graphics.so`, and more).
+
+```bash
+$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
+```
+
+### 3. Check permissions and paths
+
+Ensure that the libraries has the correct permissions and is in the directory where `xenly` expects to find it. Ensure the library is readable and executable:
+
+```bash
+$ chmod +rx <libraries>
+```
+
+For example,
+
+```bash
+$ chmod +rx math.so
+```
+
+Confirm that `math.so` is in the same directory as xenly or in a directory listed in `LD_LIBRARY_PATH`.
 
 ## Copyright
 
