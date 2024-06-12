@@ -45,7 +45,7 @@ typedef struct {
 } Variable;
 
 Variable variables[MAX_VARIABLES];
-int num_variables = 0;
+int result_variables = 0;
 
 typedef struct {
     char name[MAX_TOKEN_SIZE];
@@ -54,7 +54,7 @@ typedef struct {
 } Data;
 
 Data data_storage[MAX_VARIABLES + MAX_OBJECTS + MAX_ARRAYS];
-int num_data = 0;
+int result_data = 0;
 
 typedef struct {
     char name[MAX_TOKEN_SIZE];
@@ -64,7 +64,7 @@ typedef struct {
 } Array;
 
 Array arrays[MAX_ARRAYS];
-int num_arrays = 0;
+int result_arrays = 0;
 int multiline_comment = 0;
 
 typedef struct {
@@ -230,7 +230,7 @@ void execute_print(const char* arg) {
         char var_name[MAX_TOKEN_SIZE];
         sscanf(arg, "$%s", var_name);
         int found = 0;
-        for (int i = 0; i < num_variables; i++) {
+        for (int i = 0; i < result_variables; i++) {
             if (strcmp(variables[i].name, var_name) == 0) {
                 printf("%s\n", variables[i].value);
                 found = 1;
@@ -268,7 +268,7 @@ void execute_print(const char* arg) {
         char var_name[MAX_TOKEN_SIZE];
         sscanf(arg, "$%s", var_name);
         int found = 0;
-        for (int i = 0; i < num_variables; i++) {
+        for (int i = 0; i < result_variables; i++) {
             if (strcmp(variables[i].name, var_name) == 0) {
                 printf("%s\n", variables[i].value);
                 found = 1;
@@ -306,21 +306,21 @@ void execute_var(const char* line) {
         error("Invalid 'var' line");
     }
 
-    for (int i = 0; i < num_variables; i++) {
+    for (int i = 0; i < result_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
             error("Variable already declared");
         }
     }
 
-    if (num_variables < MAX_VARIABLES) {
-        strcpy(variables[num_variables].name, name);
+    if (result_variables < MAX_VARIABLES) {
+        strcpy(variables[result_variables].name, name);
         // Check if value is another variable
         if (value[0] == '$') {
             // Look for the variable referenced by value
             char var_name[MAX_TOKEN_SIZE];
             sscanf(value, "$%s", var_name);
             int found = 0;
-            for (int i = 0; i < num_variables; i++) {
+            for (int i = 0; i < result_variables; i++) {
                 if (strcmp(variables[i].name, var_name) == 0) {
                     strcpy(value, variables[i].value);
                     found = 1;
@@ -331,17 +331,17 @@ void execute_var(const char* line) {
                 error("Referenced variable not found");
             }
         }
-        strcpy(variables[num_variables].value, value);
-        num_variables++;
+        strcpy(variables[result_variables].value, value);
+        result_variables++;
     }
     
     else {
-        error("Maximum number of variables exceeded");
+        error("Maximum resultber of variables exceeded");
     }
 }
 
 double evaluate_condition(const char* condition) {
-    for (int i = 0; i < num_variables; i++) {
+    for (int i = 0; i < result_variables; i++) {
         if (strcmp(variables[i].name, condition) == 0) {
             return strcmp(variables[i].value, "true") == 0 ? 1 : 0;
         }
@@ -391,9 +391,9 @@ int main(int argc, char* argv[]) {
             execute_print(argument);
         }
 
-        else if (strncmp(line, "xenly_sqrt(", 11) == 0) {
-            double num = atof(line + 11);
-            printf("%f\n", xenly_sqrt(num));
+        else if (strncmp(line, "xenly_sqrt(", 11) == 0 && line[strlen(line) - 1] == ')') {
+            double result = atof(line + 11);
+            printf("%f\n", xenly_sqrt(result));
         }
 
         else if (strncmp(line, "var", 3) == 0) {
