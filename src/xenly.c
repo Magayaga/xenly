@@ -133,8 +133,14 @@ void load_module(const char* module_name) {
 
     // Load function pointers using dlsym
     xenly_sqrt = (xenly_sqrt_t)dlsym(handle, "xenly_sqrt");
-    xenly_cbrt = (xenly_cbrt_t)dlsym(handle, "xenly_cbrt");
     if (!xenly_sqrt) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_cbrt = (xenly_cbrt_t)dlsym(handle, "xenly_cbrt");
+    if (!xenly_cbrt) {
         fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
