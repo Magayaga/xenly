@@ -120,9 +120,9 @@ void load_module(const char* module_name) {
     }
 }
 #else
+// LINUX OPERATING SYSTEM
 void load_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
-// LINUX OPERATING SYSTEM
     snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
 
     void* handle = dlopen(filename, RTLD_LAZY);
