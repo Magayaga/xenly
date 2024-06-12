@@ -20,6 +20,9 @@
 // Define a function to calculate the square root
 double xenly_sqrt(double x);
 
+// Define a function to calculate the cube root
+double xenly_cbrt(double x);
+
 // Define a function to calculate the power
 double xenly_pow(double base, double exponent);
 

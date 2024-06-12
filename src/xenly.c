@@ -73,9 +73,13 @@ typedef struct {
     // Add more fields as needed
 } Module;
 
+// Declare the function pointers
 typedef double (*xenly_sqrt_t)(double);
+typedef double (*xenly_cbrt_t)(double);
 
+// Define the function pointers
 xenly_sqrt_t xenly_sqrt;
+xenly_cbrt_t xenly_cbrt;
 
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
@@ -107,6 +111,13 @@ void load_module(const char* module_name) {
         FreeLibrary(handle);
         return;
     }
+
+    xenly_cbrt = (xenly_cbrt_t)(void*)GetProcAddress(handle, "xenly_cbrt");
+    if (!xenly_cbrt) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_cbrt' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 }
 #else
 void load_module(const char* module_name) {
@@ -122,8 +133,9 @@ void load_module(const char* module_name) {
 
     // Load function pointers using dlsym
     xenly_sqrt = (xenly_sqrt_t)dlsym(handle, "xenly_sqrt");
+    xenly_cbrt = (xenly_cbrt_t)dlsym(handle, "xenly_cbrt");
     if (!xenly_sqrt) {
-        fprintf(stderr, "Error: Unable to load function 'xenly_sqrt' from module '%s'; %s\n", filename, dlerror());
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
     }
@@ -394,6 +406,11 @@ int main(int argc, char* argv[]) {
         else if (strncmp(line, "xenly_sqrt(", 11) == 0 && line[strlen(line) - 1] == ')') {
             double result = atof(line + 11);
             printf("%f\n", xenly_sqrt(result));
+        }
+
+        else if (strncmp(line, "xenly_cbrt(", 11) == 0 && line[strlen(line) - 1] == ')') {
+            double result = atof(line + 11);
+            printf("%f\n", xenly_cbrt(result));
         }
 
         else if (strncmp(line, "var", 3) == 0) {

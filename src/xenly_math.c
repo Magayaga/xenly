@@ -23,6 +23,11 @@ double xenly_sqrt(double x) {
     return sqrt(x);
 }
 
+// Define a function to calculate the cube root
+double xenly_cbrt(double x) {
+    return cbrt(x);
+}
+
 // Define a function to calculate the power
 double xenly_pow(double base, double exp) {
     return pow(base, exp);
