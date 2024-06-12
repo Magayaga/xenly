@@ -5,7 +5,7 @@
 Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
 
 ### Hello, World! program
-The following shows how a **"Hello, World!"** program is written in Xenon programming language:
+The following shows how a **"Hello, World!"** program is written in Xenly programming language:
 
 ```c
 // “Hello, World!” program
@@ -42,7 +42,7 @@ $ git checkout pre-linux
 You can run the program (`makefile` for Linux and `main.sh` for both Windows and Linux).
 
 ```bash
-# Run the program (makefile or  bash script)
+# Run the program (makefile or bash script)
 $ make
 $ bash main.sh
 ```
