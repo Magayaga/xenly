@@ -76,10 +76,18 @@ typedef struct {
 // Declare the function pointers
 typedef double (*xenly_sqrt_t)(double);
 typedef double (*xenly_cbrt_t)(double);
+typedef double (*xenly_pow_t)(double, double);
+typedef double (*xenly_sin_t)(double);
+typedef double (*xenly_cos_t)(double);
+typedef double (*xenly_tan_t)(double);
 
 // Define the function pointers
 xenly_sqrt_t xenly_sqrt;
 xenly_cbrt_t xenly_cbrt;
+xenly_pow_t xenly_pow;
+xenly_sin_t xenly_sin;
+xenly_cos_t xenly_cos;
+xenly_tan_t xenly_tan;
 
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
@@ -118,6 +126,34 @@ void load_module(const char* module_name) {
         FreeLibrary(handle);
         return;
     }
+
+    xenly_pow = (xenly_pow_t)(void*)GetProcAddress(handle, "xenly_pow");
+    if (!xenly_pow) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_pow' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_sin = (xenly_sin_t)(void*)GetProcAddress(handle, "xenly_sin");
+    if (!xenly_sin) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_sin' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_cos = (xenly_cos_t)(void*)GetProcAddress(handle, "xenly_cos");
+    if (!xenly_cos) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_cos' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_tan = (xenly_tan_t)(void*)GetProcAddress(handle, "xenly_tan");
+    if (!xenly_tan) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_tan' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 }
 #else
 // LINUX OPERATING SYSTEM
@@ -141,6 +177,34 @@ void load_module(const char* module_name) {
 
     xenly_cbrt = (xenly_cbrt_t)dlsym(handle, "xenly_cbrt");
     if (!xenly_cbrt) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_pow = (xenly_pow_t)dlsym(handle, "xenly_pow");
+    if (!xenly_pow) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_sin = (xenly_sin_t)dlsym(handle, "xenly_sin");
+    if (!xenly_sin) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_cos = (xenly_cos_t)dlsym(handle, "xenly_cos");
+    if (!xenly_cos) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_tan = (xenly_tan_t)dlsym(handle, "xenly_tan");
+    if (!xenly_tan) {
         fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
@@ -417,6 +481,32 @@ int main(int argc, char* argv[]) {
         else if (strncmp(line, "xenly_cbrt(", 11) == 0 && line[strlen(line) - 1] == ')') {
             double result = atof(line + 11);
             printf("%f\n", xenly_cbrt(result));
+        }
+
+        else if (strncmp(line, "xenly_pow(", 10) == 0 && line[strlen(line) - 1] == ')') {
+            char* comma_pos = strchr(line + 10, ',');
+            if (comma_pos == NULL) {
+                error("Invalid syntax for xenly_pow");
+            }
+            *comma_pos = '\0'; // Split into base and exponent
+            double base = atof(line + 10);
+            double exp = atof(comma_pos + 1);
+            printf("%f\n", xenly_pow(base, exp));
+        }
+
+        else if (strncmp(line, "xenly_sin(", 10) == 0 && line[strlen(line) - 1] == ')') {
+            double result = atof(line + 10);
+            printf("%f\n", xenly_sin(result));
+        }
+
+        else if (strncmp(line, "xenly_cos(", 10) == 0 && line[strlen(line) - 1] == ')') {
+            double result = atof(line + 10);
+            printf("%f\n", xenly_cos(result));
+        }
+
+        else if (strncmp(line, "xenly_tan(", 10) == 0 && line[strlen(line) - 1] == ')') {
+            double result = atof(line + 10);
+            printf("%f\n", xenly_tan(result));
         }
 
         else if (strncmp(line, "var", 3) == 0) {
