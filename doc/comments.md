@@ -25,6 +25,8 @@ Multi-line comments start with `/*` and ends with `*/`. Any text between `/*` an
 print("Hello, World!")
 ```
 
+On June 13, 2024, [@magayaga](https://github.com/magayaga) announced that multi-line comments was not working for Xenly's nanopreview version now.
+
 ## Copyright
 
 Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
