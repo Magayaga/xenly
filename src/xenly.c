@@ -112,7 +112,7 @@ double evaluate_arithmetic_expression(const char** expression);
 // WINDOWS OPERATING SYSTEM
 void load_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
-    sprintf(filename, "%s.dll", module_name);
+    sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
     HMODULE handle = LoadLibrary(filename);
     if (!handle) {
         fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
