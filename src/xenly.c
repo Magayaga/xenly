@@ -74,6 +74,7 @@ typedef struct {
 } Module;
 
 // Declare the function pointers
+typedef double (*xenly_constant_t)();
 typedef double (*xenly_sqrt_t)(double);
 typedef double (*xenly_cbrt_t)(double);
 typedef double (*xenly_pow_t)(double, double);
@@ -82,6 +83,12 @@ typedef double (*xenly_cos_t)(double);
 typedef double (*xenly_tan_t)(double);
 
 // Define the function pointers
+xenly_constant_t pi;
+xenly_constant_t tau;
+xenly_constant_t e;
+xenly_constant_t goldenRatio;
+xenly_constant_t silverRatio;
+xenly_constant_t superGoldenRatio;
 xenly_sqrt_t xenly_sqrt;
 xenly_cbrt_t xenly_cbrt;
 xenly_pow_t xenly_pow;
@@ -113,6 +120,48 @@ void load_module(const char* module_name) {
     }
 
     // Load function pointers using GetProcAddress
+    pi = (xenly_constant_t)GetProcAddress(handle, "pi");
+    if (!pi) {
+        fprintf(stderr, "Error: Unable to load constant 'pi' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    tau = (xenly_constant_t)GetProcAddress(handle, "tau");
+    if (!tau) {
+        fprintf(stderr, "Error: Unable to load constant 'tau' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    e = (xenly_constant_t)GetProcAddress(handle, "e");
+    if (!e) {
+        fprintf(stderr, "Error: Unable to load constant 'e' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    goldenRatio = (xenly_constant_t)GetProcAddress(handle, "goldenRatio");
+    if (!goldenRatio) {
+        fprintf(stderr, "Error: Unable to load constant 'goldenRatio' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    silverRatio = (xenly_constant_t)GetProcAddress(handle, "silverRatio");
+    if (!silverRatio) {
+        fprintf(stderr, "Error: Unable to load constant 'silverRatio' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    superGoldenRatio = (xenly_constant_t)GetProcAddress(handle, "superGoldenRatio");
+    if (!superGoldenRatio) {
+        fprintf(stderr, "Error: Unable to load constant 'superGoldenRatio' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
     xenly_sqrt = (xenly_sqrt_t)GetProcAddress(handle, "xenly_sqrt");
     if (!xenly_sqrt) {
         fprintf(stderr, "Error: Unable to load function 'xenly_sqrt' from module '%s'\n", filename);
@@ -324,6 +373,30 @@ void execute_print(const char* arg) {
             error("Referenced variable not found");
         }
     }
+
+    else if (strcmp(arg, "pi") == 0) {
+        printf("%lf\n", pi());
+    }
+    
+    else if (strcmp(arg, "tau") == 0) {
+        printf("%lf\n", tau());
+    }
+    
+    else if (strcmp(arg, "e") == 0) {
+        printf("%lf\n", e());
+    }
+    
+    else if (strcmp(arg, "goldenRatio") == 0) {
+        printf("%lf\n", goldenRatio());
+    }
+    
+    else if (strcmp(arg, "silverRatio") == 0) {
+        printf("%lf\n", silverRatio());
+    }
+    
+    else if (strcmp(arg, "superGoldenRatio") == 0) {
+        printf("%lf\n", superGoldenRatio());
+    }
     
     else {
         // Check if the argument is a quoted string
@@ -379,6 +452,65 @@ void execute_print(const char* arg) {
     }
 }
 #endif
+
+void execute_math_func(const char* line) {
+    char func[MAX_TOKEN_SIZE];
+    char arg[MAX_TOKEN_SIZE];
+
+    sscanf(line, "%[^()](%[^)])", func, arg);
+
+    double value = 0.0;
+    if (strcmp(arg, "pi") == 0) {
+        value = pi();
+    }
+    
+    else if (strcmp(arg, "tau") == 0) {
+        value = tau();
+    }
+    
+    else if (strcmp(arg, "e") == 0) {
+        value = e();
+    }
+    
+    else if (strcmp(arg, "goldenRatio") == 0) {
+        value = goldenRatio();
+    }
+    
+    else if (strcmp(arg, "silverRatio") == 0) {
+        value = silverRatio();
+    }
+    
+    else if (strcmp(arg, "superGoldenRatio") == 0) {
+        value = superGoldenRatio();
+    }
+    
+    else {
+        value = atof(arg);
+    }
+
+
+
+    if (strcmp(func, "xenly_sqrt") == 0) {
+        printf("%f\n", xenly_sqrt(value));
+    }
+    
+    else if (strcmp(func, "xenly_cbrt") == 0) {
+        printf("%f\n", xenly_cbrt(value));
+    }
+    
+    else if (strcmp(func, "xenly_pow") == 0) {
+        char base[MAX_TOKEN_SIZE];
+        char exp[MAX_TOKEN_SIZE];
+        sscanf(arg, "%[^,],%s", base, exp);
+        double base_value = atof(base);
+        double exp_value = atof(exp);
+        printf("%f\n", xenly_pow(base_value, exp_value));
+    }
+    
+    else {
+        error("Unknown function");
+    }
+}
 
 void execute_var(const char* line) {
     char name[MAX_TOKEN_SIZE];
@@ -473,40 +605,8 @@ int main(int argc, char* argv[]) {
             execute_print(argument);
         }
 
-        else if (strncmp(line, "xenly_sqrt(", 11) == 0 && line[strlen(line) - 1] == ')') {
-            double result = atof(line + 11);
-            printf("%f\n", xenly_sqrt(result));
-        }
-
-        else if (strncmp(line, "xenly_cbrt(", 11) == 0 && line[strlen(line) - 1] == ')') {
-            double result = atof(line + 11);
-            printf("%f\n", xenly_cbrt(result));
-        }
-
-        else if (strncmp(line, "xenly_pow(", 10) == 0 && line[strlen(line) - 1] == ')') {
-            char* comma_pos = strchr(line + 10, ',');
-            if (comma_pos == NULL) {
-                error("Invalid syntax for xenly_pow");
-            }
-            *comma_pos = '\0'; // Split into base and exponent
-            double base = atof(line + 10);
-            double exp = atof(comma_pos + 1);
-            printf("%f\n", xenly_pow(base, exp));
-        }
-
-        else if (strncmp(line, "xenly_sin(", 10) == 0 && line[strlen(line) - 1] == ')') {
-            double result = atof(line + 10);
-            printf("%f\n", xenly_sin(result));
-        }
-
-        else if (strncmp(line, "xenly_cos(", 10) == 0 && line[strlen(line) - 1] == ')') {
-            double result = atof(line + 10);
-            printf("%f\n", xenly_cos(result));
-        }
-
-        else if (strncmp(line, "xenly_tan(", 10) == 0 && line[strlen(line) - 1] == ')') {
-            double result = atof(line + 10);
-            printf("%f\n", xenly_tan(result));
+        else if (strchr(line, '(') && strchr(line, ')')) {
+            execute_math_func(line);
         }
 
         else if (strncmp(line, "var", 3) == 0) {

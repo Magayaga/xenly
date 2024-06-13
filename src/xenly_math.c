@@ -13,12 +13,38 @@
 #include <math.h>
 #include "xenly_math.h"
 
+// Define and export mathematical constants
 #define MATH_PI 3.14159265358979323846
 #define MATH_TAU 6.28318530717958647692
 #define MATH_E 2.71828182845904523536
 #define MATH_GOLDEN_RATIO 1.61803398874989484820
 #define MATH_SILVER_RATIO 2.41421356237309504880
 #define MATH_SUPERGOLDEN_RATIO 1.46557123187676802665
+
+// Mathematical constants using functions
+double pi() {
+    return MATH_PI;
+}
+
+double tau() {
+    return MATH_TAU;
+}
+
+double e() {
+    return MATH_E;
+}
+
+double goldenRatio() {
+    return MATH_GOLDEN_RATIO;
+}
+
+double silverRatio() {
+    return MATH_SILVER_RATIO;
+}
+
+double superGoldenRatio() {
+    return MATH_SUPERGOLDEN_RATIO;
+}
 
 // Define a function to calculate the square root
 double xenly_sqrt(double x) {

@@ -16,6 +16,47 @@ import (
 	"math"
 )
 
+// Define and export mathematical constants
+const (
+	MATH_PI = 3.14159265358979323846
+	MATH_TAU = 6.28318530717958647692
+    MATH_E = 2.71828182845904523536
+    MATH_GOLDEN_RATIO = 1.61803398874989484820
+    MATH_SILVER_RATIO = 2.41421356237309504880
+    MATH_SUPERGOLDEN_RATIO = 1.46557123187676802665
+)
+
+// Export constants using functions
+//export pi
+func pi() C.double {
+    return C.double(MATH_PI)
+}
+
+//export tau
+func tau() C.double {
+	return C.double(MATH_TAU)
+}
+
+//export e
+func e() C.double {
+	return C.double(MATH_E)
+}
+
+//export goldenRatio
+func goldenRatio() C.double {
+	return C.double(MATH_GOLDEN_RATIO)
+}
+
+//export silverRatio
+func silverRatio() C.double {
+	return C.double(MATH_SILVER_RATIO)
+}
+
+//export superGoldenRatio
+func superGoldenRatio() C.double {
+	return C.double(MATH_SUPERGOLDEN_RATIO)
+}
+
 // Define a function to calculate the square root
 //export xenly_sqrt
 func xenly_sqrt(x C.double) C.double {
