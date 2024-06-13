@@ -453,7 +453,7 @@ void execute_print(const char* arg) {
 }
 #endif
 
-void execute_math_func(const char* line) {
+void execute_math_function(const char* line) {
     char func[MAX_TOKEN_SIZE];
     char arg[MAX_TOKEN_SIZE];
 
@@ -505,6 +505,18 @@ void execute_math_func(const char* line) {
         double base_value = atof(base);
         double exp_value = atof(exp);
         printf("%f\n", xenly_pow(base_value, exp_value));
+    }
+
+    else if (strcmp(func, "xenly_sin") == 0) {
+        printf("%f\n", xenly_sin(value));
+    }
+
+    else if (strcmp(func, "xenly_cos") == 0) {
+        printf("%f\n", xenly_cos(value));
+    }
+
+    else if (strcmp(func, "xenly_tan") == 0) {
+        printf("%f\n", xenly_tan(value));
     }
     
     else {
@@ -606,7 +618,7 @@ int main(int argc, char* argv[]) {
         }
 
         else if (strchr(line, '(') && strchr(line, ')')) {
-            execute_math_func(line);
+            execute_math_function(line);
         }
 
         else if (strncmp(line, "var", 3) == 0) {

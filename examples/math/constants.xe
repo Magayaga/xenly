@@ -1,3 +1,6 @@
+import math
+
+// mathematical constants
 print(pi)
 print(e)
 print(goldenRatio)
