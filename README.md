@@ -37,7 +37,7 @@ $ cd xenly-pre-linux
 $ git checkout pre-linux
 ```
 
-### 2. Installing Xenly's interpreter
+### 2. Installing Xenly's source code
 
 You can run the program (`makefile` for Linux and `main.sh` for both Windows and Linux).
 
@@ -45,6 +45,9 @@ You can run the program (`makefile` for Linux and `main.sh` for both Windows and
 # Run the program (makefile or bash script)
 $ make
 $ bash main.sh
+
+# Run the binary code
+$ ./xenly -v
 ```
 
 ### 3. Set the Library paths
