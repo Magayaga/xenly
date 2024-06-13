@@ -291,6 +291,42 @@ double evaluate_factor(const char** expression) {
             (*expression)++; // Move past digits and the decimal point
         }
     }
+    
+    else {
+        if (strncmp(*expression, "pi", 2) == 0) {
+            result = pi() * negate;
+            *expression += 2;
+        }
+        
+        else if (strncmp(*expression, "tau", 3) == 0) {
+            result = tau() * negate;
+            *expression += 3;
+        }
+        
+        else if (strncmp(*expression, "e", 1) == 0) {
+            result = e() * negate;
+            (*expression)++;
+        }
+        
+        else if (strncmp(*expression, "goldenRatio", 11) == 0) {
+            result = goldenRatio() * negate;
+            *expression += 11;
+        }
+        
+        else if (strncmp(*expression, "silverRatio", 11) == 0) {
+            result = silverRatio() * negate;
+            *expression += 11;
+        }
+        
+        else if (strncmp(*expression, "superGoldenRatio", 16) == 0) {
+            result = superGoldenRatio() * negate;
+            *expression += 16;
+        }
+        
+        else {
+            error("Unknown constant or function");
+        }
+    }
 
     return result;
 }
@@ -299,33 +335,29 @@ double evaluate_factor(const char** expression) {
 double evaluate_term(const char** expression) {
     // Evaluate a term (factor) in an arithmetic expression
     double result = evaluate_factor(expression);
-    while (**expression && (**expression == '*' || **expression == '/' || **expression == '%')) {
-        char op = **expression;
-        (*expression)++; // Move past the operator
+
+    while (**expression == '*' || **expression == '/' || **expression == '%') {
+        char operator = **expression;
+        (*expression)++;
+
         double factor = evaluate_factor(expression);
-        switch (op) {
+        switch (operator) {
             case '*':
                 result *= factor;
                 break;
             
             case '/':
-                if (factor != 0) {
-                    result /= factor;
-                }
-                
-                else {
+                if (factor == 0.0) {
                     error("Division by zero");
                 }
+                result /= factor;
                 break;
             
             case '%':
-                if (factor != 0) {
-                    result = fmod(result, factor);
-                }
-                
-                else {
+                if (factor == 0.0) {
                     error("Modulo by zero");
                 }
+                result = fmod(result, factor);
                 break;
         }
     }
@@ -368,39 +400,15 @@ void execute_print(const char* arg) {
                 break;
             }
         }
-        
+
         if (!found) {
             error("Referenced variable not found");
         }
     }
-
-    else if (strcmp(arg, "pi") == 0) {
-        printf("%lf\n", pi());
-    }
-    
-    else if (strcmp(arg, "tau") == 0) {
-        printf("%lf\n", tau());
-    }
-    
-    else if (strcmp(arg, "e") == 0) {
-        printf("%lf\n", e());
-    }
-    
-    else if (strcmp(arg, "goldenRatio") == 0) {
-        printf("%lf\n", goldenRatio());
-    }
-    
-    else if (strcmp(arg, "silverRatio") == 0) {
-        printf("%lf\n", silverRatio());
-    }
-    
-    else if (strcmp(arg, "superGoldenRatio") == 0) {
-        printf("%lf\n", superGoldenRatio());
-    }
     
     else {
         // Check if the argument is a quoted string
-        if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
+        if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') ||
             (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
             // Print the string without quotes
             printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
@@ -408,7 +416,8 @@ void execute_print(const char* arg) {
         
         else {
             // Evaluate and print the expression
-            double result = evaluate_arithmetic_expression(&arg);
+            const char* expression = arg;
+            double result = evaluate_arithmetic_expression(&expression);
             printf("%lf\n", result);
         }
     }
@@ -460,35 +469,8 @@ void execute_math_function(const char* line) {
     sscanf(line, "%[^()](%[^)])", func, arg);
 
     double value = 0.0;
-    if (strcmp(arg, "pi") == 0) {
-        value = pi();
-    }
-    
-    else if (strcmp(arg, "tau") == 0) {
-        value = tau();
-    }
-    
-    else if (strcmp(arg, "e") == 0) {
-        value = e();
-    }
-    
-    else if (strcmp(arg, "goldenRatio") == 0) {
-        value = goldenRatio();
-    }
-    
-    else if (strcmp(arg, "silverRatio") == 0) {
-        value = silverRatio();
-    }
-    
-    else if (strcmp(arg, "superGoldenRatio") == 0) {
-        value = superGoldenRatio();
-    }
-    
-    else {
-        value = atof(arg);
-    }
-
-
+    const char* arg_ptr = arg;
+    value = evaluate_arithmetic_expression(&arg_ptr);
 
     if (strcmp(func, "xenly_sqrt") == 0) {
         printf("%f\n", xenly_sqrt(value));
@@ -502,19 +484,23 @@ void execute_math_function(const char* line) {
         char base[MAX_TOKEN_SIZE];
         char exp[MAX_TOKEN_SIZE];
         sscanf(arg, "%[^,],%s", base, exp);
-        double base_value = atof(base);
-        double exp_value = atof(exp);
-        printf("%f\n", xenly_pow(base_value, exp_value));
-    }
 
+        const char* base_ptr = base;
+        const char* exp_ptr = exp;
+        double base_val = evaluate_arithmetic_expression(&base_ptr);
+        double exp_val = evaluate_arithmetic_expression(&exp_ptr);
+
+        printf("%f\n", xenly_pow(base_val, exp_val));
+    }
+    
     else if (strcmp(func, "xenly_sin") == 0) {
         printf("%f\n", xenly_sin(value));
     }
-
+    
     else if (strcmp(func, "xenly_cos") == 0) {
         printf("%f\n", xenly_cos(value));
     }
-
+    
     else if (strcmp(func, "xenly_tan") == 0) {
         printf("%f\n", xenly_tan(value));
     }
@@ -541,28 +527,15 @@ void execute_var(const char* line) {
     if (result_variables < MAX_VARIABLES) {
         strcpy(variables[result_variables].name, name);
         // Check if value is another variable
-        if (value[0] == '$') {
-            // Look for the variable referenced by value
-            char var_name[MAX_TOKEN_SIZE];
-            sscanf(value, "$%s", var_name);
-            int found = 0;
-            for (int i = 0; i < result_variables; i++) {
-                if (strcmp(variables[i].name, var_name) == 0) {
-                    strcpy(value, variables[i].value);
-                    found = 1;
-                    break;
-                }
-            }
-            if (!found) {
-                error("Referenced variable not found");
-            }
-        }
-        strcpy(variables[result_variables].value, value);
+        const char* value_ptr = value;
+        double evaluated_value = evaluate_arithmetic_expression(&value_ptr);
+        snprintf(variables[result_variables].value, sizeof(variables[result_variables].value), "%lf", evaluated_value);
+
         result_variables++;
     }
     
     else {
-        error("Maximum resultber of variables exceeded");
+        error("Maximum number of variables exceeded");
     }
 }
 
