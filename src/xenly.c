@@ -120,49 +120,49 @@ void load_module(const char* module_name) {
     }
 
     // Load function pointers using GetProcAddress
-    pi = (xenly_constant_t)GetProcAddress(handle, "pi");
+    pi = (xenly_constant_t)(void*)GetProcAddress(handle, "pi");
     if (!pi) {
         fprintf(stderr, "Error: Unable to load constant 'pi' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
 
-    tau = (xenly_constant_t)GetProcAddress(handle, "tau");
+    tau = (xenly_constant_t)(void*)GetProcAddress(handle, "tau");
     if (!tau) {
         fprintf(stderr, "Error: Unable to load constant 'tau' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
 
-    e = (xenly_constant_t)GetProcAddress(handle, "e");
+    e = (xenly_constant_t)(void*)GetProcAddress(handle, "e");
     if (!e) {
         fprintf(stderr, "Error: Unable to load constant 'e' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
 
-    goldenRatio = (xenly_constant_t)GetProcAddress(handle, "goldenRatio");
+    goldenRatio = (xenly_constant_t)(void*)GetProcAddress(handle, "goldenRatio");
     if (!goldenRatio) {
         fprintf(stderr, "Error: Unable to load constant 'goldenRatio' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
 
-    silverRatio = (xenly_constant_t)GetProcAddress(handle, "silverRatio");
+    silverRatio = (xenly_constant_t)(void*)GetProcAddress(handle, "silverRatio");
     if (!silverRatio) {
         fprintf(stderr, "Error: Unable to load constant 'silverRatio' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
 
-    superGoldenRatio = (xenly_constant_t)GetProcAddress(handle, "superGoldenRatio");
+    superGoldenRatio = (xenly_constant_t)(void*)GetProcAddress(handle, "superGoldenRatio");
     if (!superGoldenRatio) {
         fprintf(stderr, "Error: Unable to load constant 'superGoldenRatio' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
 
-    xenly_sqrt = (xenly_sqrt_t)GetProcAddress(handle, "xenly_sqrt");
+    xenly_sqrt = (xenly_sqrt_t)(void*)GetProcAddress(handle, "xenly_sqrt");
     if (!xenly_sqrt) {
         fprintf(stderr, "Error: Unable to load function 'xenly_sqrt' from module '%s'\n", filename);
         FreeLibrary(handle);
