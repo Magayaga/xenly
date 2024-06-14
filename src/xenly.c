@@ -96,18 +96,21 @@ xenly_sin_t xenly_sin;
 xenly_cos_t xenly_cos;
 xenly_tan_t xenly_tan;
 
+// Error
 void error(const char* message) {
     fprintf(stderr, "Error: %s\n", message);
     exit(1);
 }
 
+// Comment
 void execute_comment(const char* comment) {
     printf("// %s\n", comment);
 }
 
 double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
-    
+
+// Load module
 #if defined(_WIN32) || defined(_WIN64)
 // WINDOWS OPERATING SYSTEM
 void load_module(const char* module_name) {
@@ -331,16 +334,33 @@ double evaluate_factor(const char** expression) {
     return result;
 }
 
+// Power
+double evaluate_power(const char** expression) {
+    // Evaluate base factor first
+    double base = evaluate_factor(expression);
+
+    // Check for '**' operator
+    while (**expression == '*' && *(*expression + 1) == '*') {
+        // Skip the '**' operator
+        (*expression) += 2;
+        
+        // Evaluate exponent recursively
+        double exponent = evaluate_power(expression);
+        base = xenly_pow(base, exponent);
+    }
+    return base;
+}
+
 // Term
 double evaluate_term(const char** expression) {
-    // Evaluate a term (factor) in an arithmetic expression
-    double result = evaluate_factor(expression);
+    // Evaluate a term (power) in an arithmetic expression
+    double result = evaluate_power(expression);
 
     while (**expression == '*' || **expression == '/' || **expression == '%') {
         char operator = **expression;
         (*expression)++;
 
-        double factor = evaluate_factor(expression);
+        double factor = evaluate_power(expression);
         switch (operator) {
             case '*':
                 result *= factor;
@@ -415,6 +435,11 @@ void execute_print(const char* arg) {
         }
         
         else {
+            char arg[MAX_TOKEN_SIZE];
+            if (sscanf("%255[^)]", arg) != 1) {
+                error("Invalid print statement");
+            }
+
             // Evaluate and print the expression
             const char* expression = arg;
             double result = evaluate_arithmetic_expression(&expression);
@@ -454,6 +479,11 @@ void execute_print(const char* arg) {
         }
         
         else {
+            char expr[MAX_TOKEN_SIZE];
+            if (sscanf("%255[^)]", expr) != 1) {
+                error("Invalid print statement");
+            }
+
             // Evaluate and print the expression
             double result = evaluate_arithmetic_expression(&arg);
             printf("%lf\n", result);
