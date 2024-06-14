@@ -4,7 +4,8 @@
  *
  * It is initially written in Go programming language.
  *
- * `xenly_math.go` is the similar to the `xenly_math.c` in C programming language.
+ * `xenly_math.go` is the similar to the `xenly_math.c` in C programming language and `xenly_math.rs` in Rust
+ * programming language.
  * 
  * It is available for Linux and Windows operating systems.
  *
