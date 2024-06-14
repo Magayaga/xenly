@@ -13,6 +13,7 @@
 #include <ctype.h>
 #include <math.h>
 #include "print_info.h"
+#include "project.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 // WINDOWS OPERATING SYSTEM
@@ -435,11 +436,6 @@ void execute_print(const char* arg) {
         }
         
         else {
-            char arg[MAX_TOKEN_SIZE];
-            if (sscanf("%255[^)]", arg) != 1) {
-                error("Invalid print statement");
-            }
-
             // Evaluate and print the expression
             const char* expression = arg;
             double result = evaluate_arithmetic_expression(&expression);
@@ -479,11 +475,6 @@ void execute_print(const char* arg) {
         }
         
         else {
-            char expr[MAX_TOKEN_SIZE];
-            if (sscanf("%255[^)]", expr) != 1) {
-                error("Invalid print statement");
-            }
-
             // Evaluate and print the expression
             double result = evaluate_arithmetic_expression(&arg);
             printf("%lf\n", result);
@@ -580,6 +571,11 @@ double evaluate_condition(const char* condition) {
 }
 
 int main(int argc, char* argv[]) {
+    if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
+        // Create initialize project
+        create_initialize_project(argv[2]);
+    }
+
     if (argc != 2) {
         error("Usage: xenly [input file]");
     }
@@ -589,8 +585,35 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    else if (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
+        print_help();
+        return 0;
+    }
+
+    else if (argc == 2 && (strcmp(argv[1], "--operatingsystem" ) == 0 || strcmp(argv[1], "-os") == 0)) {
+        print_operatingsystem();
+        return 0;
+    }
+
+    else if (argc == 2 && (strcmp(argv[1], "--dumpmachine") == 0 || strcmp(argv[1], "-dm") == 0)) {
+        print_dumpmachines();
+        return 0;
+    }
+
+    /*
+    else if (argc == 2 && (strcmp(argv[1], "--dumpreleasedate") == 0 || strcmp(argv[1], "-drd") == 0)) {
+        print_dumpreleasedate();
+        return 0;
+    }
+    */
+
     else if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
         print_dumpversion();
+        return 0;
+    }
+
+    else if (argc == 2 && (strcmp(argv[1], "--new-project") == 0)) {
+        initialize_project();
         return 0;
     }
 

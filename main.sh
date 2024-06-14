@@ -14,7 +14,7 @@ else
 fi
 
 # Compile xenly.c with the selected compiler
-$compiler src/xenly.c src/color.c src/print_info.c -o xenly -lm
+$compiler src/xenly.c src/color.c src/print_info.c src/project.c -o xenly -lm
 $compiler src/xenly_math.c -shared -o math.so -fPIC -lm
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
 chmod +rx math.so

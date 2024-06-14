@@ -16,6 +16,18 @@ void print_version();
 // Print dump version
 void print_dumpversion();
 
+// Print dump release date
+void print_dumpreleasedate();
+
+// Print help
+void print_help();
+
+// Print dumpmachines
+void print_dumpmachines();
+
+// Print operating systems
+void print_operatingsystem();
+
 // Print author
 void print_author();
 
