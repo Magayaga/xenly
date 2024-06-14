@@ -12,6 +12,14 @@
 #include "color.h"
 #include "print_info.h"
 
+#if defined(_WIN32) || defined(_WIN64)
+    // Windows-specific includes
+    #include <windows.h>
+#elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    // Unix-like system-specific includes
+    #include <sys/utsname.h>
+#endif
+
 // #define XENLY_RELEASEDATE
 #define XENLY_VERSION "0.1.0-nanopreview2"
 #define XENLY_AUTHORS "Cyril John Magayaga"
