@@ -12,6 +12,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include "error.h"
 #include "print_info.h"
 #include "project.h"
 
@@ -96,12 +97,6 @@ xenly_pow_t xenly_pow;
 xenly_sin_t xenly_sin;
 xenly_cos_t xenly_cos;
 xenly_tan_t xenly_tan;
-
-// Error
-void error(const char* message) {
-    fprintf(stderr, "Error: %s\n", message);
-    exit(1);
-}
 
 // Comment
 void execute_comment(const char* comment) {
