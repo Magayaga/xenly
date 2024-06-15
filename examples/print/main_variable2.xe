@@ -7,6 +7,6 @@
 let x = "Good Morning"
 let y = "Good Afternoon"
 let z = "Good Evening"
-print(x)
-print(y)
-print(z)
+print($x)
+print($y)
+print($z)
