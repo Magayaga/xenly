@@ -9,11 +9,11 @@
 #ifndef MATH_BINARY_H
 #define MATH_BINARY_H
 
-// Binary numbers to decimal
-int convert_binary_to_decimal(const char* binary);
+// Convert Binary string to Decimal
+double xenly_bindec(const char* binary);
 
-// Decimal to Binary number
-char* convert_decimal_to_binary(int decimal);
+// Convert Decimal to Binary string
+char* xenly_decbin(int decimal)
 
 
 #endif

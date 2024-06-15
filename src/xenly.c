@@ -83,8 +83,10 @@ typedef double (*xenly_pow_t)(double, double);
 typedef double (*xenly_sin_t)(double);
 typedef double (*xenly_cos_t)(double);
 typedef double (*xenly_tan_t)(double);
+typedef double (*xenly_bindec_t)(const char*);
+typedef char* (*xenly_decbin_t)(int);
 
-// Define the function pointers
+// Define the function pointers for math
 xenly_constant_t pi;
 xenly_constant_t tau;
 xenly_constant_t e;
@@ -97,6 +99,10 @@ xenly_pow_t xenly_pow;
 xenly_sin_t xenly_sin;
 xenly_cos_t xenly_cos;
 xenly_tan_t xenly_tan;
+
+// Define the function pointers for binary math
+xenly_bindec_t xenly_bindec;
+xenly_decbin_t xenly_decbin;
 
 // Comment
 void execute_comment(const char* comment) {
@@ -203,6 +209,30 @@ void load_module(const char* module_name) {
         return;
     }
 }
+
+void load_binary_math_module(const char* module_name) {
+    char filename[MAX_TOKEN_SIZE];
+    sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
+    HMODULE handle = LoadLibrary(filename);
+    if (!handle) {
+        fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
+        return;
+    }
+
+    xenly_bindec = (xenly_bindec_t)(void*)GetProcAddress(handle, "xenly_bindec");
+    if (!xenly_bindec) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_bindec' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_decbin = (xenly_decbin_t)(void*)GetProcAddress(handle, "xenly_decbin");
+    if (!xenly_decbin) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_decbin' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+}
 #else
 // LINUX OPERATING SYSTEM
 void load_module(const char* module_name) {
@@ -253,6 +283,31 @@ void load_module(const char* module_name) {
 
     xenly_tan = (xenly_tan_t)dlsym(handle, "xenly_tan");
     if (!xenly_tan) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+}
+
+void load_binary_math_module(const char* module_name) {
+    char filename[MAX_TOKEN_SIZE];
+    snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
+
+    void* handle = dlopen(filename, RTLD_LAZY);
+    if (!handle) {
+        fprintf(stderr, "Error: Unable to open module file '%s'; %s\n", filename, dlerror());
+        exit(1);
+    }
+
+    xenly_bindec = (xenly_bindec_t)dlsym(handle, "xenly_bindec");
+    if (!xenly_bindec) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_decbin = (xenly_decbin_t)dlsym(handle, "xenly_decbin");
+    if (!xenly_decbin) {
         fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
@@ -520,6 +575,16 @@ void execute_math_function(const char* line) {
     else if (strcmp(func, "xenly_tan") == 0) {
         printf("%f\n", xenly_tan(value));
     }
+
+    else if (strcmp(func, "xenly_bindec") == 0) {
+        printf("%f\n", xenly_bindec(arg));
+    }
+    
+    else if (strcmp(func, "xenly_decbin") == 0) {
+        const char* arg_ptr = arg;
+        int value = (int)evaluate_arithmetic_expression(&arg_ptr);
+        printf("%s\n", xenly_decbin(value));
+    }
     
     else {
         error("Unknown function");
@@ -627,7 +692,22 @@ int main(int argc, char* argv[]) {
         line[strcspn(line, "\n")] = '\0';
 
         if (strncmp(line, "import ", 7) == 0) {
-            load_module(line + 7);
+            char module_name[MAX_TOKEN_SIZE];
+            sscanf(line + 7, "%s", module_name);
+
+            // import math
+            if (strcmp(module_name, "math") == 0) {
+                load_module("math");
+            }
+            
+            // import binary_math
+            else if (strcmp(module_name, "binary_math") == 0) {
+                load_binary_math_module("binary_math");
+            }
+            
+            else {
+                fprintf(stderr, "Error: Unknown module '%s'\n", module_name);
+            }
         }
         
         else if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
