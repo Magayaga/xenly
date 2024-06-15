@@ -34,7 +34,7 @@ A **Xenly** variable is created the moment you first assign a value to it.
 ```swift
 // "var" variable to print()
 var hi = "Hello, World!"
-print(hi)
+print($hi)
 ```
 
 I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in C programming language.
