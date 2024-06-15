@@ -17,4 +17,4 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build
-      run: rustc --crate-type cdylib -o math.dylib src/xenly_math.rs
+      run: rustc --crate-type cdylib -o math.so src/xenly_math.rs
