@@ -63,12 +63,13 @@ $ xenly
 
 ### 2. Installing Xenly's source code
 
-You can run the program (`makefile` for Linux and `main.sh` for both Windows and Linux).
+You can run the program `makefile` for Linux, `make.bat` for Windows, and `main.sh` for both Windows and Linux.
 
 ```bash
-# Run the program (makefile or bash script)
+# Run the program (makefile, bash script, or batchfile)
 $ make
 $ bash main.sh
+$ ./make.bat
 
 # Run the binary code
 $ ./xenly -v
