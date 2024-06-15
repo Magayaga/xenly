@@ -22,4 +22,4 @@ jobs:
         go-version: '1.21'
 
     - name: Build
-      run: go build -o src/goxenly.dll -buildmode=c-shared src/goxenly.go
+      run: go build -o math.so -buildmode=c-shared src/xenly_math.go
