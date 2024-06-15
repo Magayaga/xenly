@@ -13,7 +13,7 @@
 double xenly_bindec(const char* binary);
 
 // Convert Decimal to Binary string
-char* xenly_decbin(int decimal)
+char* xenly_decbin(int decimal);
 
 
 #endif

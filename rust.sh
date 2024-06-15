@@ -25,18 +25,16 @@ else
     exit 1
 fi
 
-# Name of the shared library
-LIB_NAME="math.${LIB_EXT}"
-
 # Create the output directory if it doesn't exist
 mkdir -p "$OUT_DIR"
 
 # Build the Go shared library
-rustc --crate-type cdylib -o "${LIB_NAME}" "$SRC_DIR/xenly_math.rs"
+rustc --crate-type cdylib -o "math.${LIB_EXT}" "$SRC_DIR/xenly_math.rs"
+rustc --crate-type cdylib -o "binary_math.${LIB_EXT}" "$SRC_DIR/xenly_binary_math.rs"
 
 # Check if the build was successful
 if [[ $? -eq 0 ]]; then
-    echo "Library built successfully: ${LIB_NAME}"
+    echo "Library built successfully"
 else
     echo "Build failed."
     exit 1

@@ -3,9 +3,11 @@
  * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
  *
  * It is initially written in C programming language.
- * 
- * It is available for Linux and Windows operating systems.
  *
+ * `xenly_binary_math.c` is the similar to the `xenly_binary_math.go` in Go programming language and and
+ * `xenly_binary_math.rs` in Rust programming language.
+ *
+ * It is available for Linux and Windows operating systems.
  */
 #include <stdio.h>
 #include <stdlib.h>
