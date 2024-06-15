@@ -4,6 +4,7 @@
  *
  * It is initially written in C programming language.
  *
+ * It is available for Linux and Windows operating systems.
  */
 #ifndef MATH_BINARY_H
 #define MATH_BINARY_H

@@ -3,13 +3,14 @@
  * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
  *
  * It is initially written in C programming language.
+ * 
+ * It is available for Linux and Windows operating systems.
  *
  */
-
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-#include "math_binary.h"
+#include "binary_math.h"
 
 // Binary numbers to decimal
 int convert_binary_to_decimal(const char* binary) {
