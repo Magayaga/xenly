@@ -31,3 +31,16 @@
 * On March 27, 2024, He was sick due to a cough, headache, and dry nose.
 
 * On May 28, 2024, He announced that the upcoming features of the Xenly programming language are web development, embedded system, and graphical user interface but the next 10 years.
+
+* On June 3, 2024, He announced that the new features of the `nanopreview` Xenly programming language are new Xenly modules. After many library changes applied to the working draft, the **“Hello, World!”** program and adding new **Math modules** will be:
+
+    ```swift
+    import math
+
+    // "Hello, World!" program
+    print("Hello, World!")
+
+    // Square root
+    xenly_sqrt(121)
+    ```
+

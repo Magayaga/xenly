@@ -32,7 +32,7 @@ LIB_NAME="math.${LIB_EXT}"
 mkdir -p "$OUT_DIR"
 
 # Build the Go shared library
-go build -o "${LIB_NAME}" -buildmode=c-shared "$SRC_DIR/xenly_math.go"
+rustc --crate-type cdylib -o "${LIB_NAME}" "$SRC_DIR/xenly_math.rs"
 
 # Check if the build was successful
 if [[ $? -eq 0 ]]; then

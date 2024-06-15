@@ -1,7 +1,8 @@
 # History of the Xenly version
 
-| Version           | Released date      | Git Commit                                                                                     |
-|:-----------------:|:------------------:|:----------------------------------------------------------------------------------------------:|
+## Xenly's `preview` versions
+| Version           | Released date      | Git Commit     |
+|:-----------------:|:------------------:|:--------------:|
 | `v0.1.0-preview1` | August 28, 2023    | - |
 | `v0.1.0-preview2` | December 27, 2023  | [`4541f09`](https://github.com/Magayaga/xenly/commit/4541f09af8e96e06399aec41cd257f16716b2ac7) |
 | `v0.1.0-preview3` | January 26, 2024   | [`671b15b`](https://github.com/Magayaga/xenly/commit/671b15bb7c8c4465b9d2be7d3323dfffd8972919) |
@@ -11,6 +12,13 @@
 | `v0.1.0-preview7` | May 28, 2024       | [`0a23548`](https://github.com/Magayaga/xenly/commit/0a235485c1a9f9097a42105d4e6e72231c8f8f16) |
 | `v0.1.0-preview8` | June 27, 2024      | TBA |
 | `v0.1.0-preview9` | July 26, 2024      | TBA |
+
+## Xenly's `nanopreview` versions
+
+| Version               | Released date      | Git Commit     |
+|:---------------------:|:------------------:|:--------------:|
+| `v0.1.0-nanopreview1` | April 9, 2024      | [`6ee4dcf`](https://github.com/Magayaga/xenly/commit/6ee4dcfad1e0b96e0594d70301613e8e97956227) |
+| `v0.1.0-nanopreview2` | TBA                | TBA            |
 
 ## Copyright
 Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.

@@ -1,41 +1,40 @@
 @echo off
+setlocal
 
-rem Directory structure
-set SOURCE_DIR=src
-set OBJ_DIR=obj
-set OUTPUT_FILE=xenly.exe
+rem Check for gcc
+where gcc >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    set "compiler=gcc"
+) else (
+    rem Check for clang
+    where clang >nul 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        set "compiler=clang"
+    ) else (
+        echo Error: No suitable C compiler found (gcc or clang)
+        exit /b 1
+    )
+)
 
-rem Check if GCC is installed
-gcc --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo GCC not found. Please install GCC and add it to your system PATH.
+rem Compile xenly.c with the selected compiler
+%compiler% src\xenly.c src\color.c src\error.c src\print_info.c src\project.c -o xenly.exe -lm
+if %ERRORLEVEL% NEQ 0 (
+    echo Compilation failed.
     exit /b 1
 )
 
-rem Create the obj directory if it doesn't exist
-if not exist %OBJ_DIR% (
-    mkdir %OBJ_DIR%
+%compiler% src\xenly_math.c -shared -o math.dll -fPIC -lm
+if %ERRORLEVEL% NEQ 0 (
+    echo Compilation failed.
+    exit /b 1
 )
-
-rem Compile each source file separately into object files
-gcc -c %SOURCE_DIR%\xenly.c -o %OBJ_DIR%\xenly.o
-gcc -c %SOURCE_DIR%\print_info.c -o %OBJ_DIR%\print_info.o
-gcc -c %SOURCE_DIR%\color.c -o %OBJ_DIR%\color.o
-gcc -c %SOURCE_DIR%\project.c -o %OBJ_DIR%\project.o
-gcc -c %SOURCE_DIR%\math_binary.c -o %OBJ_DIR%\math_binary.o
-gcc -c %SOURCE_DIR%\error.c -o %OBJ_DIR%\error.o
 
 rem Check if compilation was successful
-if %errorlevel% equ 0 (
-    rem Link object files to create the executable
-    gcc -o %OUTPUT_FILE% %OBJ_DIR%\xenly.o %OBJ_DIR%\print_info.o %OBJ_DIR%\color.o %OBJ_DIR%\project.o %OBJ_DIR%\math_binary.o %OBJ_DIR%\error.o
-    if %errorlevel% equ 0 (
-        echo Compilation successful. Running xenly programming language.
-    ) else (
-        echo Linking failed.
-    )
+if exist xenly.exe (
+    echo Compilation successful. Running xenly programming language
+    xenly.exe
 ) else (
-    echo Compilation of source files failed.
+    echo Compilation failed.
 )
 
-exit /b %errorlevel%
+endlocal

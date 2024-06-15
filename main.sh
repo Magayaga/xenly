@@ -4,13 +4,8 @@
 # 
 # It is initially written in Bash Script.
 #
-#!/bin/bash
-
-# Check for the availability of compilers (GCC, tcc, or clang)
 if command -v gcc >/dev/null 2>&1; then
     compiler="gcc"
-elif command -v tcc >/dev/null 2>&1; then
-    compiler="tcc"
 elif command -v clang >/dev/null 2>&1; then
     compiler="clang"
 else
@@ -19,7 +14,10 @@ else
 fi
 
 # Compile xenly.c with the selected compiler
-$compiler src/xenly.c src/print_info.c src/color.c src/project.c src/math_binary.c src/error.c -o xenly -lm
+$compiler src/xenly.c src/color.c src/error.c src/print_info.c src/project.c -o xenly -lm
+$compiler src/xenly_math.c -shared -o math.so -fPIC -lm
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
+chmod +rx math.so
 
 # Check if compilation was successful
 if [ $? -eq 0 ]; then

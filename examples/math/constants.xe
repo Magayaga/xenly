@@ -1,20 +1,8 @@
-/*
-   Xenly programming language
-   Copyright 2024 Cyril John Magayaga
+import math
 
-   This is constants
-*/
-
-// Mathematical constants
+// mathematical constants
 print(pi)
 print(e)
 print(goldenRatio)
 print(silverRatio)
 print(supergoldenRatio)
-
-// Physical constants
-print(speedOfLight)
-print(speedOfLight.kmh)
-print(speedOfLight.mih)
-print(gravitationalConstant)
-print(gravitationalConstant.dyncm2.g2)

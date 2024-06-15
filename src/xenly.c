@@ -4,578 +4,277 @@
  *
  * It is initially written in C programming language.
  *
+ * It is available for Linux and Windows operating systems.
+ *
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <stdarg.h>
-#include <stdint.h>
 #include <ctype.h>
 #include <math.h>
-#include "constants.h"
-#include "color.h"
 #include "error.h"
-#include "xenly.h"
-#include "project.h"
 #include "print_info.h"
-#include "math_binary.h"
-// #include "goxenly.h"
+#include "project.h"
 
-// Define platform-specific includes and methods
 #if defined(_WIN32) || defined(_WIN64)
-    #include <windows.h>
-#elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
-    #include <sys/utsname.h>
+// WINDOWS OPERATING SYSTEM
+#include <windows.h>
+
+// DYNAMIC-LINK LIBRARY - is a shared library in the Windows operating system.
+#define IMPORT_SUFFIX "dll"
+
 #else
-    #error "Unsupported platform"
+// LINUX OPERATING SYSTEM
+#include <dlfcn.h>
+
+/*
+ * SHARED OBJECT - is a shared library in the Linux operating system because
+ * Linux distributions (Examples: Ubuntu, Fedora, Debian, Kali Linux, and more)
+ * and Mobile operating systems based on Linux kernel (Examples: Android, and more)
+ *
+ */
+#define IMPORT_SUFFIX "so"
 #endif
 
-// Evaluately condition
-bool evaluately_condition(const char* condition) {
-    // Implement a more comprehensive logic for evaluating conditions
-    // This is a simplified example
-    return atoi(condition) != 0;
-    return true;
+#define MAX_TOKEN_SIZE 1000
+#define MAX_VARIABLES 1000
+#define MAX_OBJECTS 1000
+#define MAX_ARRAYS 100
+
+typedef struct {
+    char name[MAX_TOKEN_SIZE];
+    char value[MAX_TOKEN_SIZE];
+} Variable;
+
+Variable variables[MAX_VARIABLES];
+int result_variables = 0;
+
+typedef struct {
+    char name[MAX_TOKEN_SIZE];
+    int type; // 0 for variable, 1 for object, 2 for array
+    char value[MAX_TOKEN_SIZE];
+} Data;
+
+Data data_storage[MAX_VARIABLES + MAX_OBJECTS + MAX_ARRAYS];
+int result_data = 0;
+
+typedef struct {
+    char name[MAX_TOKEN_SIZE];
+    int type; // 0 for variable, 1 for object, 2 for array
+    int size;
+    double* elements;
+} Array;
+
+Array arrays[MAX_ARRAYS];
+int result_arrays = 0;
+int multiline_comment = 0;
+
+typedef struct {
+    char name[MAX_TOKEN_SIZE];
+    char version[MAX_TOKEN_SIZE];
+    // Add more fields as needed
+} Module;
+
+// Declare the function pointers
+typedef double (*xenly_constant_t)();
+typedef double (*xenly_sqrt_t)(double);
+typedef double (*xenly_cbrt_t)(double);
+typedef double (*xenly_pow_t)(double, double);
+typedef double (*xenly_sin_t)(double);
+typedef double (*xenly_cos_t)(double);
+typedef double (*xenly_tan_t)(double);
+
+// Define the function pointers
+xenly_constant_t pi;
+xenly_constant_t tau;
+xenly_constant_t e;
+xenly_constant_t goldenRatio;
+xenly_constant_t silverRatio;
+xenly_constant_t superGoldenRatio;
+xenly_sqrt_t xenly_sqrt;
+xenly_cbrt_t xenly_cbrt;
+xenly_pow_t xenly_pow;
+xenly_sin_t xenly_sin;
+xenly_cos_t xenly_cos;
+xenly_tan_t xenly_tan;
+
+// Comment
+void execute_comment(const char* comment) {
+    printf("// %s\n", comment);
 }
 
-double evaluate_condition(const char* condition);
-double execute_sqrt(const char* arg);
-void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body);
 double evaluate_factor(const char** expression);
-double evaluate_term(const char** expression);
-double evaluate_arithmetic_expression(const char* expression);
+double evaluate_arithmetic_expression(const char** expression);
 
-// Print
-void execute_print(const char* arg) {
-    if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
-        printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
-    }
-    
-    else if (strpbrk(arg, "+-*/%^")) {
-        double result = evaluate_arithmetic_expression(arg);
-        printf("%lf\n", result);
-    }
-    
-    else if (strcmp(arg, "pi") == 0) {
-        printf("%lf\n", MATH_PI);
-    }
-
-    else if (strcmp(arg, "π") == 0) {
-        printf("%lf\n", MATH_PI);
-    }
-    
-    else if (strcmp(arg, "tau") == 0) {
-        printf("%lf\n", MATH_TAU);
-    }
-
-    else if (strcmp(arg, "τ") == 0) {
-        printf("%lf\n", MATH_TAU);
-    }
-    
-    else if (strcmp(arg, "e") == 0) {
-        printf("%lf\n", MATH_E);
-    }
-    
-    else if (strcmp(arg, "goldenRatio") == 0) {
-        printf("%lf\n", MATH_GOLDEN_RATIO);
-    }
-    
-    else if (strcmp(arg, "silverRatio") == 0) {
-        printf("%lf\n", MATH_SILVER_RATIO);
-    }
-    
-    else if (strcmp(arg, "supergoldenRatio") == 0) {
-        printf("%lf\n", MATH_SUPERGOLDEN_RATIO);
-    }
-
-    else if (strcmp(arg, "speedOfLight") == 0) {
-        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MS);
-    }
-
-    else if (strcmp(arg, "c") == 0) {
-        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MS);
-    }
-
-    else if (strcmp(arg, "speedOfLight.kmh") == 0) {
-        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_KMH);
-    }
-
-    else if (strcmp(arg, "speedOfLight.mih") == 0) {
-        printf("%d\n", PHYSICAL_SPEED_OF_LIGHT_MileS);
-    }
-
-    else if (strcmp(arg, "gravitationalConstant") == 0) {
-        printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2);
-    }
-
-    else if (strcmp(arg, "G") == 0) {
-        printf("%.17f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2);
-    }
-
-    else if (strcmp(arg, "gravitationalConstant.dyncm2.g2") == 0) {
-        printf("%.14f\n", PHYSICAL_GRAVTIATIONAL_CONSTANT_DYN_CM2__G2);
-    }
-
-    else if (strncmp(arg, "sqrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
-        double result = evaluate_condition(arg + 5);
-        if (result >= 0) {
-            printf("%lf\n", sqrt(result));
-        }
-        
-        else {
-            error("Square root of a negative number is not supported");
-        }
-    }
-    
-    else if (strncmp(arg, "cbrt(", 5) == 0 && arg[strlen(arg) - 1] == ')') {
-        double result = evaluate_condition(arg + 5);
-        printf("%lf\n", cbrt(result));
-    }
-    
-    else if (isdigit(arg[0]) || (arg[0] == '-' && isdigit(arg[1]))) {
-        // Check if it's a numeric constant or expression
-        double result = evaluate_condition(arg);
-        printf("%lf\n", result);
-    }
-    
-    else {
-        int is_variable = 0;
-        for (int i = 0; i < num_variables; i++) {
-            if (strcmp(variables[i].name, arg) == 0) {
-                printf("%s\n", variables[i].value);
-                is_variable = 1;
-                break;
-            }
-        }
-        if (!is_variable) {
-            int result = evaluate_condition(arg);
-            printf("%d\n", result);
-        }
-    }
-}
-
-// Input
-void execute_input(const char* message, char* buffer, size_t buffer_size) {
-    // Skip leading whitespace
-    while (isspace(*message)) {
-        message++;
-    }
-    
-    // Check if the message starts with a quote
-    if (*message == '"') {
-        // Find the end of the quoted message
-        const char* end_quote = strchr(message + 1, '"');
-        if (end_quote == NULL) {
-            error("Invalid input message: missing closing quote");
-        }
-        
-        // Copy the quoted message to the buffer
-        size_t length = end_quote - message - 1; // Exclude the quotes
-        if (length >= buffer_size) {
-            error("Input message is too long for the buffer");
-        }
-        strncpy(buffer, message + 1, length);
-        buffer[length] = '\0'; // Null-terminate the string
-    } else {
-        // No quotes found, copy the entire message to the buffer
-        size_t message_length = strlen(message);
-        if (message_length >= buffer_size) {
-            error("Input message is too long for the buffer");
-        }
-        strncpy(buffer, message, buffer_size - 1);
-        buffer[buffer_size - 1] = '\0'; // Ensure null-termination
-    }
-
-    // Print the prompt message
-    printf("%s", buffer);
-
-    // Read input from stdin
-    if (fgets(buffer, buffer_size, stdin) != NULL) {
-        buffer[strcspn(buffer, "\n")] = '\0'; // Remove trailing newline character
-    } else {
-        error("Error reading input");
-    }
-}
-
-// Parse numeric value
-int parse_numeric_value(const char* value, double* result) {
-    char* endptr;
-    *result = strtod(value, &endptr);
-
-    // Check if the conversion was successful
-    if (*endptr != '\0') {
-        return 0;  // Conversion failed
-    }
-
-    return 1;  // Conversion successful
-}
-
-// Bool
-void execute_bool(const char* name, bool value) {
-    if (num_variables >= MAX_VARIABLES) {
-        error("Maximum number of variables exceeded");
+// Load module
+#if defined(_WIN32) || defined(_WIN64)
+// WINDOWS OPERATING SYSTEM
+void load_module(const char* module_name) {
+    char filename[MAX_TOKEN_SIZE];
+    sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
+    HMODULE handle = LoadLibrary(filename);
+    if (!handle) {
+        fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
         return;
     }
 
-    for (int i = 0; i < num_variables; i++) {
-        if (strcmp(variables[i].name, name) == 0) {
-            error("Variable already declared");
-            return;
-        }
-    }
-
-    strcpy(variables[num_variables].name, name);
-
-    // Store boolean value as string "true" or "false"
-    strcpy(variables[num_variables].value, value ? "true" : "false");
-
-    num_variables++;
-}
-
-bool evaluate_bool(const char* value) {
-    if (strcmp(value, "true") == 0) {
-        return true;
-    }
-    
-    else if (strcmp(value, "false") == 0) {
-        return false;
-    }
-    
-    else {
-        error("Invalid boolean value");
-        return false; // Return false by default in case of error
-    }
-}
-
-// Var
-void execute_var(const char* name, const char* val) {
-
-    if (num_variables >= MAX_VARIABLES) {
-        fprintf(stderr, "maximum number of variables exceeded\n");
+    // Load function pointers using GetProcAddress
+    pi = (xenly_constant_t)(void*)GetProcAddress(handle, "pi");
+    if (!pi) {
+        fprintf(stderr, "Error: Unable to load constant 'pi' from module '%s'\n", filename);
+        FreeLibrary(handle);
         return;
     }
 
-    for (int i = 0; i < num_variables; i++) {
-        if (strcmp(variables[i].name, name) == 0) {
-            fprintf(stderr, "variable already declared\n");
-            return;
-        }
+    tau = (xenly_constant_t)(void*)GetProcAddress(handle, "tau");
+    if (!tau) {
+        fprintf(stderr, "Error: Unable to load constant 'tau' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
     }
 
-    strncpy(variables[num_variables].name, name, sizeof(variables[num_variables].name) - 1);
-
-    if (val[0] == '"' && val[strlen(val) - 1] == '"') {
-        if (strlen(val) >= sizeof(variables[num_variables].value)) {
-            fprintf(stderr, "Error: value length exceeds maximum limit\n");
-            return;
-        }
-        strncpy(variables[num_variables].value, val, sizeof(variables[num_variables].value) - 1);
-    }
-    
-    else {
-        double result;
-        if (!parse_numeric_value(val, &result)) {
-            fprintf(stderr, "Error: invalid numeric value\n");
-            return;
-        }
-        
-        snprintf(variables[num_variables].value, sizeof(variables[num_variables].value), "%.10lf", result);
+    e = (xenly_constant_t)(void*)GetProcAddress(handle, "e");
+    if (!e) {
+        fprintf(stderr, "Error: Unable to load constant 'e' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
     }
 
-    variables[num_variables].name[sizeof(variables[num_variables].name) - 1] = '\0';
-    variables[num_variables].value[sizeof(variables[num_variables].value) - 1] = '\0';
-
-    num_variables++;
-}
-
-// Parse and Execute Arithmetic operation
-int parse_and_execute_arithmetic_operation(const char* operation, int* result) {
-    // Assuming the operation is in the format "operand1 operator operand2"
-    int operand1, operand2;
-    char op;
-    
-    if (sscanf(operation, "%d %c %d", &operand1, &op, &operand2) != 3) {
-        return 0; // Parsing failed
+    goldenRatio = (xenly_constant_t)(void*)GetProcAddress(handle, "goldenRatio");
+    if (!goldenRatio) {
+        fprintf(stderr, "Error: Unable to load constant 'goldenRatio' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
     }
-    
-    switch(op) {
-        case '+':
-            *result = operand1 + operand2;
-            break;
-        case '-':
-            *result = operand1 - operand2;
-            break;
-        case '*':
-            *result = operand1 * operand2;
-            break;
-        case '/':
-            if (operand2 == 0) {
-                return 0; // Division by zero error
-            }
-            *result = operand1 / operand2;
-            break;
-        default:
-            return 0; // Invalid operator
+
+    silverRatio = (xenly_constant_t)(void*)GetProcAddress(handle, "silverRatio");
+    if (!silverRatio) {
+        fprintf(stderr, "Error: Unable to load constant 'silverRatio' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
     }
-    
-    return 1; // Operation executed successfully
-}
 
-#pragma GCC diagnostic ignored "-Wunused-parameter"
+    superGoldenRatio = (xenly_constant_t)(void*)GetProcAddress(handle, "superGoldenRatio");
+    if (!superGoldenRatio) {
+        fprintf(stderr, "Error: Unable to load constant 'superGoldenRatio' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 
-// For
-void execute_for(FILE* input_file, const char* loop_variable, int start_value, int end_value, const char* loop_body) {
-    // Set loop variable outside the loop
-    char loop_variable_value[MAX_TOKEN_SIZE];
-    
-    for (int i = start_value; i <= end_value; i++) {
-        snprintf(loop_variable_value, sizeof(loop_variable_value), "%d", i);
-        execute_var(loop_variable, loop_variable_value);
+    xenly_sqrt = (xenly_sqrt_t)(void*)GetProcAddress(handle, "xenly_sqrt");
+    if (!xenly_sqrt) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_sqrt' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 
-        // Execute loop body
-        const char* line = loop_body;  // Point to the beginning of loop_body
-        while (*line != '\0') {  // Loop until the end of loop_body
-            char temp_line[MAX_TOKEN_SIZE + 10]; // Temporary buffer for line
-            size_t line_length = strcspn(line, "\n"); // Find the length of current line
-            strncpy(temp_line, line, line_length); // Copy the current line to temp_line
-            temp_line[line_length] = '\0'; // Null-terminate the string
+    xenly_cbrt = (xenly_cbrt_t)(void*)GetProcAddress(handle, "xenly_cbrt");
+    if (!xenly_cbrt) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_cbrt' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 
-            // Move line pointer to the next line
-            line += line_length + 1;
+    xenly_pow = (xenly_pow_t)(void*)GetProcAddress(handle, "xenly_pow");
+    if (!xenly_pow) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_pow' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 
-            // End of the loop body
-            if (strncmp(temp_line, "}", 1) == 0) {
-                break;
-            }
+    xenly_sin = (xenly_sin_t)(void*)GetProcAddress(handle, "xenly_sin");
+    if (!xenly_sin) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_sin' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 
-            // Execute the line within the loop body
-            // Add relevant logic here
-            // Example: Assuming each line in the loop body contains an arithmetic operation
-            int result;
-            if (parse_and_execute_arithmetic_operation(temp_line, &result)) {
-                // Result of operation
-                printf("Result of operation: %d\n", result);
-            }
-            
-            else {
-                error("Invalid operation\n");
-            }
-        }
+    xenly_cos = (xenly_cos_t)(void*)GetProcAddress(handle, "xenly_cos");
+    if (!xenly_cos) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_cos' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_tan = (xenly_tan_t)(void*)GetProcAddress(handle, "xenly_tan");
+    if (!xenly_tan) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_tan' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
     }
 }
+#else
+// LINUX OPERATING SYSTEM
+void load_module(const char* module_name) {
+    char filename[MAX_TOKEN_SIZE];
+    snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
 
-#pragma GCC diagnostic warning "-Wunused-parameter"
-
-// Int
-void execute_let(const char* name, const char* value) {
-    for (int i = 0; i < num_variables; i++) {
-        if (strcmp(variables[i].name, name) == 0) {
-            error("Variable already declared");
-        }
+    void* handle = dlopen(filename, RTLD_LAZY);
+    if (!handle) {
+        fprintf(stderr, "Error: Unable to open module file '%s'; %s\n", filename, dlerror());
+        exit(1);
     }
 
-    if (num_variables < MAX_VARIABLES) {
-        strcpy(variables[num_variables].name, name);
-        strcpy(variables[num_variables].value, value);
-        num_variables++;
+    // Load function pointers using dlsym
+    xenly_sqrt = (xenly_sqrt_t)dlsym(handle, "xenly_sqrt");
+    if (!xenly_sqrt) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
     }
 
-    else {
-        error("Maximum number of variables exceeded");
-    }
-}
-
-// Square root function
-double xe_sqrt(double x) {
-    if (x < 0) return -1; // Return error for negative numbers
-    if (x == 0 || x == 1) return x; // Return x for 0 and 1
-    double precision = 1.0e-7; // Define precision
-    double guess = x / 2.0; // Initial guess
-    while ((guess * guess - x) > precision || (x - guess * guess) > precision) {
-        guess = (guess + x / guess) / 2.0; // Newton's method
-    }
-    return guess;
-}
-
-// Cube root function
-double xe_cbrt(double x) {
-    double precision = 1.0e-7; // Define precision
-    double guess = x / 3.0; // Initial guess
-    while ((guess * guess * guess - x) > precision || (x - guess * guess * guess) > precision) {
-        guess = (2 * guess + x / (guess * guess)) / 3.0; // Newton's method
-    }
-    return guess;
-}
-
-// Fifth root function
-double ffrt(double x) {
-    if (x >= 0) {
-        return pow(x, 1.0 / 5);
-    }
-    
-    else {
-        error("Fifth root of a negative number is not supported");
-        return 0.0; // You can choose to return a default value here
-    }
-}
-
-// Square root
-double execute_sqrt(const char* arg) {
-    double result = evaluate_condition(arg);
-    if (result >= 0) {
-        return xe_sqrt(result);
+    xenly_cbrt = (xenly_cbrt_t)dlsym(handle, "xenly_cbrt");
+    if (!xenly_cbrt) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
     }
 
-    else {
-        error("Square root of a negative number is not supported");
-    }
-    
-    return 0;
-}
-
-// Cube root
-double execute_cbrt(const char* arg) {
-    double result = evaluate_condition(arg);
-    
-    if (result < 0) {
-        printf("Cube root of a negative number is not supported.\n");
-        return -1;
-    }
-    
-    return xe_cbrt(result);
-}
-
-// Pow
-double execute_pow(const char* arg) {
-    double base, exponent;
-    if (sscanf(arg, "%lf, %lf", &base, &exponent) == 2) {
-        return pow(base, exponent);
-    }
-    else {
-        error("Invalid arguments for 'pow'");
-    }
-    return 0.0;
-}
-
-// Sin
-double execute_sin(const char* arg) {
-    double result = evaluate_condition(arg);
-    return sin(result);
-}
-
-// Cos
-double execute_cos(const char* arg) {
-    double result = evaluate_condition(arg);
-    return cos(result);
-}
-
-// Tan
-double execute_tan(const char* arg) {
-    double result = evaluate_condition(arg);
-    return tan(result);
-}
-
-// Gamma
-double execute_gamma(const char* arg) {
-    double result = evaluate_condition(arg);
-    return tgamma(result);
-}
-
-// Max
-double xe_max(double x, double y) {
-    return (x > y) ? x : y;
-}
-
-// Min
-double xe_min(double x, double y) {
-    return (x < y) ? x : y;
-}
-
-// Max function
-double execute_max(const double* numbers, int count) {
-    double max_value = numbers[0];
-    for (int i = 1; i < count; i++) {
-        max_value = xe_max(max_value, numbers[i]);
-    }
-    return max_value;
-}
-
-// Min function
-double execute_min(const double* numbers, int count) {
-    double min_value = numbers[0];
-    for (int i = 1; i < count; i++) {
-        min_value = xe_min(min_value, numbers[i]);
-    }
-    return min_value;
-}
-
-// Abs
-double xe_abs(double x) {
-    return x < 0 ? -x : x;
-}
-
-// Abs function
-double execute_abs(const char* arg) {
-    double x = atoi(arg);
-    return xe_abs(x);
-}
-
-// Factorial function
-int factorial(int n) {
-    if (n == 0 || n == 1) {
-        return 1;
+    xenly_pow = (xenly_pow_t)dlsym(handle, "xenly_pow");
+    if (!xenly_pow) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
     }
 
-    return n * factorial(n - 1);
-}
-
-// Factorial numbers
-int execute_factorial(const char* arg) {
-    int result = evaluate_condition(arg);
-    if (result < 0) {
-        error("Factorial of a negative number is not supported");
+    xenly_sin = (xenly_sin_t)dlsym(handle, "xenly_sin");
+    if (!xenly_sin) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
     }
 
-    return factorial(result);
-}
+    xenly_cos = (xenly_cos_t)dlsym(handle, "xenly_cos");
+    if (!xenly_cos) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
 
-// Fibonacci function
-int fibonacci(int n) {
-    if (n <= 0) {
-        return 0;
-    }
-    
-    else if (n == 1) {
-        return 1;
-    }
-    
-    else {
-        return fibonacci(n - 1) + fibonacci(n - 2);
+    xenly_tan = (xenly_tan_t)dlsym(handle, "xenly_tan");
+    if (!xenly_tan) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
     }
 }
-
-// Fibonacci numbers
-int execute_fibonacci(const char* arg) {
-    int result = evaluate_condition(arg);
-    if (result < 0) {
-        error("Fibonacci of a negative number is not supported");
-    }
-    return fibonacci(result);
-}
+#endif
 
 // Factor
 double evaluate_factor(const char** expression) {
     // Evaluate a factor in an arithmetic expression
-    double result;
+    double result = 0.0;
 
-    while (isspace(**expression)) {
-        (*expression)++; // Skip whitespace
+    // Check for unary minus
+    int negate = 1;
+    if (**expression == '-') {
+        negate = -1;
+        (*expression)++; // Move past the unary minus
     }
 
     if (**expression == '(') {
         (*expression)++; // Move past the opening parenthesis
-        result = evaluate_arithmetic_expression(*expression);
+        result = evaluate_arithmetic_expression(expression);
         if (**expression == ')') {
             (*expression)++; // Move past the closing parenthesis
         }
@@ -585,267 +284,295 @@ double evaluate_factor(const char** expression) {
         }
     }
     
-    else {
-        result = atof(*expression);
+    else if (isdigit(**expression) || **expression == '.') {
+        result = atof(*expression) * negate;
         while (isdigit(**expression) || **expression == '.') {
             (*expression)++; // Move past digits and the decimal point
+        }
+    }
+    
+    else {
+        if (strncmp(*expression, "pi", 2) == 0) {
+            result = pi() * negate;
+            *expression += 2;
+        }
+        
+        else if (strncmp(*expression, "tau", 3) == 0) {
+            result = tau() * negate;
+            *expression += 3;
+        }
+        
+        else if (strncmp(*expression, "e", 1) == 0) {
+            result = e() * negate;
+            (*expression)++;
+        }
+        
+        else if (strncmp(*expression, "goldenRatio", 11) == 0) {
+            result = goldenRatio() * negate;
+            *expression += 11;
+        }
+        
+        else if (strncmp(*expression, "silverRatio", 11) == 0) {
+            result = silverRatio() * negate;
+            *expression += 11;
+        }
+        
+        else if (strncmp(*expression, "superGoldenRatio", 16) == 0) {
+            result = superGoldenRatio() * negate;
+            *expression += 16;
+        }
+        
+        else {
+            error("Unknown constant or function");
         }
     }
 
     return result;
 }
 
+// Power
+double evaluate_power(const char** expression) {
+    // Evaluate base factor first
+    double base = evaluate_factor(expression);
+
+    // Check for '**' operator
+    while (**expression == '*' && *(*expression + 1) == '*') {
+        // Skip the '**' operator
+        (*expression) += 2;
+        
+        // Evaluate exponent recursively
+        double exponent = evaluate_power(expression);
+        base = xenly_pow(base, exponent);
+    }
+    return base;
+}
+
 // Term
 double evaluate_term(const char** expression) {
-    // Evaluate a term (factor) in an arithmetic expression
-    double result = evaluate_factor(expression);
-    while (**expression) {
+    // Evaluate a term (power) in an arithmetic expression
+    double result = evaluate_power(expression);
+
+    while (**expression == '*' || **expression == '/' || **expression == '%') {
         char operator = **expression;
-        if (operator == '*' || operator == '/' || operator == '%') {
-            (*expression)++; // Move past the operator
-            double factor = evaluate_factor(expression);
-            if (operator == '*') {
+        (*expression)++;
+
+        double factor = evaluate_power(expression);
+        switch (operator) {
+            case '*':
                 result *= factor;
-            }
+                break;
             
-            else if (operator == '/') {
-                if (factor != 0) {
-                    result /= factor;
-                }
-                
-                else {
+            case '/':
+                if (factor == 0.0) {
                     error("Division by zero");
                 }
-            }
+                result /= factor;
+                break;
             
-            else if (operator == '%') {
-                if (factor != 0) {
-                    result = fmod(result, factor);
-                }
-                
-                else {
+            case '%':
+                if (factor == 0.0) {
                     error("Modulo by zero");
                 }
-            }
-        }
-        
-        else {
-            break; // Not an operator, exit the loop
+                result = fmod(result, factor);
+                break;
         }
     }
     return result;
 }
 
 // Evaluate arithmetic expression
-double evaluate_arithmetic_expression(const char* expression) {
+double evaluate_arithmetic_expression(const char** expression) {
     // Use a recursive descent parser to evaluate arithmetic expressions
-    double result = evaluate_term(&expression);
-    while (*expression) {
-        char operator = *expression;
-        if (operator == '+' || operator == '-') {
-            expression++; // Move past the operator
-            double term = evaluate_term(&expression);
-            if (operator == '+') {
+    double result = evaluate_term(expression);
+    while (**expression && (**expression == '+' || **expression == '-')) {
+        char op = **expression;
+        (*expression)++; // Move past the operator
+        double term = evaluate_term(expression);
+        switch (op) {
+            case '+':
                 result += term;
-            }
-            
-            else {
+                break;
+            case '-':
                 result -= term;
-            }
-        }
-        
-        else {
-            break; // Not an operator, exit the loop
+                break;
         }
     }
     return result;
 }
 
-// Evaluate condition
-double evaluate_condition(const char* condition) {
+#if defined(_WIN32) || defined(_WIN64)
+// WINDOWS OPERATING SYSTEM
+void execute_print(const char* arg) {
+    // Check if the argument is a variable reference
+    if (arg[0] == '$') {
+        // Look for the variable referenced by arg
+        char var_name[MAX_TOKEN_SIZE];
+        sscanf(arg, "$%s", var_name);
+        int found = 0;
+        for (int i = 0; i < result_variables; i++) {
+            if (strcmp(variables[i].name, var_name) == 0) {
+                printf("%s\n", variables[i].value);
+                found = 1;
+                break;
+            }
+        }
 
-    if (strcmp(condition, "true") == 0) {
-        return 1.0;
+        if (!found) {
+            error("Referenced variable not found");
+        }
     }
     
-    else if (strcmp(condition, "false") == 0) {
-        return 0.0;
-    }
-    
-    else if (strpbrk(condition, "+-*/%^")) {
-        // Use a simple recursive descent parser to evaluate arithmetic expressions
-        return evaluate_arithmetic_expression(condition);
-    }
-
-    else if (strncmp(condition, "pow(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
-        // Extract the base and exponent values from the argument
-        char arguments[MAX_TOKEN_SIZE];
-        strncpy(arguments, condition + 4, strlen(condition) - 5);
-        arguments[strlen(condition) - 5] = '\0';
-
-        char* base_arg = strtok(arguments, ",");
-        char* exponent_arg = strtok(NULL, ",");
-
-        double base = evaluate_condition(base_arg);
-        double exponent = evaluate_condition(exponent_arg);
-
-        return pow(base, exponent);
-    }
-
-    else if (strncmp(condition, "sin(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 4);
-        return sin(inner_result);
-    }
-
-    else if (strncmp(condition, "cos(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 4);
-        return cos(inner_result);
-    }
-
-    else if (strncmp(condition, "tan(", 4) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 4);
-        return tan(inner_result);
-    }
-
-    else if (strncmp(condition, "gamma(", 6) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 6);
-        return tgamma(inner_result);
-    }
-
-    else if (strncmp(condition, "fibonacci(", 10) == 0 && condition[strlen(condition) - 1] == ')') {
-        int inner_result = evaluate_condition(condition + 10);
-        if (inner_result < 0) {
-            error("Fibonacci of a negative number is not supported");
+    else {
+        // Check if the argument is a quoted string
+        if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') ||
+            (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
+            // Print the string without quotes
+            printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
         }
-        return fibonacci(inner_result);
-    }
-
-    else if (strncmp(condition, "factorial(", 10) == 0 && condition[strlen(condition) - 1] == ')') {
-        int inner_result = evaluate_condition(condition + 10);
-        if (inner_result < 0) {
-            error("Factorial of a negative number is not supported");
-        }
-        return factorial(inner_result);
-    }
-
-    else if (condition[0] == '(' && condition[strlen(condition) - 1] == ')') {
-        char expression[MAX_TOKEN_SIZE];
-        strncpy(expression, condition + 1, strlen(condition) - 2);
-        expression[strlen(condition) - 2] = '\0';
-        return evaluate_condition(expression);
-    }
-
-    else if (strncmp(condition, "sqrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 5);
-        if (inner_result >= 0) {
-            return xe_sqrt(inner_result);
-        }
-
+        
         else {
-            error("Square root of a negative number is not supported");
+            // Evaluate and print the expression
+            const char* expression = arg;
+            double result = evaluate_arithmetic_expression(&expression);
+            printf("%lf\n", result);
         }
     }
+}
 
-    else if (strncmp(condition, "cbrt(", 5) == 0 && condition[strlen(condition) - 1] == ')') {
-        double inner_result = evaluate_condition(condition + 5);
-        return xe_cbrt(inner_result);
+#else
+// LINUX OPERATING SYSTEM
+void execute_print(const char* arg) {
+    // Check if the argument is a variable reference
+    if (arg[0] == '$') {
+        // Look for the variable referenced by arg
+        char var_name[MAX_TOKEN_SIZE];
+        sscanf(arg, "$%s", var_name);
+        int found = 0;
+        for (int i = 0; i < result_variables; i++) {
+            if (strcmp(variables[i].name, var_name) == 0) {
+                printf("%s\n", variables[i].value);
+                found = 1;
+                break;
+            }
+        }
+        
+        if (!found) {
+            error("Referenced variable not found");
+        }
     }
     
     else {
-        for (int i = 0; i < num_variables; i++) {
-            if (strcmp(variables[i].name, condition) == 0) {
-                return strcmp(variables[i].value, "true") == 0 ? 1 : 0;
-            }
+        // Check if the argument is a quoted string
+        if ((arg[0] == '"' && arg[strlen(arg) - 1] == '"') || 
+            (arg[0] == '\'' && arg[strlen(arg) - 1] == '\'')) {
+            // Print the string without quotes
+            printf("%.*s\n", (int)strlen(arg) - 2, arg + 1);
+        }
+        
+        else {
+            // Evaluate and print the expression
+            double result = evaluate_arithmetic_expression(&arg);
+            printf("%lf\n", result);
         }
     }
-
-    return atoi(condition); // Convert string to integer
 }
+#endif
 
-// Object
-void execute_object(const char* name, const char* properties) {
-    // Create a new object with given properties
-    if (num_data < MAX_OBJECTS) {
-        strcpy(data_storage[num_data].name, name);
-        data_storage[num_data].type = 1; // 1 for object
-        strcpy(data_storage[num_data].value, properties);
-        num_data++;
+void execute_math_function(const char* line) {
+    char func[MAX_TOKEN_SIZE];
+    char arg[MAX_TOKEN_SIZE];
+
+    sscanf(line, "%[^()](%[^)])", func, arg);
+
+    double value = 0.0;
+    const char* arg_ptr = arg;
+    value = evaluate_arithmetic_expression(&arg_ptr);
+
+    if (strcmp(func, "xenly_sqrt") == 0) {
+        printf("%f\n", xenly_sqrt(value));
+    }
+    
+    else if (strcmp(func, "xenly_cbrt") == 0) {
+        printf("%f\n", xenly_cbrt(value));
+    }
+    
+    else if (strcmp(func, "xenly_pow") == 0) {
+        char base[MAX_TOKEN_SIZE];
+        char exp[MAX_TOKEN_SIZE];
+        sscanf(arg, "%[^,],%s", base, exp);
+
+        const char* base_ptr = base;
+        const char* exp_ptr = exp;
+        double base_val = evaluate_arithmetic_expression(&base_ptr);
+        double exp_val = evaluate_arithmetic_expression(&exp_ptr);
+
+        printf("%f\n", xenly_pow(base_val, exp_val));
+    }
+    
+    else if (strcmp(func, "xenly_sin") == 0) {
+        printf("%f\n", xenly_sin(value));
+    }
+    
+    else if (strcmp(func, "xenly_cos") == 0) {
+        printf("%f\n", xenly_cos(value));
+    }
+    
+    else if (strcmp(func, "xenly_tan") == 0) {
+        printf("%f\n", xenly_tan(value));
     }
     
     else {
-        error("Maximum number of objects exceeded");
+        error("Unknown function");
     }
 }
 
-// Array
-void execute_array(const char* name, int size) {
-    if (num_arrays < MAX_ARRAYS) {
-        arrays[num_arrays].type = 2; // 2 for array
-        arrays[num_arrays].size = size;
-        arrays[num_arrays].elements = (double*)malloc(size * sizeof(double));
+void execute_var(const char* line) {
+    char name[MAX_TOKEN_SIZE];
+    char value[MAX_TOKEN_SIZE];
+    // Use sscanf to parse the input line
+    if (sscanf(line, "var %s = %[^\n]", name, value) != 2) {
+        error("Invalid 'var' line");
+    }
 
-        strcpy(data_storage[num_data].name, name);
-        data_storage[num_data].type = 2; // 2 for array
-        num_data++;
+    for (int i = 0; i < result_variables; i++) {
+        if (strcmp(variables[i].name, name) == 0) {
+            error("Variable already declared");
+        }
+    }
 
-        num_arrays++;
+    if (result_variables < MAX_VARIABLES) {
+        strcpy(variables[result_variables].name, name);
+        // Check if value is another variable
+        const char* value_ptr = value;
+        double evaluated_value = evaluate_arithmetic_expression(&value_ptr);
+        snprintf(variables[result_variables].value, sizeof(variables[result_variables].value), "%lf", evaluated_value);
+
+        result_variables++;
     }
     
     else {
-        error("Maximum number of arrays exceeded");
+        error("Maximum number of variables exceeded");
     }
 }
 
-// Set
-void execute_set(const char* array_name, int index, double value) {
-    for (int i = 0; i < num_arrays; i++) {
-        if (strcmp(arrays[i].name, array_name) == 0) {
-            if (index >= 0 && index < arrays[i].size) {
-                arrays[i].elements[index] = value;
-            }
-            
-            else {
-                error("Array index out of bounds");
-            }
-            return;
+double evaluate_condition(const char* condition) {
+    for (int i = 0; i < result_variables; i++) {
+        if (strcmp(variables[i].name, condition) == 0) {
+            return strcmp(variables[i].value, "true") == 0 ? 1 : 0;
         }
     }
-    error("Array not found");
+
+    return atof(condition); // Convert string to double
 }
 
-// Get
-double execute_get(const char* array_name, int index) {
-    for (int i = 0; i < num_arrays; i++) {
-        if (strcmp(arrays[i].name, array_name) == 0) {
-            if (index >= 0 && index < arrays[i].size) {
-                return arrays[i].elements[index];
-            }
-            
-            else {
-                error("Array index out of bounds");
-            }
-        }
-    }
-    error("Array not found");
-    return 0.0;
-}
-
-// Main function
 int main(int argc, char* argv[]) {
-
     if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
         // Create initialize project
         create_initialize_project(argv[2]);
     }
 
-    if (argc == 2 && (strcmp(argv[1], "--numberingline") == 0 || strcmp(argv[1], "-nl") == 0)) {
-        // Assuming the argument is a filename
-        print_code_of_lines(argv[1]);
-        return EXIT_FAILURE;
-    }
-
-    else if (argc != 2) {
-        error("xenly [input files]");
+    if (argc != 2) {
+        error("Usage: xenly [input file]");
     }
 
     else if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
@@ -868,13 +595,15 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    else if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
-        print_dumpversion();
-        return 0;
-    }
-
+    /*
     else if (argc == 2 && (strcmp(argv[1], "--dumpreleasedate") == 0 || strcmp(argv[1], "-drd") == 0)) {
         print_dumpreleasedate();
+        return 0;
+    }
+    */
+
+    else if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
+        print_dumpversion();
         return 0;
     }
 
@@ -893,311 +622,34 @@ int main(int argc, char* argv[]) {
         error("Unable to open input file");
     }
 
-    char line[MAX_TOKEN_SIZE];
-    bool in_condition_block = false;
-    bool condition_met = false;
+    char line[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
     while (fgets(line, sizeof(line), input_file)) {
         line[strcspn(line, "\n")] = '\0';
-        
-        if (strncmp(line, "if", 2) == 0 || strncmp(line, "elif", 4) == 0 || strncmp(line, "else", 4) == 0) {
-            if (in_condition_block) {
-            // Handle nested conditions
-            // ...
-            }
-            
-            char condition[MAX_TOKEN_SIZE];
-            strncpy(condition, line + (strncmp(line, "else", 4) == 0 ? 4 : 2), strlen(line) - (strncmp(line, "else", 4) == 0 ? 4 : 2));
-            condition[strlen(line) - (strncmp(line, "else", 4) == 0 ? 4 : 2)] = '\0';
-            
-            in_condition_block = true;
-            if ((strncmp(line, "if", 2) == 0 && evaluately_condition(condition)) ||
-            (strncmp(line, "elif", 4) == 0 && !condition_met && evaluately_condition(condition))) {
-                condition_met = true;
-            }
-            
-            else {
-                condition_met = false;
-                continue;
-            }
+
+        if (strncmp(line, "import ", 7) == 0) {
+            load_module(line + 7);
         }
         
-        else if (strncmp(line, "{", 1) == 0) {
-            // Start of the code block
-            if (condition_met) {
-                while (fgets(line, sizeof(line), input_file)) {
-                    line[strcspn(line, "\n")] = '\0';
-                    if (strncmp(line, "}", 1) == 0) {
-                        // End of the code block
-                        in_condition_block = false;
-                        break;
-                    }
-                    
-                    // Execute the line within the code block
-                    // Add relevant logic here
-                }
-             }
-        }
-        
-        else if (strncmp(line, "}", 1) == 0) {
-            // End of the code block
-            in_condition_block = false;
-        }
-
-        else if (strncmp(line, "for", 3) == 0) {
-            char loop_variable[MAX_TOKEN_SIZE];
-            int start_value, end_value;
-            char loop_body[MAX_TOKEN_SIZE];
-
-            // Extract loop variable, start value, and end value from the line
-            if (sscanf(line + 3, "%s = %d to %d {", loop_variable, &start_value, &end_value) == 3) {
-                // Extract the loop body until the corresponding '}'
-                char temp_line[MAX_TOKEN_SIZE + 10]; // Assuming the loop body can be up to MAX_TOKEN_SIZE characters
-                strcpy(loop_body, "");
-                while (fgets(temp_line, sizeof(temp_line), input_file)) {
-                    temp_line[strcspn(temp_line, "\n")] = '\0';
-                    if (strncmp(temp_line, "}", 1) == 0) {
-                        break;
-                    }
-                    strcat(loop_body, temp_line);
-                }
-
-                // Execute the 'for' loop
-                execute_for(input_file, loop_variable, start_value, end_value, loop_body);
-            }
-
-            else {
-                error("Invalid 'for' loop");
-            }
-        }
-
         else if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char argument[MAX_TOKEN_SIZE];
+            char argument[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
             strncpy(argument, line + 6, strlen(line) - 7);
             argument[strlen(line) - 7] = '\0';
 
-            if (strncmp(argument, "pow(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "factorial(", 10) == 0 && argument[strlen(argument) - 1] == ')') {
-                double result = evaluate_condition(argument);
-                printf("%lf\n", result);
-            }
-
-            else if (strncmp(argument, "get(", 4) == 0 && argument[strlen(argument) - 1] == ')') {
-                char array_name[MAX_TOKEN_SIZE];
-                int index;
-                
-                // Extract array name and index from the line
-                if (sscanf(argument + 4, "%[^,],%d)", array_name, &index) == 2) {
-                    double result = execute_get(array_name, index);
-                    printf("%lf\n", result);
-                }
-                
-                else {
-                    error("Invalid arguments for 'get'");
-                }
-            }
-
-            else {
-                execute_print(argument);
-            }
+            execute_print(argument);
         }
 
-        else if (strncmp(line, "input(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char message[MAX_TOKEN_SIZE];
-            sscanf(line + 6, "%[^)]", message);
-            char input_buffer[100]; // Adjust buffer size as needed
-            execute_input(message, input_buffer, sizeof(input_buffer));
-            printf("%s\n", input_buffer);
+        else if (strchr(line, '(') && strchr(line, ')')) {
+            execute_math_function(line);
         }
 
         else if (strncmp(line, "var", 3) == 0) {
-            char name[MAX_TOKEN_SIZE];
-            char value[MAX_TOKEN_SIZE];
-            if (sscanf(line, "var %s = %[^\n]", name, value) != 2) {
-                error("Invalid 'var' line");
-            }
-
-            execute_var(name, value);
-        }
-
-        else if (strncmp(line, "bool", 4) == 0) {
-            char name[MAX_TOKEN_SIZE];
-            char value[MAX_TOKEN_SIZE];
-            if (sscanf(line, "bool %s = %[^\n]", name, value) != 2) {
-                error("Invalid 'bool' line");
-            }
-            
-            // Parse boolean value and store the variable
-            bool bool_value = evaluate_bool(value);
-            execute_bool(name, bool_value);
-        }
-
-        else if (strncmp(line, "let", 3) == 0) {
-            char name[MAX_TOKEN_SIZE];
-            char value[MAX_TOKEN_SIZE];
-            if (sscanf(line, "let %s = %[^\n]", name, value) != 2) {
-                error("Invalid 'let' line");
-            }
-
-            execute_let(name, value);
-        }
-
-        else if (strncmp(line, "binary(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char binary_argument[MAX_TOKEN_SIZE];
-            strncpy(binary_argument, line + 6, strlen(line) - 7);
-            binary_argument[strlen(line) - 7] = '\0';
-
-            int decimal_result = convert_binary_to_decimal(binary_argument);
-            printf("%d\n", decimal_result);
-        }
-
-        else if (strncmp(line, "decimal(", 8) == 0 && line[strlen(line) - 1] == ')') {
-            int decimal_argument;
-            if (sscanf(line + 8, "%d", &decimal_argument) == 1) {
-                char* binary_result = convert_decimal_to_binary(decimal_argument);
-                printf("%s\n", binary_result);
-                free(binary_result); // Remember to free allocated memory
-            }
-            
-            else {
-                error("Invalid argument for convert_decimal");
-            }
-        }
-
-        else if (strncmp(line, "sqrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line + 5);
-            if (result >= 0) {
-                printf("%lf\n", xe_sqrt(result));
-            }
-
-            else {
-                error("Square root of a negative number is not supported");
-            }
-        }
-
-        else if (strncmp(line, "cbrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line + 5);
-            if (result >= 0) {
-                printf("%lf\n", xe_cbrt(result));
-            }
-            
-            else {
-                error("Cube root of a negative number is not supported");
-            }
-        }
-
-        else if (strncmp(line, "ffrt", 4) == 0 && line[4] == '(' && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line + 5);
-            if (result >= 0) {
-                printf("%lf\n", ffrt(result));
-            }
-
-            else {
-                error("Fifth root of a negative number is not supported");
-            }
-        }
-
-        else if (strncmp(line, "max(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char *token = strtok(line + 4, ",");
-            int count = 0;
-            double numbers[100];
-            while (token != NULL) {
-                numbers[count++] = atof(token);
-                token = strtok(NULL, ",");
-            }
-            double result = execute_max(numbers, count);
-            printf("%lf\n", result);
-        }
-
-        else if (strncmp(line, "min(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char *token = strtok(line + 4, ",");
-            int count = 0;
-            double numbers[100];
-            while (token != NULL) {
-                numbers[count++] = atof(token);
-                token = strtok(NULL, ",");
-            }
-            double result = execute_min(numbers, count);
-            printf("%lf\n", result);
-        }
-
-        else if (strncmp(line, "abs(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char arg[MAX_TOKEN_SIZE];
-
-            // Extract argument from the line
-            if (sscanf(line + 4, "%[^)]", arg) == 1) {
-                int result = execute_abs(arg);
-                printf("%d\n", result);
-            } else {
-                error("Invalid argument for 'abs'");
-            }
-        }
-        
-        else if (strncmp(line, "gamma(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char argument[MAX_TOKEN_SIZE];
-            strncpy(argument, line + 6, strlen(line) - 7);
-            argument[strlen(line) - 7] = '\0';
-            
-            double result = execute_gamma(argument);
-            printf("%lf\n", result);
-        }
-
-        else if (strncmp(line, "fibonacci(", 10) == 0 && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line);
-            printf("%lf\n", result);
-        }
-
-        else if (strncmp(line, "array", 5) == 0) {
-            char name[MAX_TOKEN_SIZE];
-            int size;
-
-            // Extract array name and size from the line
-            if (sscanf(line + 5, "%s %d", name, &size) == 2) {
-                execute_array(name, size);
-            }
-            
-            else {
-                error("Invalid 'array' line");
-            }
-        }
-
-        else if (strncmp(line, "set(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            char array_name[MAX_TOKEN_SIZE];
-            int index;
-            double value;
-
-            // Extract array name, index, and value from the line
-            if (sscanf(line + 4, "%[^,],%d,%lf)", array_name, &index, &value) == 3) {
-                execute_set(array_name, index, value);
-            }
-            
-            else {
-                error("Invalid arguments for 'set'");
-            }
-        }
-
-        else if (strncmp(line, "sin(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line);
-            printf("%lf\n", result);
-        }
-
-        else if (strncmp(line, "cos(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line);
-            printf("%lf\n", result);
-        }
-
-        else if (strncmp(line, "tan(", 4) == 0 && line[strlen(line) - 1] == ')') {
-            double result = evaluate_condition(line);
-            printf("%lf\n", result);
+            execute_var(line);
         }
 
         else if (strncmp(line, "//", 2) == 0) {
             continue;
         }
-        
+
         else if (multiline_comment == 0) {
             // Check if the line starts with "/*"
             if (strncmp(line, "/*", 2) == 0) {
@@ -1226,9 +678,9 @@ int main(int argc, char* argv[]) {
         else {
             error("Invalid statement");
         }
+        // Handle other function calls similarly...
     }
 
     fclose(input_file);
-
     return 0;
 }

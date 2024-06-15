@@ -1,4 +1,6 @@
-// Trigonometric functions
-sin(2)
-cos(pi)
-tan(5)
+import math
+
+// trigonometric functions
+xenly_sin(2)
+xenly_cos(2)
+xenly_tan(2)

@@ -4,6 +4,8 @@
  *
  * It is initially written in C programming language.
  *
+ * It is available for Linux and Windows operating systems.
+ *
  */
 #ifndef PRINTINFO_H
 #define PRINTINFO_H
@@ -20,17 +22,13 @@ void print_dumpreleasedate();
 // Print help
 void print_help();
 
-// Print author
-void print_author();
-
 // Print dumpmachines
 void print_dumpmachines();
 
 // Print operating systems
 void print_operatingsystem();
 
-// Print source code of lines
-void print_code_of_lines(const char *filename);
-
+// Print author
+void print_author();
 
 #endif

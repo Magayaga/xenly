@@ -4,25 +4,24 @@
  *
  * It is initially written in C programming language.
  *
+ * It is available for Linux and Windows operating systems.
+ *
  */
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <errno.h>
 #include "color.h"
 #include "print_info.h"
 
-// Define platform-specific includes and methods
 #if defined(_WIN32) || defined(_WIN64)
+    // Windows-specific includes
     #include <windows.h>
 #elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    // Unix-like system-specific includes
     #include <sys/utsname.h>
-#else
-    #error "Unsupported platform"
 #endif
 
-#define XENLY_RELEASEDATE "June 27, 2024"
-#define XENLY_VERSION "0.1.0-preview8"
+// #define XENLY_RELEASEDATE
+#define XENLY_VERSION "0.1.0-nanopreview2"
 #define XENLY_AUTHORS "Cyril John Magayaga"
 
 // Print version
@@ -43,9 +42,11 @@ void print_dumpversion() {
 }
 
 // Print dump release date
+/*
 void print_dumpreleasedate() {
     printf("%s\n", XENLY_RELEASEDATE);
 }
+*/
 
 // Print help
 void print_help() {
@@ -59,7 +60,7 @@ void print_help() {
     printf("  -h, --help                   Display this information.\n");
     printf("  -v, --version                Display compiler version information.\n");
     printf("  -dm, --dumpmachine           Display the compiler's target processor.\n");
-    printf("  -drd, --dumpreleasedate      Display the release date of the compiler.\n");
+    // printf("  -drd, --dumpreleasedate      Display the release date of the compiler.\n");
     printf("  -dv, --dumpversion           Display the version of the compiler.\n");
     printf("  -os, --operatingsystem       Display the operating system.\n");
     printf("  --author                     Display the author information.\n");
@@ -144,23 +145,4 @@ void print_operatingsystem() {
     #else
         printf("Unknown/Segmentation fault\n");
     #endif
-}
-
-// Print source code of lines
-void print_code_of_lines(const char *filename) {
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {
-        fprintf(stderr, "Error: Unable to open file %s\n", filename);
-        exit(EXIT_FAILURE);
-    }
-
-    int lines = 0;
-    char buffer[BUFSIZ];
-    while (fgets(buffer, sizeof(buffer), file) != NULL) {
-        lines++;
-    }
-
-    printf("Number of lines in %s: %d\n", filename, lines);
-
-    fclose(file);
 }

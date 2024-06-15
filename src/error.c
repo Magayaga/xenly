@@ -4,6 +4,8 @@
  *
  * It is initially written in C programming language.
  *
+ * It is available for Linux and Windows operating systems.
+ *
  */
 #include <stdio.h>
 #include <stdlib.h>
