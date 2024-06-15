@@ -1,0 +1,237 @@
+<!--
+  XENLY - high-level and general-purpose programming language
+  created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+
+  It is initially written in HTML.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get the Xenly | Xenly programming language</title>
+    <link rel="stylesheet" href="src/style.css">
+    <style class="anchorjs"></style>
+    <link rel="stylesheet" href="src/highlight.css">
+    <link rel="stylesheet" href="https://magayaga.pages.dev/cdn/cyflex/@1.0.7/fonts/sf-pro/display/font.cyflex.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body class="bg-dark">
+<nav class="navbar navbar-expand-lg bg-body-tertiary">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="index.html">
+      <img src="src/xenly.svg" alt="Logo" width="90" height="25" class="d-inline-block align-text-top">
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarText">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item dropdown">
+          <a class="nav-link" href="get-xenly.html">Get Xenly</a>
+        </li>
+        <li class="nav-item dropdown">
+          <a class="nav-link" href="#">Download</a>
+        </li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Documention
+          </a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="https://github.com/Magayaga/xenly/blob/main/doc/history_version.md">Release Notes</a></li>
+            <li><a class="dropdown-item" href="about.html">About</a></li>
+          </ul>
+        </li>
+      </ul>
+      <span class="display-time time-font navbar-text"></span>
+    </div>
+  </div>
+</nav>
+
+<div class="container mt-5">
+    <h1 class="text-light">Build and Install the Xenly programming language</h1>
+    <ul class="nav nav-tabs" id="osTabs" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link active" id="windows-tab" data-bs-toggle="tab" href="#windows" role="tab" aria-controls="windows" aria-selected="true">Windows</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="linux-tab" data-bs-toggle="tab" href="#linux" role="tab" aria-controls="linux" aria-selected="false">Linux</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="macos-tab" data-bs-toggle="tab" href="#macos" role="tab" aria-controls="macos" aria-selected="false">macOS</a>
+      </li>
+    </ul>
+    <div class="tab-content bg-white" id="osTabsContent">
+      <div class="tab-pane fade show active" id="windows" role="tabpanel" aria-labelledby="windows-tab">
+        <h3>Install using Git and GCC</h3>
+        <p>To download the Xenly's source code, use <a href="https://git-scm.com/">Git</a> and <a href="https://www.mingw-w64.org/">GCC</a>.</p>
+        <p>Run a Git Bash, PowerShell, or Command Prompt.</p>
+        <pre class="highlight"><code>
+        <span class="c"># Download the Xenly's source code</span>
+        <span class="nv">$ </span>git clone https://github.com/Magayaga/xenly.git
+        <span class="nv">$ </span>cd xenly
+        </code></pre>
+
+        <h3>Compile the code</h3>
+        <p>To build the Xenly programming language, open a Git Bash, PowerShell, or Command Prompt in the directory containing the <code>make.bat</code> or <code>main.sh</code> file and run the following command:</p>
+
+        <pre class="highlight"><code>
+        <span class="c"># Run the program in Shell</span>
+        <span class="nv">$ </span>bash main.sh
+
+        <span class="c"># or Batchfile</span>
+        <span class="nv">$ </span>./make.bat
+        </code></pre>
+
+        <h3>Verify your PATH includes Xenly</h3>
+        <p>Verify you can run Xenly programming language.</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>xenly --version
+        Xenly 0.1.0-preview8 (Pre-alpha release)
+        Copyright 2023-2024 Cyril John Magayaga
+        </code></pre>
+
+        <p>If your development machine doesn't return a Xenly version, add the location to your PATH:</p>
+        <ul>
+            <li><p>In the Windows search box, type <code>env</code>.</p></li>
+            <li><p>Click <b>Edit the system environment variables</b>.</p></li>
+            <li><p>Click <b>Environment Variables...</b>.</p></li>
+            <li><p>In the user variable section, select <b>Path</b> and click <b>Edit...</b>.</p></li>
+            <li><p>Click <b>New</b>, and enter the path to the <code>xenly</code> directory.</p></li>
+            <li><p>In each window that you just opened, click <b>Apply</b> or <b>OK</b> to dismiss it and apply the path change.</p> </li>
+        </ul>
+      </div>
+      <div class="tab-pane fade" id="linux" role="tabpanel" aria-labelledby="linux-tab">  
+        <h3>Install using <code>apt-get</code></h3>
+        <p>Update the package index files</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>sudo apt-get update
+        </code></pre>
+        <p>After, to install the <b>Git</b> and <b>GCC</b>.</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>sudo apt-get install gcc git
+        </code></pre>
+
+        <h3>Install using Git</h3>
+        <p>To download the Xenly's source code. Install Git, then run a GNU Bash.</p>
+        <pre class="highlight"><code>
+        <span class="c"># Download the Xenly's source code</span>
+        <span class="nv">$ </span>git clone https://github.com/Magayaga/xenly.git
+        <span class="nv">$ </span>cd xenly
+        </code></pre>
+
+        <h3>Compile the code</h3>
+        <p>To build the Xenly programming language, open a GNU Bash in the directory containing the <code>makefile</code> or <code>main.sh</code> file and run the following command:</p>
+
+        <pre class="highlight"><code>
+        <span class="c"># Run the program in Shell</span>
+        <span class="nv">$ </span>bash main.sh
+
+        <span class="c"># or Makefile</span>
+        <span class="nv">$ </span>make
+        </code></pre>
+
+        <h3>Verify your PATH includes Xenly</h3>
+        <p>1. Open the <code>~/.bash_profile</code> file in a text editor. You can do this using the <code>vim</code> or <code>nano</code> text editor with the following command:</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>vim ~/.bash_profile
+        </code></pre>
+
+        <p>2. Add the following line to the file to include the directory where Xenly is installed in your PATH:</p>
+        <pre class="highlight"><code>
+        export PATH="/usr/local/bin:$PATH"
+        </code></pre>
+        <p>Replace <code>/usr/local/bin</code> with the actual directory where Xenly is installed if you chose a different location.</p>
+        
+        <p>3. Save the changes and exit the text editor. After saving the changes, you need to apply them to your current shell session. You can do this by running:</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>source ~/.bash_profile
+        </code></pre>
+        
+        <p>4. You can copy the executable file to a directory that is in your PATH.</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>sudo cp xenly /usr/local/bin
+        </code></pre>
+
+      </div>
+      <div class="tab-pane fade" id="macos" role="tabpanel" aria-labelledby="macos-tab">
+        <h3>Install using Homebrew</h3>
+        <p>To install the <b>Git</b> and <b>GCC</b>, use <a href="https://brew.sh">Homebrew</a>.</p>
+        <pre class="highlight"><code>
+        <span class="c"># Install the Git and GCC</span>
+        <span class="nv">$ </span>brew install gcc git
+        </code></pre>
+
+        <h3>Install using Git</h3>
+        <p>To download the Xenly's source code. Install Git, then run a GNU Bash.</p>
+        <pre class="highlight"><code>
+        <span class="c"># Download the Xenly's source code</span>
+        <span class="nv">$ </span>git clone https://github.com/Magayaga/xenly.git
+        <span class="nv">$ </span>cd xenly
+        </code></pre>
+
+        <h3>Compile the code</h3>
+        <p>To build the Xenly programming language, open a GNU Bash in the directory containing the <code>makefile</code> or <code>main.sh</code> file and run the following command:</p>
+
+        <pre class="highlight"><code>
+        <span class="c"># Run the program in Shell</span>
+        <span class="nv">$ </span>bash main.sh
+
+        <span class="c"># or Makefile</span>
+        <span class="nv">$ </span>make
+        </code></pre>
+
+        <h3>Verify your PATH includes Xenly</h3>
+        <p>1. Open the <code>~/.bash_profile</code> file in a text editor. You can do this using the <code>vim</code> or <code>nano</code> text editor with the following command:</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>vim ~/.bash_profile
+        </code></pre>
+
+        <p>2. Add the following line to the file to include the directory where Xenly is installed in your PATH:</p>
+        <pre class="highlight"><code>
+        export PATH="/usr/local/bin:$PATH"
+        </code></pre>
+        <p>Replace <code>/usr/local/bin</code> with the actual directory where Xenly is installed if you chose a different location.</p>
+        
+        <p>3. Save the changes and exit the text editor. After saving the changes, you need to apply them to your current shell session. You can do this by running:</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>source ~/.bash_profile
+        </code></pre>
+        
+        <p>You can copy the executable file to a directory that is in your PATH.</p>
+        <pre class="highlight"><code>
+        <span class="nv">$ </span>sudo cp xenly /usr/local/bin
+        </code></pre>
+      </div>
+    </div>
+  </div>
+  
+  <div class="container">
+  <footer class="py-3 my-4">
+    <ul class="nav justify-content-center border-bottom pb-3 mb-3">
+      <li class="nav-item"><a href="#" class="nav-link px-2 text-light">Learn</a></li>
+      <li class="nav-item"><a href="https://github.com/Magayaga/xenly/blob/main/LICENSE" class="nav-link px-2 text-light">License</a></li>
+      <li class="nav-item"><a href="#" class="nav-link px-2 text-light">Download</a></li>
+      <li class="nav-item"><a href="about.html" class="nav-link px-2 text-light">About</a></li>
+    </ul>
+    <p class="text-center text-light">© 2023-2024 <a href="https://github.com/magayaga">Cyril John Magayaga</a></p>
+  </footer>
+</div>
+    <script src="src/time.js"></script>
+    <script src="https://magayaga.pages.dev/cdn/anchorjs/v4.1.0/anchor.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Clipboard.js script -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.11/clipboard.min.js"></script>
+    <script>
+    var clipboard = new ClipboardJS('.copy-btn');
+    clipboard.on('success', function(e) {
+        console.log(e);
+    });
+    
+    clipboard.on('error', function(e) {
+        console.log(e);
+    });
+</script>
+</body>
+</html>

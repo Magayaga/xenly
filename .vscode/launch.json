@@ -1,0 +1,29 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python for Xenly programming language with Clang",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "install-clang.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python for Xenly programming language with GCC",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "install-gcc.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Python for Xenly programming language with Go",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "install-go.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}

@@ -1,2 +1,4 @@
 // Gammma function
-gamma(1/2)
+print(gamma(4/3))
+print(gamma(3))
+print(gamma(4))

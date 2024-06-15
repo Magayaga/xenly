@@ -1,2 +1,7 @@
-// "Hello, World!" program
+/*
+   Xenly programming language
+   Copyright 2024 Cyril John Magayaga
+   
+   "Hello, World!" program
+*/
 print("Hello, World!")
