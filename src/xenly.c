@@ -246,6 +246,48 @@ void load_module(const char* module_name) {
     }
 
     // Load function pointers using dlsym
+    pi = (xenly_constant_t)dlsym(handle, "pi");
+    if (!pi) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    tau = (xenly_constant_t)dlsym(handle, "tau");
+    if (!tau) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    e = (xenly_constant_t)dlsym(handle, "e");
+    if (!e) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    goldenRatio = (xenly_constant_t)dlsym(handle, "goldenRatio");
+    if (!goldenRatio) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    silverRatio = (xenly_constant_t)dlsym(handle, "silverRatio");
+    if (!silverRatio) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    superGoldenRatio = (xenly_constant_t)dlsym(handle, "superGoldenRatio");
+    if (!superGoldenRatio) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
     xenly_sqrt = (xenly_sqrt_t)dlsym(handle, "xenly_sqrt");
     if (!xenly_sqrt) {
         fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
