@@ -17,7 +17,7 @@ import (
 	"math"
 )
 
-// Define and export mathematical constants
+// Define and export mathematical constants and universal constants
 const (
 	MATH_PI = 3.14159265358979323846
 	MATH_TAU = 6.28318530717958647692
@@ -25,9 +25,14 @@ const (
     MATH_GOLDEN_RATIO = 1.61803398874989484820
     MATH_SILVER_RATIO = 2.41421356237309504880
     MATH_SUPERGOLDEN_RATIO = 1.46557123187676802665
+	PHYSICAL_SPEED_OF_LIGHT_MS = 299792458
+	PHYSICAL_SPEED_OF_LIGHT_KMH = 1080000000
+	PHYSICAL_SPEED_OF_LIGHT_MileS = 186000
+	PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2 = 0.0000000000667430
+	PHYSICAL_GRAVTIATIONAL_CONSTANT_DYN_CM2__G2 = 0.0000000667430
 )
 
-// Export constants using functions
+// Export mathematical constants using functions
 //export pi
 func pi() C.double {
     return C.double(MATH_PI)
@@ -56,6 +61,32 @@ func silverRatio() C.double {
 //export superGoldenRatio
 func superGoldenRatio() C.double {
 	return C.double(MATH_SUPERGOLDEN_RATIO)
+}
+
+// Export universal constants using functions
+//export speedOfLight
+func speedOfLight() C.double {
+	return C.double(PHYSICAL_SPEED_OF_LIGHT_MS)
+}
+
+//export speedOfLight_kmh
+func speedOfLight_kmh() C.double {
+	return C.double(PHYSICAL_SPEED_OF_LIGHT_KMH)
+}
+
+//export speedOfLight_MileS
+func speedOfLight_MileS() C.double {
+	return C.double(PHYSICAL_SPEED_OF_LIGHT_MileS)
+}
+
+//export gravitationalConstant
+func gravitationalConstant() C.double {
+	return C.double(PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2)
+}
+
+//export gravitationalConstant_dyncm2g2
+func gravitationalConstant_dyncm2g2() C.double {
+	return C.double(PHYSICAL_GRAVTIATIONAL_CONSTANT_DYN_CM2__G2)
 }
 
 // Define a function to calculate the square root

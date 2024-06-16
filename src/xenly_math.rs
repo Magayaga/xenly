@@ -11,15 +11,20 @@
  *
  */
 
- // Define and export mathematical constants
+// Define and export mathematical constants and universal constants
 pub const MATH_PI: f64 = 3.14159265358979323846;
 pub const MATH_TAU: f64 = 6.28318530717958647692;
 pub const MATH_E: f64 = 2.71828182845904523536;
 pub const MATH_GOLDEN_RATIO: f64 = 1.61803398874989484820;
 pub const MATH_SILVER_RATIO: f64 = 2.41421356237309504880;
 pub const MATH_SUPERGOLDEN_RATIO: f64 = 1.46557123187676802665;
+pub const PHYSICAL_SPEED_OF_LIGHT_MS: f64 = 299_792_458;
+pub const PHYSICAL_SPEED_OF_LIGHT_KMH: f64 = 1_080_000_000;
+pub const PHYSICAL_SPEED_OF_LIGHT_MileS: f64 = 186_000;
+pub const PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2: f64 = 0.0000000000667430;
+pub const PHYSICAL_GRAVTIATIONAL_CONSTANT_DYN_CM2__G2: f64 = 0.0000000667430;
 
-// Export constants using functions
+// Export mathematical constants using functions
 #[no_mangle]
 pub extern "C" fn pi() -> f64 {
     MATH_PI
@@ -50,31 +55,63 @@ pub extern "C" fn superGoldenRatio() -> f64 {
     MATH_SUPERGOLDEN_RATIO
 }
 
+// Export universal constants using functions
+#[no_mangle]
+pub extern "C" fn speedOfLight() -> f64 {
+    PHYSICAL_SPEED_OF_LIGHT_MS
+}
+
+#[no_mangle]
+pub extern "C" fn speedOfLight_kmh() -> f64 {
+    PHYSICAL_SPEED_OF_LIGHT_KMH
+}
+
+#[no_mangle]
+pub extern "C" fn speedOfLight_MileS() -> f64 {
+    PHYSICAL_SPEED_OF_LIGHT_MileS
+}
+
+#[no_mangle]
+pub extern "C" fn gravitationalConstant() -> f64 {
+    PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2
+}
+
+#[no_mangle]
+pub extern "C" fn gravitationalConstant_dyncm2g2() -> f64 {
+    PHYSICAL_GRAVTIATIONAL_CONSTANT_DYN_CM2__G2
+}
+
+// Define a function to calculate the square root
 #[no_mangle]
 pub extern "C" fn xenly_sqrt(x: f64) -> f64 {
     x.sqrt()
 }
 
+// Define a function to calculate the cube root
 #[no_mangle]
 pub extern "C" fn xenly_cbrt(x: f64) -> f64 {
     x.cbrt()
 }
 
+// Define a function to calculate the power
 #[no_mangle]
 pub extern "C" fn xenly_pow(base: f64, exp: f64) -> f64 {
     base.powf(exp)
 }
 
+// Define a function to calculate the sine
 #[no_mangle]
 pub extern "C" fn xenly_sin(x: f64) -> f64 {
     x.sin()
 }
 
+// Define a function to calculate the cosine
 #[no_mangle]
 pub extern "C" fn xenly_cos(x: f64) -> f64 {
     x.cos()
 }
 
+// Define a function to calculate the tangent
 #[no_mangle]
 pub extern "C" fn xenly_tan(x: f64) -> f64 {
     x.tan()
