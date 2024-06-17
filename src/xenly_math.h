@@ -55,4 +55,13 @@ double xenly_cos(double x);
 // Define a function to calculate the tangent
 double xenly_tan(double x);
 
+// Define a function to calculate the cosecant
+double xenly_csc(double x);
+
+// Define a function to calculate the secant
+double xenly_sec(double x);
+
+// Define a function to calculate the cotangent
+double xenly_cot(double x);
+
 #endif
