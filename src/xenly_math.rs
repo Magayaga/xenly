@@ -116,3 +116,21 @@ pub extern "C" fn xenly_cos(x: f64) -> f64 {
 pub extern "C" fn xenly_tan(x: f64) -> f64 {
     x.tan()
 }
+
+// Define a function to calculate the cosecant
+#[no_mangle]
+pub extern "C" fn xenly_csc(x: f64) -> f64 {
+    1 / x.sin()
+}
+
+// Define a function to calculate the secant
+#[no_mangle]
+pub extern "C" fn xenly_sec(x: f64) -> f64 {
+    1 / x.cos()
+}
+
+// Define a function to calculate the cotangent
+#[no_mangle]
+pub extern "C" fn xenly_cot(x: f64) -> f64 {
+    1 / x.tan()
+}

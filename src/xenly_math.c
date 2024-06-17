@@ -102,3 +102,18 @@ double xenly_cos(double x) {
 double xenly_tan(double x) {
     return tan(x);
 }
+
+// Define a function to calculate the cosecant
+double xenly_csc(double x) {
+    return 1 / sin(x);
+}
+
+// Define a function to calculate the secant
+double xenly_sec(double x) {
+    return 1 / cos(x);
+}
+
+// Define a function to calculate the cotangent
+double xenly_cot(double x) {
+    return 1 / tan(x);
+}

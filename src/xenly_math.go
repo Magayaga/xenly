@@ -125,4 +125,22 @@ func xenly_tan(x C.double) C.double {
 	return C.double(math.Tan(float64(x)))
 }
 
+// Define a function to calculate the cosecant
+//export xenly_csc
+func xenly_csc(x C.double) C.double {
+	return C.double(1 / math.Sin(float64(x)))
+}
+
+// Define a function to calculate the secant
+//export xenly_sec
+func xenly_sec(x C.double) C.double {
+	return C.double(1 / math.Cos(float64(x)))
+}
+
+// Define a function to calculate the cotangent
+//export xenly_cot
+func xenly_cot(x C.double) C.double {
+	return C.double(1 / math.Tan(float64(x)))
+}
+
 func main() {}
