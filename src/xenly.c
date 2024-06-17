@@ -83,6 +83,9 @@ typedef double (*xenly_pow_t)(double, double);
 typedef double (*xenly_sin_t)(double);
 typedef double (*xenly_cos_t)(double);
 typedef double (*xenly_tan_t)(double);
+typedef double (*xenly_csc_t)(double);
+typedef double (*xenly_sec_t)(double);
+typedef double (*xenly_cot_t)(double);
 typedef double (*xenly_bindec_t)(const char*);
 typedef char* (*xenly_decbin_t)(int);
 
@@ -99,6 +102,9 @@ xenly_pow_t xenly_pow;
 xenly_sin_t xenly_sin;
 xenly_cos_t xenly_cos;
 xenly_tan_t xenly_tan;
+xenly_csc_t xenly_csc;
+xenly_sec_t xenly_sec;
+xenly_cot_t xenly_cot;
 
 // Define the function pointers for binary math
 xenly_bindec_t xenly_bindec;
@@ -115,7 +121,7 @@ double evaluate_arithmetic_expression(const char** expression);
 // Load module
 #if defined(_WIN32) || defined(_WIN64)
 // WINDOWS OPERATING SYSTEM
-void load_module(const char* module_name) {
+void load_math_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
     HMODULE handle = LoadLibrary(filename);
@@ -208,6 +214,27 @@ void load_module(const char* module_name) {
         FreeLibrary(handle);
         return;
     }
+
+    xenly_csc = (xenly_csc_t)(void*)GetProcAddress(handle, "xenly_csc");
+    if (!xenly_csc) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_csc' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_sec = (xenly_sec_t)(void*)GetProcAddress(handle, "xenly_sec");
+    if (!xenly_sec) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_sec' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_cot = (xenly_cot_t)(void*)GetProcAddress(handle, "xenly_cot");
+    if (!xenly_cot) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_cot' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
 }
 
 void load_binary_math_module(const char* module_name) {
@@ -235,7 +262,7 @@ void load_binary_math_module(const char* module_name) {
 }
 #else
 // LINUX OPERATING SYSTEM
-void load_module(const char* module_name) {
+void load_math_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
 
@@ -325,6 +352,20 @@ void load_module(const char* module_name) {
 
     xenly_tan = (xenly_tan_t)dlsym(handle, "xenly_tan");
     if (!xenly_tan) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_csc = (xenly_csc_t)dlsym(handle, "xenly_csc");
+    if (!xenly_csc) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_sec = (xenly_sec_t)dlsym(handle, "xenly_sec");
+    if (!xenly_sec) {
         fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
@@ -618,6 +659,18 @@ void execute_math_function(const char* line) {
         printf("%f\n", xenly_tan(value));
     }
 
+    else if (strcmp(func, "xenly_csc") == 0) {
+        printf("%f\n", xenly_csc(value));
+    }
+
+    else if (strcmp(func, "xenly_sec") == 0) {
+        printf("%f\n", xenly_sec(value));
+    }
+
+    else if (strcmp(func, "xenly_cot") == 0) {
+        printf("%f\n", xenly_cot(value));
+    }
+
     else if (strcmp(func, "xenly_bindec") == 0) {
         printf("%f\n", xenly_bindec(arg));
     }
@@ -739,7 +792,7 @@ int main(int argc, char* argv[]) {
 
             // import math
             if (strcmp(module_name, "math") == 0) {
-                load_module("math");
+                load_math_module("math");
             }
             
             // import binary_math
