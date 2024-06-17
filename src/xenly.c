@@ -370,6 +370,13 @@ void load_math_module(const char* module_name) {
         dlclose(handle);
         exit(1);
     }
+
+    xenly_cot = (xenly_cot_t)dlsym(handle, "xenly_cot");
+    if (!xenly_cot) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
 }
 
 void load_binary_math_module(const char* module_name) {
