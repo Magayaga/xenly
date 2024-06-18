@@ -14,7 +14,7 @@ SRC_DIR = src
 
 # Source files for the main program and shared library
 MAIN_SRC = $(SRC_DIR)/xenly.c $(SRC_DIR)/color.c $(SRC_DIR)/error.c $(SRC_DIR)/print_info.c $(SRC_DIR)/project.c
-LIB_SRC = $(SRC_DIR)/xenly_math.c
+LIB_SRC = $(SRC_DIR)/xenly_math.c $(SRC_DIR)/xenly_binary_math.c
 
 # Object files corresponding to the source files
 MAIN_OBJ = $(MAIN_SRC:.c=.o)
@@ -22,7 +22,7 @@ LIB_OBJ = $(LIB_SRC:.c=.o)
 
 # Output binary and shared library names
 MAIN_BIN = xenly
-LIB_SO = math.so
+LIB_SO = math.so binary_math.so
 
 # Default target: build the main binary and then clean object files
 all: $(MAIN_BIN) clean_objs
