@@ -425,6 +425,24 @@ void load_binary_math_module(const char* module_name) {
         exit(1);
     }
 }
+
+void load_2d_graphics_module(const char* module_name) {
+    char filename[MAX_TOKEN_SIZE];
+    snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
+
+    void* handle = dlopen(filename, RTLD_LAZY);
+    if (!handle) {
+        fprintf(stderr, "Error: Unable to open module file '%s'; %s\n", filename, dlerror());
+        exit(1);
+    }
+
+    draw_circle = (draw_circle_t)dlsym(handle, "draw_circle");
+    if (!draw_circle) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+}
 #endif
 
 // Factor
