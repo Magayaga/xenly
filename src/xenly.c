@@ -88,6 +88,7 @@ typedef double (*xenly_sec_t)(double);
 typedef double (*xenly_cot_t)(double);
 typedef double (*xenly_bindec_t)(const char*);
 typedef char* (*xenly_decbin_t)(int);
+typedef void (*draw_circle_t)(int, int, int);
 
 // Define the function pointers for math
 xenly_constant_t pi;
@@ -109,6 +110,9 @@ xenly_cot_t xenly_cot;
 // Define the function pointers for binary math
 xenly_bindec_t xenly_bindec;
 xenly_decbin_t xenly_decbin;
+
+// Define the function pointers for 2D graphics
+draw_circle_t draw_circle;
 
 // Comment
 void execute_comment(const char* comment) {
@@ -232,6 +236,24 @@ void load_math_module(const char* module_name) {
     xenly_cot = (xenly_cot_t)(void*)GetProcAddress(handle, "xenly_cot");
     if (!xenly_cot) {
         fprintf(stderr, "Error: Unable to load function 'xenly_cot' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+}
+
+void load_2d_graphics_module(const char* module_name) {
+    char filename[MAX_TOKEN_SIZE];
+    sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
+    HMODULE handle = LoadLibrary(filename);
+    if (!handle) {
+        fprintf(stderr, "Error: Unable to open module file '%s'\n", filename);
+        return;
+    }
+
+    // Load function pointers using GetProcAddress
+    draw_circle = (draw_circle_t)(void*)GetProcAddress(handle, "draw_circle");
+    if (!draw_circle) {
+        fprintf(stderr, "Error: Unable to load function 'draw_circle' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
@@ -688,6 +710,22 @@ void execute_math_function(const char* line) {
         printf("%s\n", xenly_decbin(value));
     }
     
+    else if (strcmp(func, "draw_circle") == 0) {
+        char x[MAX_TOKEN_SIZE];
+        char y[MAX_TOKEN_SIZE];
+        char radius[MAX_TOKEN_SIZE];
+        sscanf(arg, "%[^,],%[^,],%s", x, y, radius);
+
+        const char* x_ptr = x;
+        const char* y_ptr = y;
+        const char* radius_ptr = radius;
+        double x_val = evaluate_arithmetic_expression(&x_ptr);
+        double y_val = evaluate_arithmetic_expression(&y_ptr);
+        double radius_val = evaluate_arithmetic_expression(&radius_ptr);
+
+        draw_circle(x_val, y_val, radius_val);
+    }
+
     else {
         error("Unknown function");
     }
@@ -696,30 +734,32 @@ void execute_math_function(const char* line) {
 void execute_var(const char* line) {
     char name[MAX_TOKEN_SIZE];
     char value[MAX_TOKEN_SIZE];
+    
     // Use sscanf to parse the input line
     if (sscanf(line, "var %s = %[^\n]", name, value) != 2) {
         error("Invalid 'var' line");
     }
 
+    // Check if the variable already exists
     for (int i = 0; i < result_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
             error("Variable already declared");
         }
     }
 
-    if (result_variables < MAX_VARIABLES) {
-        strcpy(variables[result_variables].name, name);
-        // Check if value is another variable
-        const char* value_ptr = value;
-        double evaluated_value = evaluate_arithmetic_expression(&value_ptr);
-        snprintf(variables[result_variables].value, sizeof(variables[result_variables].value), "%lf", evaluated_value);
-
-        result_variables++;
-    }
-    
-    else {
+    // Ensure variable count does not exceed the maximum
+    if (result_variables >= MAX_VARIABLES) {
         error("Maximum number of variables exceeded");
     }
+
+    // Evaluate the value if it's an arithmetic expression
+    const char* value_ptr = value;
+    double evaluated_value = evaluate_arithmetic_expression(&value_ptr);
+    snprintf(variables[result_variables].value, sizeof(variables[result_variables].value), "%lf", evaluated_value);
+
+    // Store the variable name
+    strcpy(variables[result_variables].name, name);
+    result_variables++;
 }
 
 double evaluate_condition(const char* condition) {
@@ -806,6 +846,11 @@ int main(int argc, char* argv[]) {
             else if (strcmp(module_name, "binary_math") == 0) {
                 load_binary_math_module("binary_math");
             }
+
+            // import 2d_graphics
+            /* else if (strcmp(module_name, "2d_graphics") == 0) {
+                load_2d_graphics_module("2d_graphics");
+            }*/
             
             else {
                 fprintf(stderr, "Error: Unknown module '%s'\n", module_name);
