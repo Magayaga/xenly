@@ -714,15 +714,34 @@ void execute_math_function(const char* line) {
         char x[MAX_TOKEN_SIZE];
         char y[MAX_TOKEN_SIZE];
         char radius[MAX_TOKEN_SIZE];
-        sscanf(arg, "%[^,],%[^,],%s", x, y, radius);
-
+        
+        // Initialize buffers
+        x[0] = y[0] = radius[0] = '\0';
+    
+        // Parse arguments
+        int parsed = sscanf(arg, "%[^,],%[^,],%s", x, y, radius);
+        if (parsed != 3) {
+            fprintf(stderr, "Error: Invalid arguments for draw_circle. Expected format: x,y,radius\n");
+            return;
+        }
+    
+        // Convert to double
         const char* x_ptr = x;
         const char* y_ptr = y;
         const char* radius_ptr = radius;
+    
+        // Evaluate arithmetic expressions
         double x_val = evaluate_arithmetic_expression(&x_ptr);
         double y_val = evaluate_arithmetic_expression(&y_ptr);
         double radius_val = evaluate_arithmetic_expression(&radius_ptr);
-
+    
+        // Check if values are valid
+        if (x_val == NAN || y_val == NAN || radius_val == NAN) {
+            fprintf(stderr, "Error: Invalid numerical values for draw_circle.\n");
+            return;
+        }
+    
+        // Draw circle
         draw_circle(x_val, y_val, radius_val);
     }
 
@@ -848,9 +867,9 @@ int main(int argc, char* argv[]) {
             }
 
             // import 2d_graphics
-            /* else if (strcmp(module_name, "2d_graphics") == 0) {
+            else if (strcmp(module_name, "2d_graphics") == 0) {
                 load_2d_graphics_module("2d_graphics");
-            }*/
+            }
             
             else {
                 fprintf(stderr, "Error: Unknown module '%s'\n", module_name);
