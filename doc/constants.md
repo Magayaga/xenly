@@ -14,13 +14,6 @@
 | `tau` or `τ`       | A mathematical constant that is the ratio of a circle's circumference to its radius. This produces a number, and that number is always the same.          |
 | `goldenRatio`      | The golden ratio, also known as the golden number, golden proportion, or the divine proportion, is a ratio between two numbers that equals approximately 1.618. |
 | `silverRatio`      | The numerical value of the silver ratio is approximately 2.414                                                           |
-=======
-| Constant           | Description                                                                                                                                                     |
-|:-------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `pi` or `π`        | The number π is a mathematical constant that is the ratio of a circle's circumference to its diameter, approximately equal to 3.14159.                          |
-| `e`                | The number e is a mathematical constant, approximately equal to 2.71828, that is the base of the natural logarithm.                                             |
-| `tau` or `τ`       | A mathematical constant that is the ratio of a circle's circumference to its radius. This produces a number, and that number is always the same.                |
-| `goldenRatio`      | The golden ratio, also known as the golden number, golden proportion, or the divine proportion, is a ratio between two numbers that equals approximately 1.618. |
 | `silverRatio`      | The numerical value of the silver ratio is approximately 2.414                                                                                                  |
 | `supergoldenRatio` | A geometrical proportion close to 85/58. Its true value is the real solution of the equation x³ = x² + 1.                                                       |
 
