@@ -44,3 +44,18 @@
     xenly_sqrt(121)
     ```
 
+* On June 19, 2024, He announced the new features of the `nanopreview` Xenly programming language are new Xenly `binary_math` module.
+
+    ```swift
+    import binary_math
+    import math
+
+    // Power
+    xenly_pow(75,3)
+
+    // Binary numbers to decimal numbers
+    xenly_bindec(101101)
+
+    // Decimal numbers to binary numbers
+    xenly_decbin(489)
+    ```
