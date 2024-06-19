@@ -12,7 +12,7 @@
 * `--new-project` - This option likely signifies the intent to start a new project. It's a common command-line flag used in various development environments to initiate a project creation process.
 * `--create-project` (followed by a folder name) - This option might be used to specify the creation of a new project and provide a name for the folder where the project will be stored. The folder name is typically the name of the project or a descriptive name related to its purpose.
 
-Upcoming options:
+Cancelled options:
 * `-nl`, `--numberingline` (formerly `-ncl`, `--numbercodeline`) like the similar to the `nl` command for the Unix operating system.
 
 ## Copyright
