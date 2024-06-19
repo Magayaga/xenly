@@ -5,6 +5,9 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
 1. ## Windows operating system:
 
    You can download the `GCC` compiler (version 9 or above) and `Git` for the Windows operating system.
+
+   `Clang` was not working because all fixing errors, bugs, and warnings.
+   
    ```bash
    # Download the Git and GCC
    $ winget install --id Git.Git -e --source winget
@@ -20,7 +23,7 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
    Build and run the application
    
    ```bash
-   # Windows
+   # Windows (batchfile or bash script)
    $ ./make.bat
    $ bash main.sh
    ```
@@ -34,9 +37,9 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
 
    You can pass additional arguments to **Xenly**, and to your program `main.xe` or `operations.xe`.
 
-1. ## Linux or macOS operating systems:
+2. ## Linux operating system:
 
-   You can download the `GCC` compiler (version 9 or above), `Clang` compiler (version 13 or above), and `Git` for the Linux and macOS operating systems.
+   You can download the `GCC` compiler (version 9 or above), `Clang` compiler (version 13 or above), and `Git` for the Linux operating system like **Ubuntu**, **Fedora**, **Android**, and more Linux-like and Linux distros.
    ```bash
    # Download the Git and GCC
    $ sudo apt-get install git gcc
@@ -54,7 +57,41 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
    Build and run the application
    
    ```bash
-   # Linux or macOS
+   # Linux (makefile or bash script)
+   $ make
+   $ bash main.sh
+   ```
+
+   To run code in a file non-interactively, you can give it as the first argument to the **Xenly** command:
+
+   ```shell
+   $ ./xenly examples/print/main.xe
+   $ ./xenly examples/math/operations.xe
+   ```
+
+   You can pass additional arguments to **Xenly**, and to your program `main.xe` or `operations.xe`.
+
+3. ## macOS operating system:
+
+   You can download the `GCC` compiler (version 9 or above), `Clang` compiler (version 13 or above), and `Git` for the macOS operating system.
+   ```bash
+   # Download the Git and GCC
+   $ brew install git gcc
+
+   # or Download the Git and Clang
+   $ brew install git clang
+   ```
+
+   ```bash
+   # Xenly's source code
+   $ git clone https://github.com/magayaga/xenly.git
+   $ cd xenly
+   ```
+
+   Build and run the application
+   
+   ```bash
+   # macOS (makefile or bash script)
    $ make
    $ bash main.sh
    ```
