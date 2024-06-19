@@ -7,8 +7,38 @@
  * It is available for Linux and Windows operating systems.
  *
  */
-#[no_mangle]
-pub extern "C" fn draw_circle(x: i32, y: i32, radius: i32) {
-    // Your 2D graphics code here, e.g., using a hypothetical graphics library
-    println!("Drawing circle at ({}, {}) with radius {}", x, y, radius);
+use minifb::{Key, Window, WindowOptions};
+
+pub struct Renderer {
+    width: usize,
+    height: usize,
+    buffer: Vec<u32>,
+}
+
+impl Renderer {
+    pub fn new(width: usize, height: usize) -> Renderer {
+        Renderer {
+            width,
+            height,
+            buffer: vec![0; width * height],
+        }
+    }
+
+    pub fn draw_circle(&mut self, x: usize, y: usize, radius: usize, color: u32) {
+        for i in 0..self.width {
+            for j in 0..self.height {
+                let dx = x as isize - i as isize;
+                let dy = y as isize - j as isize;
+                if dx * dx + dy * dy <= (radius as isize * radius as isize) {
+                    self.buffer[j * self.width + i] = color;
+                }
+            }
+        }
+    }
+
+    pub fn update(&mut self, window: &mut Window) {
+        window
+            .update_with_buffer(&self.buffer, self.width, self.height)
+            .unwrap();
+    }
 }
