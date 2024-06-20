@@ -15,6 +15,7 @@
 #include "error.h"
 #include "print_info.h"
 #include "project.h"
+#include "xenly.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 // WINDOWS OPERATING SYSTEM
@@ -36,44 +37,16 @@
 #define IMPORT_SUFFIX "so"
 #endif
 
-#define MAX_TOKEN_SIZE 1000
-#define MAX_VARIABLES 1000
-#define MAX_OBJECTS 1000
-#define MAX_ARRAYS 100
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    char value[MAX_TOKEN_SIZE];
-} Variable;
-
+// Definitions of global variables
 Variable variables[MAX_VARIABLES];
 int result_variables = 0;
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    int type; // 0 for variable, 1 for object, 2 for array
-    char value[MAX_TOKEN_SIZE];
-} Data;
 
 Data data_storage[MAX_VARIABLES + MAX_OBJECTS + MAX_ARRAYS];
 int result_data = 0;
 
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    int type; // 0 for variable, 1 for object, 2 for array
-    int size;
-    double* elements;
-} Array;
-
 Array arrays[MAX_ARRAYS];
 int result_arrays = 0;
 int multiline_comment = 0;
-
-typedef struct {
-    char name[MAX_TOKEN_SIZE];
-    char version[MAX_TOKEN_SIZE];
-    // Add more fields as needed
-} Module;
 
 // Declare the function pointers
 typedef double (*xenly_constant_t)();
