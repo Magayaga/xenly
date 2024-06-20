@@ -4,6 +4,8 @@
  *
  * It is initially written in C programming language.
  *
+ * `xenly_fio.c` is the similar to the `xenly_fio.rs` in Rust programming language.
+ *
  * It is available for Linux and Windows operating systems.
  *
  */
