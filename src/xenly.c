@@ -125,6 +125,8 @@ double evaluate_arithmetic_expression(const char** expression);
 // Load module
 #if defined(_WIN32) || defined(_WIN64)
 // WINDOWS OPERATING SYSTEM
+
+// Mathematical functions
 void load_math_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
@@ -241,6 +243,7 @@ void load_math_module(const char* module_name) {
     }
 }
 
+// 2D Graphics functions
 void load_2d_graphics_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
@@ -259,6 +262,7 @@ void load_2d_graphics_module(const char* module_name) {
     }
 }
 
+// Binary mathematical functions
 void load_binary_math_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     sprintf(filename, "%s.%s", module_name, IMPORT_SUFFIX);
@@ -284,6 +288,8 @@ void load_binary_math_module(const char* module_name) {
 }
 #else
 // LINUX OPERATING SYSTEM
+
+// Mathematical functions
 void load_math_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
@@ -401,6 +407,7 @@ void load_math_module(const char* module_name) {
     }
 }
 
+// Binary mathematical functions
 void load_binary_math_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
@@ -426,6 +433,7 @@ void load_binary_math_module(const char* module_name) {
     }
 }
 
+// 2D Graphics functions
 void load_2d_graphics_module(const char* module_name) {
     char filename[MAX_TOKEN_SIZE];
     snprintf(filename, sizeof(filename), "%s.%s", module_name, IMPORT_SUFFIX);
@@ -888,6 +896,13 @@ int main(int argc, char* argv[]) {
             else if (strcmp(module_name, "2d_graphics") == 0) {
                 load_2d_graphics_module("2d_graphics");
             }
+
+            // import std
+            /*
+            else if (strcmp(module_name, "std") == 0) {
+                load_std_module("std");
+            }
+            */
             
             else {
                 fprintf(stderr, "Error: Unknown module '%s'\n", module_name);
