@@ -11,7 +11,8 @@
 #include <stdarg.h>
 #include <string.h>
 
-void xenly_printf(const char *format, ...) {
+// print
+void print(const char *format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -44,7 +45,9 @@ void xenly_printf(const char *format, ...) {
                     putchar(*format);
                     break;
             }
-        } else {
+        }
+        
+        else {
             if (*format == '%' && *(format + 1) == '%') {
                 format++;
             }
@@ -56,7 +59,8 @@ void xenly_printf(const char *format, ...) {
     va_end(args);
 }
 
-void xenly_sprintf(char *str, const char *format, ...) {
+// sprint
+void sprint(char *str, const char *format, ...) {
     va_list args;
     va_start(args, format);
     char *buffer = str;
@@ -90,7 +94,9 @@ void xenly_sprintf(char *str, const char *format, ...) {
                     *buffer++ = *format;
                     break;
             }
-        } else {
+        }
+        
+        else {
             if (*format == '%' && *(format + 1) == '%') {
                 format++;
             }
@@ -103,7 +109,8 @@ void xenly_sprintf(char *str, const char *format, ...) {
     va_end(args);
 }
 
-void xenly_scanf(const char *format, ...) {
+// input
+void input(const char *format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -142,7 +149,9 @@ void xenly_scanf(const char *format, ...) {
     va_end(args);
 }
 
-void xenly_println(const char *format, ...) {
+
+// println
+void println(const char *format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -174,7 +183,9 @@ void xenly_println(const char *format, ...) {
                     putchar(*format);
                     break;
             }
-        } else {
+        }
+        
+        else {
             if (*format == '%' && *(format + 1) == '%') {
                 format++;
             }
@@ -187,8 +198,8 @@ void xenly_println(const char *format, ...) {
     va_end(args);
 }
 
-// my_scanln
-void xenly_scanln(char *buffer, size_t size) {
+// scanln
+void scanln(char *buffer, size_t size) {
     if (fgets(buffer, size, stdin) != NULL) {
         size_t len = strlen(buffer);
         if (len > 0 && buffer[len - 1] == '\n') {
@@ -197,8 +208,8 @@ void xenly_scanln(char *buffer, size_t size) {
     }
 }
 
-// my_sprintln
-void xenly_sprintln(char *str, const char *format, ...) {
+// sprintln
+void sprintln(char *str, const char *format, ...) {
     va_list args;
     va_start(args, format);
     char *buffer = str;
@@ -231,7 +242,9 @@ void xenly_sprintln(char *str, const char *format, ...) {
                     *buffer++ = *format;
                     break;
             }
-        } else {
+        }
+        
+        else {
             if (*format == '%' && *(format + 1) == '%') {
                 format++;
             }
@@ -245,19 +258,214 @@ void xenly_sprintln(char *str, const char *format, ...) {
     va_end(args);
 }
 
-// my_errorf
-void xenly_errorf(const char *format, ...) {
+// error
+void error(const char *format, ...) {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
 }
 
-// my_errorln
-void xenly_errorln(const char *format, ...) {
+// errorln
+void errorln(const char *format, ...) {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     fputc('\n', stderr);
     va_end(args);
+}
+
+// write
+void write(FILE *stream, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    while (*format) {
+        if (*format == '%' && *(format + 1) != '%') {
+            format++;
+            switch (*format) {
+                case 'd': {
+                    int i = va_arg(args, int);
+                    fprintf(stream, "%d", i);
+                    break;
+                }
+                case 'f': {
+                    double f = va_arg(args, double);
+                    fprintf(stream, "%f", f);
+                    break;
+                }
+                case 'c': {
+                    int c = va_arg(args, int);
+                    fputc(c, stream);
+                    break;
+                }
+                case 's': {
+                    char *s = va_arg(args, char *);
+                    fprintf(stream, "%s", s);
+                    break;
+                }
+                // Add more cases as needed
+                default:
+                    fputc(*format, stream);
+                    break;
+            }
+        }
+        
+        else {
+            if (*format == '%' && *(format + 1) == '%') {
+                format++;
+            }
+            fputc(*format, stream);
+        }
+        format++;
+    }
+
+    va_end(args);
+}
+
+// writeln
+void writeln(FILE *stream, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    while (*format) {
+        if (*format == '%' && *(format + 1) != '%') {
+            format++;
+            switch (*format) {
+                case 'd': {
+                    int i = va_arg(args, int);
+                    fprintf(stream, "%d", i);
+                    break;
+                }
+                case 'f': {
+                    double f = va_arg(args, double);
+                    fprintf(stream, "%f", f);
+                    break;
+                }
+                case 'c': {
+                    int c = va_arg(args, int);
+                    fputc(c, stream);
+                    break;
+                }
+                case 's': {
+                    char *s = va_arg(args, char *);
+                    fprintf(stream, "%s", s);
+                    break;
+                }
+                // Add more cases as needed
+                default:
+                    fputc(*format, stream);
+                    break;
+            }
+        }
+        
+        else {
+            if (*format == '%' && *(format + 1) == '%') {
+                format++;
+            }
+            fputc(*format, stream);
+        }
+        format++;
+    }
+    fputc('\n', stream);
+
+    va_end(args);
+}
+
+// vfprint
+void vfprint(FILE *stream, const char *format, va_list args) {
+    while (*format) {
+        if (*format == '%' && *(format + 1) != '%') {
+            format++;
+            switch (*format) {
+                case 'd': {
+                    int i = va_arg(args, int);
+                    fprintf(stream, "%d", i);
+                    break;
+                }
+                case 'u': {
+                    unsigned int u = va_arg(args, unsigned int);
+                    fprintf(stream, "%u", u);
+                    break;
+                }
+                case 'o': {
+                    unsigned int o = va_arg(args, unsigned int);
+                    fprintf(stream, "%o", o);
+                    break;
+                }
+                case 'x': {
+                    unsigned int x = va_arg(args, unsigned int);
+                    fprintf(stream, "%x", x);
+                    break;
+                }
+                case 'X': {
+                    unsigned int X = va_arg(args, unsigned int);
+                    fprintf(stream, "%X", X);
+                    break;
+                }
+                case 'f': {
+                    double f = va_arg(args, double);
+                    fprintf(stream, "%f", f);
+                    break;
+                }
+                case 'e': {
+                    double e = va_arg(args, double);
+                    fprintf(stream, "%e", e);
+                    break;
+                }
+                case 'E': {
+                    double E = va_arg(args, double);
+                    fprintf(stream, "%E", E);
+                    break;
+                }
+                case 'g': {
+                    double g = va_arg(args, double);
+                    fprintf(stream, "%g", g);
+                    break;
+                }
+                case 'G': {
+                    double G = va_arg(args, double);
+                    fprintf(stream, "%G", G);
+                    break;
+                }
+                case 'c': {
+                    int c = va_arg(args, int);
+                    fputc(c, stream);
+                    break;
+                }
+                case 's': {
+                    char *s = va_arg(args, char *);
+                    fprintf(stream, "%s", s);
+                    break;
+                }
+                case 'p': {
+                    void *p = va_arg(args, void *);
+                    fprintf(stream, "%p", p);
+                    break;
+                }
+                case 'n': {
+                    int *n = va_arg(args, int *);
+                    *n = ftell(stream);
+                    break;
+                }
+                default:
+                    fputc(*format, stream);
+                    break;
+            }
+        }
+        
+        else {
+            if (*format == '%' && *(format + 1) == '%') {
+                format++;
+            }
+            fputc(*format, stream);
+        }
+        format++;
+    }
+}
+
+// vfprintln
+void vfprintln(FILE *stream, const char *format, va_list args) {
+    vfprint(stream, format, args);
+    fputc('\n', stream);
 }
