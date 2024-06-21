@@ -26,7 +26,7 @@ print("Hello, World!")
 ```
 
 
-On June 13, 2024, [@magayaga](https://github.com/magayaga) announced that multi-line comments was not working for Xenly's nanopreview version now.
+On June 13, 2024, [@magayaga](https://github.com/magayaga) announced that multi-line comments was not working for Xenly's `nanopreview` version now.
 
 ## Copyright
 

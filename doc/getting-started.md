@@ -1,10 +1,10 @@
 # Getting started with Xenly
 
-You'll need to install our build dependencies (git, gcc, clang) and check out the Xenly repository, for example on **Windows**, **Linux**, or **macOS**:
+You'll need to install our build dependencies (`git`, `gcc` for Windows, `clang` for Linux / macOS) and check out the Xenly repository, for example on **Windows**, **Linux**, or **macOS**:
 
 1. ## Windows operating system:
 
-   You can download the `GCC` compiler (version 9 or above) and `Git` for the Windows operating system.
+   You can download the `GCC` compiler (version 9 or above) available for **MSYS2** and **Cygwin**, and `Git` for the Windows operating system.
 
    `Clang` was not working because all fixing errors, bugs, and warnings.
    
@@ -14,6 +14,7 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
    $ winget install MSYS2.MSYS2
    ```
 
+   Open the Xenly's source code.
    ```bash
    # Xenly's source code
    $ git clone https://github.com/magayaga/xenly.git
@@ -39,7 +40,9 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
 
 2. ## Linux operating system:
 
-   You can download the `GCC` compiler (version 9 or above), `Clang` compiler (version 13 or above), and `Git` for the Linux operating system like **Ubuntu**, **Fedora**, **Android**, and more Linux-like and Linux distros.
+   You can download the `GCC` compiler (version 9 or above) or `Clang` compiler (version 13 or above), and `Git` for the Linux operating system like **Ubuntu**, **Fedora**, **Android**, and more Linux-like and Linux distros.
+
+   You can choose the `GCC` compiler or `Clang` compiler.
    ```bash
    # Download the Git and GCC
    $ sudo apt-get install git gcc
@@ -48,6 +51,7 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
    $ sudo apt-get install git clang
    ```
 
+   Open the Xenly's source code.
    ```bash
    # Xenly's source code
    $ git clone https://github.com/magayaga/xenly.git
@@ -73,7 +77,9 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
 
 3. ## macOS operating system:
 
-   You can download the `GCC` compiler (version 9 or above), `Clang` compiler (version 13 or above), and `Git` for the macOS operating system.
+   You can download the `GCC` compiler (version 9 or above) or `Clang` compiler (version 13 or above), and `Git` for the macOS operating system.
+
+   You can choose the `GCC` compiler or `Clang` compiler.
    ```bash
    # Download the Git and GCC
    $ brew install git gcc
@@ -82,6 +88,7 @@ You'll need to install our build dependencies (git, gcc, clang) and check out th
    $ brew install git clang
    ```
 
+   Open the Xenly's source code.
    ```bash
    # Xenly's source code
    $ git clone https://github.com/magayaga/xenly.git
