@@ -279,7 +279,7 @@ pub extern "C" fn vfprint(file: *mut FILE, format: *const c_char, args: *mut lib
     }
 }
 
-fn vfprint_function(buffer: &mut String, format: &str, args: *mut libc::va_list) {
+fn vfprint_function(buffer: &mut String, format: &str, _args: *mut libc::va_list) {
     let mut fmt_iter = format.chars().peekable();
     while let Some(ch) = fmt_iter.next() {
         if ch == '%' {

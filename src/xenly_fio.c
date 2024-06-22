@@ -111,8 +111,8 @@ void sprint(char *str, const char *format, ...) {
     va_end(args);
 }
 
-// input
-void input(const char *format, ...) {
+// scan
+void scan(const char *format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -145,12 +145,14 @@ void input(const char *format, ...) {
                     break;
             }
         }
-        format++;
+        
+        else {
+            format++;
+        }
     }
 
     va_end(args);
 }
-
 
 // println
 void println(const char *format, ...) {
@@ -182,15 +184,13 @@ void println(const char *format, ...) {
                     break;
                 }
                 default:
+                    putchar('%');
                     putchar(*format);
                     break;
             }
         }
         
         else {
-            if (*format == '%' && *(format + 1) == '%') {
-                format++;
-            }
             putchar(*format);
         }
         format++;
