@@ -83,6 +83,13 @@ double xenly_cbrt(double x) {
     return cbrt(x);
 }
 
+// Define a function to calculate the fifth root
+double xenly_ffrt(double x) {
+    if (x >= 0) {
+        return pow(x, 1.0 / 5);
+    }
+}
+
 // Define a function to calculate the power
 double xenly_pow(double base, double exp) {
     return pow(base, exp);
@@ -116,4 +123,40 @@ double xenly_sec(double x) {
 // Define a function to calculate the cotangent
 double xenly_cot(double x) {
     return 1 / tan(x);
+}
+
+// Define a function to calculate the minimum function (xe_min and xenly_min)
+double xe_min(double x, double y) {
+    return (x < y) ? x : y;
+}
+
+double xenly_min(const double* numbers, int count) {
+    double min_value = numbers[0];
+    for (int i = 1; i < count; i++) {
+        min_value = xe_min(min_value, numbers[i]);
+    }
+    return min_value;
+}
+
+// Define a function to calculate the maximum function (xe_max and xenly_max)
+double xe_max(double x, double y) {
+    return (x > y) ? x : y;
+}
+
+double xenly_max(const double* numbers, int count) {
+    double max_value = numbers[0];
+    for (int i = 1; i < count; i++) {
+        max_value = xe_max(max_value, numbers[i]);
+    }
+    return max_value;
+}
+
+// Define a function to calculate the absolute value function (xe_abs and xenly_abs)
+double xe_abs(double x) {
+    return x < 0 ? -x : x;
+}
+
+double xenly_abs(const char* arg) {
+    double x = atoi(arg);
+    return xe_abs(x);
 }
