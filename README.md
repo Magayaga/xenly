@@ -61,7 +61,7 @@ $ git clone https://github.com/xenly
 $ xenly
 ```
 
-### 2. Installing Xenly's source code
+### 2. Install the Xenly's source code
 
 You can run the program `makefile` for Linux, `make.bat` for Windows, and `main.sh` for both Windows and Linux.
 
