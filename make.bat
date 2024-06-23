@@ -33,7 +33,6 @@ if %ERRORLEVEL% NEQ 0 (
 rem Check if compilation was successful
 if exist xenly.exe (
     echo Compilation successful. Running xenly programming language
-    xenly.exe
 ) else (
     echo Compilation failed.
 )
