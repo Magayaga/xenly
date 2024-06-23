@@ -6,4 +6,4 @@ The `math` module has a set of methods and constants.
 
 ## Copyright
 
-Copyright (c) 2024 Cyril John Magayaga
+Copyright (c) 2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
