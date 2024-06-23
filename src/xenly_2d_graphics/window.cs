@@ -23,6 +23,7 @@ namespace xenly_2d_graphics
         {
             this.width = width;
             this.height = height;
+            this.renderer = new Renderer(width, height); // Initialize with a new Renderer
             this.isOpen = true;
         }
 
@@ -31,7 +32,7 @@ namespace xenly_2d_graphics
             this.renderer = renderer;
 
             // Start a separate thread to simulate window display
-            Thread displayThread = new Thread(DisplayLoop);
+            System.Threading.Thread displayThread = new System.Threading.Thread(DisplayLoop);
             displayThread.Start();
         }
 
@@ -42,21 +43,21 @@ namespace xenly_2d_graphics
             {
                 string fileName = $"frame_{frame++:D4}.png";
                 renderer.SaveToFile(fileName);
-                Console.WriteLine($"Saved {fileName}");
-                Thread.Sleep(1000 / 30); // Simulate 30 FPS
+                System.Console.WriteLine($"Saved {fileName}");
+                System.Threading.Thread.Sleep(1000 / 30); // Simulate 30 FPS
             }
         }
 
         public void Update()
         {
             // In this example, Update does nothing specific. It's here for demonstration.
-            Console.WriteLine("Updating window content...");
+            System.Console.WriteLine("Updating window content...");
         }
 
         public void Close()
         {
             isOpen = false;
-            Console.WriteLine("Window closed.");
+            System.Console.WriteLine("Window closed.");
         }
     }
 }
