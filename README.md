@@ -119,7 +119,7 @@ The Xenly source code is organized as follows:
 | `doc/`                       | Documentation for the Xenly programming language            |
 | `docs/`                      | Official website for the Xenly programming language         |
 | `examples/`                  | Example code for the Xenly programming language             |
-| `src/`                       | Source for the Xenly programming language                   |
+| `src/`                       | Source code for the Xenly programming language              |
 
 If you are new to the **Xenly**, you may want to check out these additional resources.
 
