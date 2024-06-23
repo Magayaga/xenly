@@ -1,8 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "d2Zhptx+dAA=",
+  "dgSpecHash": "2/ivanOwW0s=",
   "success": true,
   "projectFilePath": "D:\\xenly\\src\\xenly_2d_graphics\\xenly_2d_graphics.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "C:\\Users\\cyril\\.nuget\\packages\\skiasharp\\2.88.8\\skiasharp.2.88.8.nupkg.sha512",
+    "C:\\Users\\cyril\\.nuget\\packages\\skiasharp.nativeassets.macos\\2.88.8\\skiasharp.nativeassets.macos.2.88.8.nupkg.sha512",
+    "C:\\Users\\cyril\\.nuget\\packages\\skiasharp.nativeassets.win32\\2.88.8\\skiasharp.nativeassets.win32.2.88.8.nupkg.sha512"
+  ],
   "logs": []
 }
