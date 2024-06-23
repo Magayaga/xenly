@@ -15,6 +15,7 @@ package main
 import (
 	"C"
 	"math"
+	"strconv"
 )
 
 // Define and export mathematical constants and universal constants
@@ -101,6 +102,12 @@ func xenly_cbrt(x C.double) C.double {
     return C.double(math.Cbrt(float64(x)))
 }
 
+// Define a function to calculate the fifth root
+//export xenly_ffrt
+func xenly_ffrt(x C.double) C.double {
+	return C.double(float64(x) / float64(1/5))
+}
+
 // Define a function to calculate the power
 //export xenly_pow
 func xenly_pow(base, exp C.double) C.double {
@@ -142,5 +149,63 @@ func xenly_sec(x C.double) C.double {
 func xenly_cot(x C.double) C.double {
 	return C.double(1 / math.Tan(float64(x)))
 }
+
+// Define a function to calculate the minimum function (xe_min and xenly_min)
+//export xe_min
+func xe_min(x C.double, y C.double) C.double {
+    if x < y {
+		return x
+	}
+	return y
+}
+
+//export xenly_min
+func xenly_min(numbers []C.double, count int) C.double {
+    if count <= 0 {
+        panic("count must be positive")
+    }
+    min_value := numbers[0]
+    for i := 1; i < count; i++ {
+        min_value = xe_min(min_value, numbers[i])
+    }
+    return min_value
+}
+
+// Define a function to calculate the maximum function (xe_max and xenly_max)
+//export xe_max
+func xe_max(x C.double, y C.double) C.double {
+    if x > y {
+		return x
+	}
+	return y
+}
+
+//export xenly_max
+func xenly_max(numbers []C.double, count int) C.double {
+    if count <= 0 {
+        panic("count must be positive")
+    }
+    max_value := numbers[0]
+    for i := 1; i < count; i++ {
+        max_value = xe_max(max_value, numbers[i])
+    }
+    return max_value
+}
+
+// Define a function to calculate the absolute value function (xe_abs and xenly_abs)
+//export xe_abs
+func xe_abs(x C.double) C.double {
+    return C.double(math.Abs(float64(x)))
+}
+
+//export xenly_abs
+func xenly_abs(arg *C.char) C.double {
+	x, err := strconv.ParseFloat(C.GoString(arg), 64)
+	if err != nil {
+		panic(err)
+	}
+	return xe_abs(C.double(x))
+}
+
 
 func main() {}

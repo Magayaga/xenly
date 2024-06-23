@@ -10,6 +10,8 @@
  * It is available for Linux and Windows operating systems.
  *
  */
+use std::ffi::CStr;
+use std::os::raw::c_char;
 
 // Define and export mathematical constants and universal constants
 pub const MATH_PI: f64 = 3.14159265358979323846;
@@ -20,7 +22,7 @@ pub const MATH_SILVER_RATIO: f64 = 2.41421356237309504880;
 pub const MATH_SUPERGOLDEN_RATIO: f64 = 1.46557123187676802665;
 pub const PHYSICAL_SPEED_OF_LIGHT_MS: f64 = 299_792_458.0;
 pub const PHYSICAL_SPEED_OF_LIGHT_KMH: f64 = 1_080_000_000.0;
-pub const PHYSICAL_SPEED_OF_LIGHT_MileS: f64 = 186_000.0;
+pub const PHYSICAL_SPEED_OF_LIGHT_MILES: f64 = 186_000.0;
 pub const PHYSICAL_GRAVTIATIONAL_CONSTANT_N_M2__KG2: f64 = 0.0000000000667430;
 pub const PHYSICAL_GRAVTIATIONAL_CONSTANT_DYN_CM2__G2: f64 = 0.0000000667430;
 
@@ -68,7 +70,7 @@ pub extern "C" fn speedOfLight_kmh() -> f64 {
 
 #[no_mangle]
 pub extern "C" fn speedOfLight_MileS() -> f64 {
-    PHYSICAL_SPEED_OF_LIGHT_MileS
+    PHYSICAL_SPEED_OF_LIGHT_MILES
 }
 
 #[no_mangle]
@@ -91,6 +93,12 @@ pub extern "C" fn xenly_sqrt(x: f64) -> f64 {
 #[no_mangle]
 pub extern "C" fn xenly_cbrt(x: f64) -> f64 {
     x.cbrt()
+}
+
+// Define a function to calculate the fifth root
+#[no_mangle]
+pub extern "C" fn xenly_ffrt(x: f64) -> f64 {
+    x / (1.0/5.0)
 }
 
 // Define a function to calculate the power
@@ -133,4 +141,74 @@ pub extern "C" fn xenly_sec(x: f64) -> f64 {
 #[no_mangle]
 pub extern "C" fn xenly_cot(x: f64) -> f64 {
     1.0 / x.tan()
+}
+
+// Define a function to calculate the minimum function (xe_min and xenly_min)
+#[no_mangle]
+pub extern "C" fn xe_min(x: f64, y: f64) -> f64 {
+    if x < y {
+        x
+    } else {
+        y
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn xenly_min(numbers: *const f64, count: usize) -> f64 {
+    let numbers = unsafe {
+        std::slice::from_raw_parts(numbers, count)
+    };
+    
+    let mut min_value = numbers[0];
+    for &num in &numbers[1..] {
+        min_value = xe_min(min_value, num);
+    }
+    min_value
+}
+
+// Define a function to calculate the maximum function (xe_max and xenly_max)
+#[no_mangle]
+pub extern "C" fn xe_max(x: f64, y: f64) -> f64 {
+    if x > y {
+        x
+    } else {
+        y
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn xenly_max(numbers: *const f64, count: usize) -> f64 {
+    let numbers = unsafe {
+        std::slice::from_raw_parts(numbers, count)
+    };
+    
+    let mut max_value = numbers[0];
+    for &num in &numbers[1..] {
+        max_value = xe_max(max_value, num);
+    }
+    max_value
+}
+
+// Define a function to calculate the absolute value function (xe_abs and xenly_abs)
+#[no_mangle]
+pub extern "C" fn xe_abs(x: f64) -> f64 {
+    if x < 0.0 {
+        -x
+    } else {
+        x
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn xenly_abs(arg: *const c_char) -> f64 {
+    let c_str = unsafe {
+        assert!(!arg.is_null());
+
+        CStr::from_ptr(arg)
+    };
+
+    let str_utf8 = c_str.to_str().expect("Invalid UTF-8 string");
+    let x: f64 = str_utf8.parse().expect("Failed to parse input as number");
+
+    xe_abs(x)
 }
