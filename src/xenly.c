@@ -39,6 +39,7 @@
 // Define data structures
 #define MAX_TOKEN_SIZE 1000
 #define MAX_VARIABLES 1000
+#define MAX_NUMBERS 1000
 #define MAX_OBJECTS 1000
 #define MAX_ARRAYS 100
 
@@ -91,6 +92,7 @@ int multiline_comment = 0;
 typedef double (*xenly_constant_t)();
 typedef double (*xenly_sqrt_t)(double);
 typedef double (*xenly_cbrt_t)(double);
+typedef double (*xenly_ffrt_t)(double);
 typedef double (*xenly_pow_t)(double, double);
 typedef double (*xenly_sin_t)(double);
 typedef double (*xenly_cos_t)(double);
@@ -98,6 +100,9 @@ typedef double (*xenly_tan_t)(double);
 typedef double (*xenly_csc_t)(double);
 typedef double (*xenly_sec_t)(double);
 typedef double (*xenly_cot_t)(double);
+typedef double (*xenly_min_t)(double);
+typedef double (*xenly_max_t)(double);
+typedef double (*xenly_abs_t)(double);
 typedef double (*xenly_bindec_t)(const char*);
 typedef char* (*xenly_decbin_t)(int);
 typedef void (*draw_circle_t)(int, int, int);
@@ -111,6 +116,7 @@ xenly_constant_t silverRatio;
 xenly_constant_t superGoldenRatio;
 xenly_sqrt_t xenly_sqrt;
 xenly_cbrt_t xenly_cbrt;
+xenly_ffrt_t xenly_ffrt;
 xenly_pow_t xenly_pow;
 xenly_sin_t xenly_sin;
 xenly_cos_t xenly_cos;
@@ -118,6 +124,9 @@ xenly_tan_t xenly_tan;
 xenly_csc_t xenly_csc;
 xenly_sec_t xenly_sec;
 xenly_cot_t xenly_cot;
+xenly_min_t xenly_min;
+xenly_max_t xenly_max;
+xenly_abs_t xenly_abs;
 
 // Define the function pointers for binary math
 xenly_bindec_t xenly_bindec;
@@ -205,6 +214,13 @@ void load_math_module(const char* module_name) {
         return;
     }
 
+    xenly_ffrt = (xenly_ffrt_t)(void*)GetProcAddress(handle, "xenly_ffrt");
+    if (!xenly_ffrt) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_ffrt' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
     xenly_pow = (xenly_pow_t)(void*)GetProcAddress(handle, "xenly_pow");
     if (!xenly_pow) {
         fprintf(stderr, "Error: Unable to load function 'xenly_pow' from module '%s'\n", filename);
@@ -250,6 +266,27 @@ void load_math_module(const char* module_name) {
     xenly_cot = (xenly_cot_t)(void*)GetProcAddress(handle, "xenly_cot");
     if (!xenly_cot) {
         fprintf(stderr, "Error: Unable to load function 'xenly_cot' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_min = (xenly_min_t)(void*)GetProcAddress(handle, "xenly_min");
+    if (!xenly_min) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_min' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_max = (xenly_max_t)(void*)GetProcAddress(handle, "xenly_max");
+    if (!xenly_max) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_max' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xenly_abs = (xenly_abs_t)(void*)GetProcAddress(handle, "xenly_abs");
+    if (!xenly_abs) {
+        fprintf(stderr, "Error: Unable to load function 'xenly_abs' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
@@ -369,6 +406,13 @@ void load_math_module(const char* module_name) {
         exit(1);
     }
 
+    xenly_ffrt = (xenly_ffrt_t)dlsym(handle, "xenly_ffrt");
+    if (!xenly_ffrt) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
     xenly_pow = (xenly_pow_t)dlsym(handle, "xenly_pow");
     if (!xenly_pow) {
         fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
@@ -413,6 +457,27 @@ void load_math_module(const char* module_name) {
 
     xenly_cot = (xenly_cot_t)dlsym(handle, "xenly_cot");
     if (!xenly_cot) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_min = (xenly_min_t)dlsym(handle, "xenly_min");
+    if (!xenly_min) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_max = (xenly_max_t)dlsym(handle, "xenly_max");
+    if (!xenly_max) {
+        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        dlclose(handle);
+        exit(1);
+    }
+
+    xenly_abs = (xenly_abs_t)dlsym(handle, "xenly_abs");
+    if (!xenly_abs) {
         fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
@@ -693,12 +758,27 @@ void execute_math_function(const char* line) {
     const char* arg_ptr = arg;
     value = evaluate_arithmetic_expression(&arg_ptr);
 
+    // Parse comma-separated arguments
+    double numbers[MAX_NUMBERS];
+    int count = 0;
+    const char* arg_ptr = args;
+    char* token = strtok((char*)arg_ptr, ",");
+
+    while (token != NULL && count < MAX_NUMBERS) {
+        numbers[count++] = atof(token);
+        token = strtok(NULL, ",");
+    }
+
     if (strcmp(func, "xenly_sqrt") == 0) {
         printf("%f\n", xenly_sqrt(value));
     }
     
     else if (strcmp(func, "xenly_cbrt") == 0) {
         printf("%f\n", xenly_cbrt(value));
+    }
+
+    else if (strcmp(func, "xenly_ffrt") == 0) {
+        printf("%f\n", xenly_ffrt(value));
     }
     
     else if (strcmp(func, "xenly_pow") == 0) {

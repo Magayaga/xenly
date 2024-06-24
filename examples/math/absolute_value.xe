@@ -1,3 +1,5 @@
+import math
+
 // Absolute value function returns the absolute value of a number:
-abs(-9)
-abs(12)
+xenly_abs(-9)
+xenly_abs(12)
