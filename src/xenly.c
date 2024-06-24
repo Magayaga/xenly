@@ -100,8 +100,8 @@ typedef double (*xenly_tan_t)(double);
 typedef double (*xenly_csc_t)(double);
 typedef double (*xenly_sec_t)(double);
 typedef double (*xenly_cot_t)(double);
-typedef double (*xenly_min_t)(double);
-typedef double (*xenly_max_t)(double);
+typedef double (*xenly_min_t)(int, ...);
+typedef double (*xenly_max_t)(int, ...);
 typedef double (*xenly_abs_t)(double);
 typedef double (*xenly_bindec_t)(const char*);
 typedef char* (*xenly_decbin_t)(int);
@@ -761,7 +761,6 @@ void execute_math_function(const char* line) {
     // Parse comma-separated arguments
     double numbers[MAX_NUMBERS];
     int count = 0;
-    const char* arg_ptr = args;
     char* token = strtok((char*)arg_ptr, ",");
 
     while (token != NULL && count < MAX_NUMBERS) {
@@ -816,6 +815,30 @@ void execute_math_function(const char* line) {
 
     else if (strcmp(func, "xenly_cot") == 0) {
         printf("%f\n", xenly_cot(value));
+    }
+
+    else if (strcmp(func, "xenly_min") == 0) {
+        double result = numbers[0];
+        for (int i = 1; i < count; i++) {
+            result = xenly_min(result, numbers[i]);
+        }
+        printf("%f\n", result);
+    }
+    
+    else if (strcmp(func, "xenly_max") == 0) {
+        double result = numbers[0];
+        for (int i = 1; i < count; i++) {
+            result = xenly_max(result, numbers[i]);
+        }
+        printf("%f\n", result);
+    }
+    
+    else if (strcmp(func, "xenly_abs") == 0) {
+        if (count != 1) {
+            fprintf(stderr, "xenly_abs expects 1 argument\n");
+            return;
+        }
+        printf("%f\n", xenly_abs(numbers[0]));
     }
 
     else if (strcmp(func, "xenly_bindec") == 0) {
