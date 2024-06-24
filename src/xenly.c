@@ -43,6 +43,23 @@
 #define MAX_OBJECTS 1000
 #define MAX_ARRAYS 100
 
+// Add this to the top of your code, where you define global variables and structures
+/*
+#define MAX_FUNCTIONS 100
+#define MAX_PARAMS 10
+#define MAX_BODY_SIZE 100
+
+typedef struct {
+    char name[MAX_TOKEN_SIZE];
+    char params[MAX_PARAMS][MAX_TOKEN_SIZE];
+    int param_count;
+    char body[MAX_BODY_SIZE];
+} Function;
+
+Function functions[MAX_FUNCTIONS];
+int function_count = 0;
+*/
+
 typedef struct {
     char name[MAX_TOKEN_SIZE];
     char value[MAX_TOKEN_SIZE];
@@ -100,6 +117,8 @@ typedef double (*xenly_tan_t)(double);
 typedef double (*xenly_csc_t)(double);
 typedef double (*xenly_sec_t)(double);
 typedef double (*xenly_cot_t)(double);
+typedef double (*xe_min_t)(int, ...);
+typedef double (*xe_max_t)(int, ...);
 typedef double (*xenly_min_t)(int, ...);
 typedef double (*xenly_max_t)(int, ...);
 typedef double (*xenly_abs_t)(double);
@@ -124,6 +143,8 @@ xenly_tan_t xenly_tan;
 xenly_csc_t xenly_csc;
 xenly_sec_t xenly_sec;
 xenly_cot_t xenly_cot;
+xe_min_t xe_min;
+xe_max_t xe_max;
 xenly_min_t xenly_min;
 xenly_max_t xenly_max;
 xenly_abs_t xenly_abs;
@@ -140,6 +161,7 @@ void execute_comment(const char* comment) {
     printf("// %s\n", comment);
 }
 
+void execute_print(const char* arg);
 double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
 
@@ -270,9 +292,23 @@ void load_math_module(const char* module_name) {
         return;
     }
 
+    xe_min = (xe_min_t)(void*)GetProcAddress(handle, "xe_min");
+    if (!xe_min) {
+        fprintf(stderr, "Error: Unable to load function 'xe_min' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
     xenly_min = (xenly_min_t)(void*)GetProcAddress(handle, "xenly_min");
     if (!xenly_min) {
         fprintf(stderr, "Error: Unable to load function 'xenly_min' from module '%s'\n", filename);
+        FreeLibrary(handle);
+        return;
+    }
+
+    xe_max = (xe_max_t)(void*)GetProcAddress(handle, "xe_max");
+    if (!xe_max) {
+        fprintf(stderr, "Error: Unable to load function 'xe_max' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
@@ -530,6 +566,106 @@ void load_2d_graphics_module(const char* module_name) {
 }
 #endif
 
+/*
+void parse_function_definition(const char* line) {
+    // Format: fn function_name(param1, param2, ...) { body }
+    char name[MAX_TOKEN_SIZE];
+    char params[MAX_PARAMS][MAX_TOKEN_SIZE];
+    int param_count = 0;
+    char body[MAX_BODY_SIZE];
+
+    const char* ptr = line + 3; // Move past "fn "
+    
+    // Extract function name
+    sscanf(ptr, "%s", name);
+    ptr += strlen(name);
+    
+    // Parse parameters
+    if (*ptr == '(') {
+        ptr++;
+        while (*ptr && *ptr != ')') {
+            sscanf(ptr, "%[^,)]", params[param_count]);
+            ptr += strlen(params[param_count]);
+            param_count++;
+            if (*ptr == ',') ptr++;
+        }
+        if (*ptr == ')') ptr++;
+    }
+
+    // Parse function body
+    if (*ptr == '{') {
+        ptr++;
+        sscanf(ptr, "%[^}]}", body);
+    }
+
+    // Store the function definition
+    strcpy(functions[function_count].name, name);
+    functions[function_count].param_count = param_count;
+    for (int i = 0; i < param_count; i++) {
+        strcpy(functions[function_count].params[i], params[i]);
+    }
+    strcpy(functions[function_count].body, body);
+    function_count++;
+}
+
+double evaluate_function(const char* func_name, const char** arg) {
+    for (int i = 0; i < function_count; i++) {
+        if (strcmp(functions[i].name, func_name) == 0) {
+            // Found the function, evaluate arguments
+            double arg_values[MAX_PARAMS];
+            const char* ptr = *arg;
+            for (int j = 0; j < functions[i].param_count; j++) {
+                arg_values[j] = evaluate_arithmetic_expression(&ptr);
+                if (*ptr == ',') ptr++;
+            }
+            *arg = ptr;
+
+            // Temporarily store the original variables
+            Variable original_vars[MAX_VARIABLES];
+            int original_result_variables = result_variables;
+            memcpy(original_vars, variables, sizeof(variables));
+
+            // Assign argument values to parameters
+            for (int j = 0; j < functions[i].param_count; j++) {
+                strcpy(variables[result_variables].name, functions[i].params[j]);
+                sprintf(variables[result_variables].value, "%f", arg_values[j]);
+                result_variables++;
+            }
+
+            // Evaluate function body
+            const char* body_ptr = functions[i].body;
+            double result = evaluate_arithmetic_expression(&body_ptr);
+
+            // Restore original variables
+            memcpy(variables, original_vars, sizeof(original_vars));
+            result_variables = original_result_variables;
+
+            return result;
+        }
+    }
+
+    fprintf(stderr, "Error: Function '%s' not found\n", func_name);
+    return 0.0;
+}
+
+void execute_line(const char* line) {
+    if (strncmp(line, "fn ", 3) == 0) {
+        parse_function_definition(line);
+    } else if (strchr(line, '(')) {
+        // Function call
+        char func_name[MAX_TOKEN_SIZE];
+        const char* ptr = line;
+        sscanf(ptr, "%[^()]", func_name);
+        ptr += strlen(func_name) + 1; // Move past function name and opening parenthesis
+        double result = evaluate_function(func_name, &ptr);
+        printf("%lf\n", result);
+    } else {
+        // Handle other commands
+        execute_print(line);
+    }
+}
+*/
+
 // Factor
 double evaluate_factor(const char** expression) {
     // Evaluate a factor in an arithmetic expression
@@ -759,7 +895,7 @@ void execute_math_function(const char* line) {
     value = evaluate_arithmetic_expression(&arg_ptr);
 
     // Parse comma-separated arguments
-    double numbers[MAX_NUMBERS];
+    double numbers[0];
     int count = 0;
     char* token = strtok((char*)arg_ptr, ",");
 
@@ -817,28 +953,24 @@ void execute_math_function(const char* line) {
         printf("%f\n", xenly_cot(value));
     }
 
+    /*
     else if (strcmp(func, "xenly_min") == 0) {
-        double result = numbers[0];
+        double min_value = numbers[0];
         for (int i = 1; i < count; i++) {
-            result = xenly_min(result, numbers[i]);
+            printf("%f\n", xenly_min(min_value, value));
         }
-        printf("%f\n", result);
     }
-    
+       
     else if (strcmp(func, "xenly_max") == 0) {
-        double result = numbers[0];
+        double max_value = numbers[0];
         for (int i = 1; i < count; i++) {
-            result = xenly_max(result, numbers[i]);
+            printf("%f\n", xenly_max(max_value, value));
         }
-        printf("%f\n", result);
     }
+    */
     
     else if (strcmp(func, "xenly_abs") == 0) {
-        if (count != 1) {
-            fprintf(stderr, "xenly_abs expects 1 argument\n");
-            return;
-        }
-        printf("%f\n", xenly_abs(numbers[0]));
+        printf("%f\n", xenly_abs(value));
     }
 
     else if (strcmp(func, "xenly_bindec") == 0) {
@@ -1023,6 +1155,22 @@ int main(int argc, char* argv[]) {
                 fprintf(stderr, "Error: Unknown module '%s'\n", module_name);
             }
         }
+
+        /*
+        if (strncmp(line, "fn ", 3) == 0) {
+            parse_function_definition(line);
+        }
+        
+        else if (strchr(line, '(')) {
+            // Function call
+            char func_name[MAX_TOKEN_SIZE];
+            const char* ptr = line;
+            sscanf(ptr, "%[^()]", func_name);
+            ptr += strlen(func_name) + 1; // Move past function name and opening parenthesis
+            double result = evaluate_function(func_name, &ptr);
+            printf("%lf\n", result);
+        }
+        */
         
         else if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
             char argument[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
