@@ -34,6 +34,9 @@ You'll need to install our build dependencies (`git`, `gcc` for Windows, `clang`
    ```shell
    $ ./xenly examples/print/main.xe
    $ ./xenly examples/math/operations.xe
+
+   # Xenly's version information
+   $ ./xenly -v
    ```
 
    You can pass additional arguments to **Xenly**, and to your program `main.xe` or `operations.xe`.
@@ -71,6 +74,9 @@ You'll need to install our build dependencies (`git`, `gcc` for Windows, `clang`
    ```shell
    $ ./xenly examples/print/main.xe
    $ ./xenly examples/math/operations.xe
+
+   # Xenly's version information
+   $ ./xenly -v
    ```
 
    You can pass additional arguments to **Xenly**, and to your program `main.xe` or `operations.xe`.
@@ -108,6 +114,9 @@ You'll need to install our build dependencies (`git`, `gcc` for Windows, `clang`
    ```shell
    $ ./xenly examples/print/main.xe
    $ ./xenly examples/math/operations.xe
+
+   # Xenly's version information
+   $ ./xenly -v
    ```
 
    You can pass additional arguments to **Xenly**, and to your program `main.xe` or `operations.xe`.
