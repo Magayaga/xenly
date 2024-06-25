@@ -42,7 +42,7 @@ namespace xenly_2d_graphics
             while (isOpen)
             {
                 string fileName = $"frame_{frame++:D4}.png";
-                renderer.SaveToFile(fileName);
+                renderer.save_to_file(fileName);
                 System.Console.WriteLine($"Saved {fileName}");
                 System.Threading.Thread.Sleep(1000 / 30); // Simulate 30 FPS
             }

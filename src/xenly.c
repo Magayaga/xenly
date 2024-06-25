@@ -124,7 +124,7 @@ typedef double (*xenly_max_t)(int, ...);
 typedef double (*xenly_abs_t)(double);
 typedef double (*xenly_bindec_t)(const char*);
 typedef char* (*xenly_decbin_t)(int);
-typedef void (*draw_circle_t)(int, int, int);
+typedef void (*draw_circle_t)(int, int, int/*, uint32_t*/);
 
 // Define the function pointers for math
 xenly_constant_t pi;

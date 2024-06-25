@@ -27,7 +27,7 @@ namespace xenly_2d_graphics
             canvas = new SKCanvas(bitmap);
         }
 
-        public void DrawCircle(int x, int y, int radius, SKColor color)
+        public void draw_circle(int x, int y, int radius, SKColor color)
         {
             using (var paint = new SKPaint { Color = color, IsAntialias = true })
             {
@@ -49,7 +49,7 @@ namespace xenly_2d_graphics
             }
         }
 
-        public void SaveToFile(string filePath)
+        public void save_to_file(string filePath)
         {
             using (var image = SKImage.FromBitmap(bitmap))
             using (var data = image.Encode(SKEncodedImageFormat.Png, 100))

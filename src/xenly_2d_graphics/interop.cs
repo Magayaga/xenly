@@ -16,24 +16,24 @@ namespace xenly_2d_graphics
     public static class Interop
     {
         [DllImport("xenly_2d_graphics.dll")]
-        public static extern IntPtr Renderer_Create(int width, int height);
+        public static extern IntPtr Renderer_create(int width, int height);
 
         [DllImport("xenly_2d_graphics.dll")]
-        public static extern void Renderer_DrawCircle(IntPtr renderer, int x, int y, int radius, uint color);
+        public static extern void Renderer_draw_circle(IntPtr renderer, int x, int y, int radius, uint color);
 
         [DllImport("xenly_2d_graphics.dll")]
-        public static extern IntPtr Renderer_GetBuffer(IntPtr renderer);
+        public static extern IntPtr Renderer_get_buffer(IntPtr renderer);
 
         [DllImport("xenly_2d_graphics.dll")]
-        public static extern void Renderer_Free(IntPtr renderer);
+        public static extern void Renderer_free(IntPtr renderer);
 
         [DllImport("xenly_2d_graphics.dll")]
-        public static extern IntPtr Window_Create(int width, int height);
+        public static extern IntPtr Window_create(int width, int height);
 
         [DllImport("xenly_2d_graphics.dll")]
-        public static extern void Window_Free(IntPtr window);
+        public static extern void Window_free(IntPtr window);
 
         [DllImport("xenly_2d_graphics.dll")]
-        public static extern void Window_Update(IntPtr window, IntPtr buffer, int width, int height);
+        public static extern void Window_update(IntPtr window, IntPtr buffer, int width, int height);
     }
 }
