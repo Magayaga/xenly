@@ -72,10 +72,10 @@ $ bash main.sh
 $ ./make.bat
 
 # Run the binary code
-$ ./xenly -v
+$ ./xenly
 ```
 
-### 3. Set the Library paths
+### 3. Set the Library paths (Linux)
 
 Make sure the shared library path is correctly set so that the system can find the libraries. Set the `LD_LIBRARY_PATH` environment variable to include the directory containing libraries (`math.so`, `graphics.so`, and more).
 
@@ -83,7 +83,7 @@ Make sure the shared library path is correctly set so that the system can find t
 $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
 ```
 
-### 4. Check permissions and paths
+### 4. Check permissions and paths (Linux)
 
 Ensure that the libraries has the correct permissions and is in the directory where `xenly` expects to find it. Ensure the library is readable and executable:
 
