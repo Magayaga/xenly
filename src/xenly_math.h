@@ -43,6 +43,9 @@ double xenly_sqrt(double x);
 // Define a function to calculate the cube root
 double xenly_cbrt(double x);
 
+// Define a function to calculate the fifth root
+double xenly_ffrt(double x);
+
 // Define a function to calculate the power
 double xenly_pow(double base, double exponent);
 
@@ -63,5 +66,17 @@ double xenly_sec(double x);
 
 // Define a function to calculate the cotangent
 double xenly_cot(double x);
+
+// Define a function to calculate the minimum function (xe_min and xenly_min)
+double xe_min(double x, double y);
+double xenly_min(const double* numbers, int count);
+
+// Define a function to calculate the maximum function (xe_max and xenly_max)
+double xe_max(double x, double y);
+double xenly_max(const double* numbers, int count);
+
+// Define a function to calculate the absolute value function (xe_abs and xenly_abs)
+double xe_abs(double x);
+double xenly_abs(const char* arg);
 
 #endif
