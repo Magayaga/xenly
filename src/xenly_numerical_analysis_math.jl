@@ -6,7 +6,7 @@
 #
 module xenly_numerical_analysis_math
 
-export xenly_gmres, xenly_conjugate_gradient, xenly_gaussian_elimination, xenly_newtons_method, xenly_hill_climbing, xenly_bisection_method, 
+export xenly_gmres, xenly_conjugate_gradient, xenly_gaussian_elimination, xenly_newtons_method, xenly_hill_climbing, xenly_bisection_method, xenly_eulers_method
 
 # GMRES (Generalized Minimal RESidual method)
 function xenly_gmres(A, b, x0, tol=1e-6, maxiter=100)
@@ -155,7 +155,7 @@ function xenly_bisection_method(f, a, b; tol=1e-6, maxiter=1000)
 end
 
 # Euler's method
-function eulers_method(f, y0, t0, t_end, h)
+function xenly_eulers_method(f, y0, t0, t_end, h)
     t = t0:h:t_end
     y = zeros(length(t))
     y[1] = y0
