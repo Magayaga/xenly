@@ -148,7 +148,9 @@ pub extern "C" fn xenly_cot(x: f64) -> f64 {
 pub extern "C" fn xe_min(x: f64, y: f64) -> f64 {
     if x < y {
         x
-    } else {
+    }
+    
+    else {
         y
     }
 }
@@ -171,7 +173,9 @@ pub extern "C" fn xenly_min(numbers: *const f64, count: usize) -> f64 {
 pub extern "C" fn xe_max(x: f64, y: f64) -> f64 {
     if x > y {
         x
-    } else {
+    }
+    
+    else {
         y
     }
 }
@@ -194,7 +198,9 @@ pub extern "C" fn xenly_max(numbers: *const f64, count: usize) -> f64 {
 pub extern "C" fn xe_abs(x: f64) -> f64 {
     if x < 0.0 {
         -x
-    } else {
+    }
+    
+    else {
         x
     }
 }
