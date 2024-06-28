@@ -5,4 +5,8 @@ print(pi)
 print(e)
 print(goldenRatio)
 print(silverRatio)
-print(supergoldenRatio)
+print(superGoldenRatio)
+
+// universal constants
+print(speedOfLight)
+print(gravitationalConstant)

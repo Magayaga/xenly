@@ -119,8 +119,8 @@ typedef double (*xenly_sec_t)(double);
 typedef double (*xenly_cot_t)(double);
 typedef double (*xe_min_t)(int, ...);
 typedef double (*xe_max_t)(int, ...);
-typedef double (*xenly_min_t)(int, ...);
-typedef double (*xenly_max_t)(int, ...);
+typedef double (*xenly_min_t)(const char*);
+typedef double (*xenly_max_t)(const char*);
 typedef double (*xenly_abs_t)(double);
 typedef double (*xenly_bindec_t)(const char*);
 typedef char* (*xenly_decbin_t)(int);
@@ -148,6 +148,10 @@ xe_max_t xe_max;
 xenly_min_t xenly_min;
 xenly_max_t xenly_max;
 xenly_abs_t xenly_abs;
+
+// Define the function pointers for math like universal constants
+xenly_constant_t speedOfLight;
+xenly_constant_t gravitationalConstant;
 
 // Define the function pointers for binary math
 xenly_bindec_t xenly_bindec;
@@ -220,6 +224,20 @@ void load_math_module(const char* module_name) {
         fprintf(stderr, "Error: Unable to load constant 'superGoldenRatio' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
+    }
+
+    speedOfLight = (xenly_constant_t)(void*)GetProcAddress(handle, "speedOfLight");
+    if (!speedOfLight) {
+       fprintf(stderr, "Error: Unable to load constant 'speedOfLight' from module '%s'\n", filename);
+       FreeLibrary(handle);
+       return;
+    }
+
+    gravitationalConstant = (xenly_constant_t)(void*)GetProcAddress(handle, "gravitationalConstant");
+    if (!gravitationalConstant) {
+       fprintf(stderr, "Error: Unable to load constant 'gravitationalConstant' from module '%s'\n", filename);
+       FreeLibrary(handle);
+       return;
     }
 
     xenly_sqrt = (xenly_sqrt_t)(void*)GetProcAddress(handle, "xenly_sqrt");
@@ -388,44 +406,58 @@ void load_math_module(const char* module_name) {
     // Load function pointers using dlsym
     pi = (xenly_constant_t)dlsym(handle, "pi");
     if (!pi) {
-        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
     }
 
     tau = (xenly_constant_t)dlsym(handle, "tau");
     if (!tau) {
-        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
     }
 
     e = (xenly_constant_t)dlsym(handle, "e");
     if (!e) {
-        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
     }
 
     goldenRatio = (xenly_constant_t)dlsym(handle, "goldenRatio");
     if (!goldenRatio) {
-        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
     }
 
     silverRatio = (xenly_constant_t)dlsym(handle, "silverRatio");
     if (!silverRatio) {
-        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
     }
 
     superGoldenRatio = (xenly_constant_t)dlsym(handle, "superGoldenRatio");
     if (!superGoldenRatio) {
-        fprintf(stderr, "Error: Unable to load functions from module '%s'; %s\n", filename, dlerror());
+        fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
         dlclose(handle);
         exit(1);
+    }
+
+    speedOfLight = (xenly_constant_t)dlysm(handle, "speedOfLight");
+    if (!speedOfLight) {
+       fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
+       dlclose(handle);
+       exit(1);
+    }
+
+    gravitationalConstant = (xenly_constant_t)dlysm(handle, "gravitationalConstant");
+    if (!gravitationalConstant) {
+       fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
+       dlclose(handle);
+       exit(1);
     }
 
     xenly_sqrt = (xenly_sqrt_t)dlsym(handle, "xenly_sqrt");
@@ -727,6 +759,16 @@ double evaluate_factor(const char** expression) {
             result = superGoldenRatio() * negate;
             *expression += 16;
         }
+
+        else if (strncmp(*expression, "speedOfLight", 12) == 0) {
+            result = speedOfLight() * negate;
+            *expression += 12;
+        }
+
+        else if (strncmp(*expression, "gravitationalConstant", 21) == 0) {
+            result = gravitationalConstant() * negate;
+            *expression += 21;
+        }
         
         else {
             error("Unknown constant or function");
@@ -953,21 +995,13 @@ void execute_math_function(const char* line) {
         printf("%f\n", xenly_cot(value));
     }
 
-    /*
     else if (strcmp(func, "xenly_min") == 0) {
-        double min_value = numbers[0];
-        for (int i = 1; i < count; i++) {
-            printf("%f\n", xenly_min(min_value, value));
-        }
+        printf("%f\n", xenly_min(arg));
     }
-       
+
     else if (strcmp(func, "xenly_max") == 0) {
-        double max_value = numbers[0];
-        for (int i = 1; i < count; i++) {
-            printf("%f\n", xenly_max(max_value, value));
-        }
+        printf("%f\n", xenly_max(arg));
     }
-    */
     
     else if (strcmp(func, "xenly_abs") == 0) {
         printf("%f\n", xenly_abs(value));
