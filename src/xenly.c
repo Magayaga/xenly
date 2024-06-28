@@ -936,16 +936,6 @@ void execute_math_function(const char* line) {
     const char* arg_ptr = arg;
     value = evaluate_arithmetic_expression(&arg_ptr);
 
-    // Parse comma-separated arguments
-    double numbers[0];
-    int count = 0;
-    char* token = strtok((char*)arg_ptr, ",");
-
-    while (token != NULL && count < MAX_NUMBERS) {
-        numbers[count++] = atof(token);
-        token = strtok(NULL, ",");
-    }
-
     if (strcmp(func, "xenly_sqrt") == 0) {
         printf("%f\n", xenly_sqrt(value));
     }
