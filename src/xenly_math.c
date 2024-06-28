@@ -87,8 +87,8 @@ double xenly_cbrt(double x) {
 
 // Define a function to calculate the fifth root
 double xenly_ffrt(double x) {
-    if (x >= 0) {
-        return pow(x, 1.0 / 5);
+    if (x >= 0.0) {
+        return pow(x, 1.0 / 5.0);
     }
 }
 

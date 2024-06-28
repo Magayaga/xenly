@@ -446,14 +446,14 @@ void load_math_module(const char* module_name) {
         exit(1);
     }
 
-    speedOfLight = (xenly_constant_t)dlysm(handle, "speedOfLight");
+    speedOfLight = (xenly_constant_t)dlsym(handle, "speedOfLight");
     if (!speedOfLight) {
        fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
        dlclose(handle);
        exit(1);
     }
 
-    gravitationalConstant = (xenly_constant_t)dlysm(handle, "gravitationalConstant");
+    gravitationalConstant = (xenly_constant_t)dlsym(handle, "gravitationalConstant");
     if (!gravitationalConstant) {
        fprintf(stderr, "Error: Unable to load constants from module '%s'; %s\n", filename, dlerror());
        dlclose(handle);
