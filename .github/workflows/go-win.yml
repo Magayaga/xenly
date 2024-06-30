@@ -21,5 +21,7 @@ jobs:
       with:
         go-version: '1.21'
 
-    - name: Build
+    - name: Build xenly_math.go
       run: go build -o math.dll -buildmode=c-shared src/xenly_math.go
+    - name: Build xenly_binary_math.go
+      run: go build -o binary_math.dll -buildmode=c-shared src/xenly_binary_math.go
