@@ -1168,10 +1168,10 @@ int main(int argc, char* argv[]) {
                 load_2d_graphics_module("2d_graphics");
             }
 
-            // import std
+            // import fio
             /*
-            else if (strcmp(module_name, "std") == 0) {
-                load_std_module("std");
+            else if (strcmp(module_name, "fio") == 0) {
+                load_std_module("fio");
             }
             */
             
