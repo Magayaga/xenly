@@ -1,0 +1,6 @@
+import math
+
+// reciprocal trigonometric functions
+xenly_csc(2)
+xenly_sec(2)
+xenly_cot(2)

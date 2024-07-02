@@ -1,0 +1,9 @@
+import math
+
+// Mathematical Power
+// xenly_pow() method returns the value of x raised to power y.
+// x required. A number which represents the base.
+// y required. A number which represents the exponent.
+xenly_pow(3, 2)
+xenly_pow(16, 0.5)
+xenly_pow(-3, 4)
