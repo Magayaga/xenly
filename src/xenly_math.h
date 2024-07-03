@@ -68,12 +68,10 @@ double xenly_sec(double x);
 double xenly_cot(double x);
 
 // Define a function to calculate the minimum function (xe_min and xenly_min)
-double xe_min(double x, double y);
-double xenly_min(const double* numbers, int count);
+double xenly_min(int count, ...);
 
 // Define a function to calculate the maximum function (xe_max and xenly_max)
-double xe_max(double x, double y);
-double xenly_max(const double* numbers, int count);
+double xenly_max(int count, ...);
 
 // Define a function to calculate the absolute value function (xe_abs and xenly_abs)
 double xe_abs(double x);

@@ -10,6 +10,7 @@
  * It is available for Linux and Windows operating systems.
  *
  */
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -126,28 +127,37 @@ double xenly_cot(double x) {
 }
 
 // Define a function to calculate the minimum function (xe_min and xenly_min)
-double xe_min(double x, double y) {
-    return (x < y) ? x : y;
-}
-
-double xenly_min(const double* numbers, int count) {
-    double min_value = numbers[0];
-    for (int i = 1; i < count; i++) {
-        min_value = xe_min(min_value, numbers[i]);
+double xenly_min(int count, ...) {
+    va_list args;
+    va_start(args, count);
+    double min_value = DBL_MAX; // Initialize with the highest possible value
+    
+    for (int i = 0; i < count; i++) {
+        double num = va_arg(args, double);
+        if (num < min_value) {
+            min_value = num;
+        }
     }
+    
+    va_end(args);
     return min_value;
 }
 
-// Define a function to calculate the maximum function (xe_max and xenly_max)
-double xe_max(double x, double y) {
-    return (x > y) ? x : y;
-}
 
-double xenly_max(const double* numbers, int count) {
-    double max_value = numbers[0];
-    for (int i = 1; i < count; i++) {
-        max_value = xe_max(max_value, numbers[i]);
+// Define a function to calculate the maximum function (xe_max and xenly_max)
+double xenly_max(int count, ...) {
+    va_list args;
+    va_start(args, count);
+    double max_value = -DBL_MAX; // Initialize with the lowest possible value
+    
+    for (int i = 0; i < count; i++) {
+        double num = va_arg(args, double);
+        if (num > max_value) {
+            max_value = num;
+        }
     }
+    
+    va_end(args);
     return max_value;
 }
 

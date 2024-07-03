@@ -117,10 +117,8 @@ typedef double (*xenly_tan_t)(double);
 typedef double (*xenly_csc_t)(double);
 typedef double (*xenly_sec_t)(double);
 typedef double (*xenly_cot_t)(double);
-typedef double (*xe_min_t)(int, ...);
-typedef double (*xe_max_t)(int, ...);
-typedef double (*xenly_min_t)(const char*);
-typedef double (*xenly_max_t)(const char*);
+typedef double (*xenly_min_t)(int, ...);
+typedef double (*xenly_max_t)(int, ...);
 typedef double (*xenly_abs_t)(double);
 typedef double (*xenly_bindec_t)(const char*);
 typedef char* (*xenly_decbin_t)(int);
@@ -143,8 +141,6 @@ xenly_tan_t xenly_tan;
 xenly_csc_t xenly_csc;
 xenly_sec_t xenly_sec;
 xenly_cot_t xenly_cot;
-xe_min_t xe_min;
-xe_max_t xe_max;
 xenly_min_t xenly_min;
 xenly_max_t xenly_max;
 xenly_abs_t xenly_abs;
@@ -310,23 +306,9 @@ void load_math_module(const char* module_name) {
         return;
     }
 
-    xe_min = (xe_min_t)(void*)GetProcAddress(handle, "xe_min");
-    if (!xe_min) {
-        fprintf(stderr, "Error: Unable to load function 'xe_min' from module '%s'\n", filename);
-        FreeLibrary(handle);
-        return;
-    }
-
     xenly_min = (xenly_min_t)(void*)GetProcAddress(handle, "xenly_min");
     if (!xenly_min) {
         fprintf(stderr, "Error: Unable to load function 'xenly_min' from module '%s'\n", filename);
-        FreeLibrary(handle);
-        return;
-    }
-
-    xe_max = (xe_max_t)(void*)GetProcAddress(handle, "xe_max");
-    if (!xe_max) {
-        fprintf(stderr, "Error: Unable to load function 'xe_max' from module '%s'\n", filename);
         FreeLibrary(handle);
         return;
     }
@@ -986,11 +968,13 @@ void execute_math_function(const char* line) {
     }
 
     else if (strcmp(func, "xenly_min") == 0) {
-        printf("%f\n", xenly_min(arg));
+        int num_value = atoi(arg_ptr);
+        printf("%f\n", xenly_min(num_value));
     }
 
     else if (strcmp(func, "xenly_max") == 0) {
-        printf("%f\n", xenly_max(arg));
+        int num_value = atoi(arg_ptr);
+        printf("%f\n", xenly_max(num_value));
     }
     
     else if (strcmp(func, "xenly_abs") == 0) {
