@@ -59,3 +59,5 @@
     // Decimal numbers to binary numbers
     xenly_decbin(489)
     ```
+
+* On July 9, 2024, He announced a new virtual machine that enables a computer to run Xenly programs and programs written in other languages that are also compiled to Xenly bytecode are called **Xenly Virtual Machine**.
