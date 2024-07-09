@@ -23,8 +23,8 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-%compiler% src\xenly_math.c -shared -o math.dll -fPIC -lm
-%compiler% src\xenly_binary_math.c -shared -o binary_math.dll -fPIC -lm
+%compiler% src\libm\math\xenly_math.c -shared -o math.dll -fPIC -lm
+%compiler% src\libm\binary_math\xenly_binary_math.c -shared -o binary_math.dll -fPIC -lm
 if %ERRORLEVEL% NEQ 0 (
     echo Compilation failed.
     exit /b 1

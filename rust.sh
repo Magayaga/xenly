@@ -7,7 +7,7 @@
 #!/bin/bash
 
 # Directory where the Go source files are located
-SRC_DIR="src"
+SRC_DIR="src/libm"
 
 # Output directory for the shared library
 OUT_DIR="bin"
@@ -29,8 +29,8 @@ fi
 mkdir -p "$OUT_DIR"
 
 # Build the Go shared library
-rustc --crate-type cdylib -o "math.${LIB_EXT}" "$SRC_DIR/xenly_math.rs"
-rustc --crate-type cdylib -o "binary_math.${LIB_EXT}" "$SRC_DIR/xenly_binary_math.rs"
+rustc --crate-type cdylib -o "math.${LIB_EXT}" "$SRC_DIR/math/xenly_math.rs"
+rustc --crate-type cdylib -o "binary_math.${LIB_EXT}" "$SRC_DIR/binary_math/xenly_binary_math.rs"
 
 # Check if the build was successful
 if [[ $? -eq 0 ]]; then
