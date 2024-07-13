@@ -30,10 +30,19 @@ Xenly programming language should be command-line interfaces, web servers, and d
 ### Hello, World! program
 The following shows how a **"Hello, World!"** program is written in Xenly programming language:
 
-```swift
-// “Hello, World!” program
-print("Hello, World!")
-```
+* `print` (v0.1.0-preview0 - v0.1.0-preview8)
+
+  ```swift
+  // “Hello, World!” program
+  print("Hello, World!")
+  ```
+
+* `nota` (v0.1.0-preview9 - present). `nota` is the Latin word for **"print"** and **"note"**.
+
+  ```swift
+  // “Hello, World!” program
+  nota("Hello, World!")
+  ```
 
 A **Xenly** variable is created the moment you first assign a value to it.
 
