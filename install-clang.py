@@ -28,7 +28,7 @@ def compile_with_clang():
 
 def compile_math_library():
     # Define the source file and output file for math library
-    source_file = "src/xenly_math.c"
+    source_file = "src/libm/xenly_math.c"
     if platform.system() == "Windows":
         output_file = "math.dll"
         compile_command = f"clang {source_file} -shared -o {output_file} -lm"
@@ -50,7 +50,7 @@ def compile_math_library():
 
 def compile_binary_math_library():
     # Define the source file and output file for binary math library
-    source_file = "src/xenly_binary_math.c"
+    source_file = "src/libm/binary_math/xenly_binary_math.c"
     if platform.system() == "Windows":
         output_file = "binary_math.dll"
         compile_command = f"clang {source_file} -shared -o {output_file} -lm"
