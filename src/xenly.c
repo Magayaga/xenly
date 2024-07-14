@@ -108,7 +108,8 @@ void execute_print(char* args) {
     char* token = strtok(args, ",");
     while (token!= NULL) {
         char* trimmed_token = trim(token);
-        if (trimmed_token[0] == '"') {
+        if (trimmed_token[0] == '"' && trimmed_token[strlen(trimmed_token)-1] == '"') {
+            // Remove the quotes and print the string content
             printf("%.*s", (int)strlen(trimmed_token) - 2, trimmed_token + 1);
         }
         
@@ -124,11 +125,19 @@ void execute_print(char* args) {
                 }
             }
             
+            else if (is_numeric(trimmed_token)) {
+                printf("%s", trimmed_token);
+            }
+            
             else {
-                printf("%g", evaluate_expression(trimmed_token));
+                double result = evaluate_expression(trimmed_token);
+                printf("%g", result);
             }
         }
         token = strtok(NULL, ",");
+        if (token != NULL) {
+            printf(" ");  // Add space between printed items
+        }
     }
     printf("\n");
 }
@@ -137,7 +146,7 @@ void execute_print(char* args) {
 char* execute_input(char* prompt) {
     static char input_buffer[MAX_INPUT_LENGTH];
     if (prompt!= NULL && strlen(prompt) > 0) {
-        if (prompt[0] == '"') {
+        if (prompt[0] == '"' && prompt[strlen(prompt)-1] == '"') {
             printf("%.*s", (int)strlen(prompt) - 2, prompt + 1);
         }
         
@@ -171,7 +180,7 @@ void interpret_line(char* line) {
             char* var_name = trim(var_decl);
             char* var_value = trim(eq_sign + 1);
             
-            if (strncmp(var_value, "input(", 6) == 0) {
+            if (strncmp(var_value, "input(", 6) == 0 && var_value[strlen(var_value)-1] == ')') {
                 char* input_args = var_value + 6;
                 input_args[strlen(input_args)-1] = '\0';  // Remove closing parenthesis
                 char* input_result = execute_input(input_args);
@@ -184,9 +193,10 @@ void interpret_line(char* line) {
                 }
             }
             
-            else if (var_value[0] == '"') {
+            else if (var_value[0] == '"' && var_value[strlen(var_value)-1] == '"') {
+                // Remove the quotes and store the string content
+                var_value[strlen(var_value)-1] = '\0';
                 add_variable(var_name, 0, var_value + 1, 1);
-                variables[variable_count-1].string_value[strlen(variables[variable_count-1].string_value)-1] = '\0';
             }
             
             else {
