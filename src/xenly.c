@@ -12,6 +12,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include "xenly.h"
 
 #define MAX_LINE_LENGTH 1000
 #define MAX_VARIABLES 100
@@ -214,25 +215,4 @@ void interpret_line(char* line) {
     else {
         printf("Syntax error: Invalid statement '%s'\n", trimmed_line);
     }
-}
-
-int main(int argc, char* argv[]) {
-    if (argc!= 2) {
-        printf("Usage: %s <filename.xe>\n", argv[0]);
-        return 1;
-    }
-
-    FILE* file = fopen(argv[1], "r");
-    if (file == NULL) {
-        printf("Error: Could not open file %s\n", argv[1]);
-        return 1;
-    }
-
-    char line[MAX_LINE_LENGTH];
-    while (fgets(line, sizeof(line), file)) {
-        interpret_line(line);
-    }
-
-    fclose(file);
-    return 0;
 }
