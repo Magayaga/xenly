@@ -14,18 +14,6 @@
 #include <math.h>
 #include "xenly.h"
 
-#define MAX_LINE_LENGTH 1000
-#define MAX_VARIABLES 100
-#define MAX_INPUT_LENGTH 1000
-
-// Structure to represent a variable
-typedef struct {
-    char name[50];
-    double value;
-    char string_value[1000];
-    int is_string;
-} Variable;
-
 // Array to store all declared variables
 Variable variables[MAX_VARIABLES];
 int variable_count = 0;
