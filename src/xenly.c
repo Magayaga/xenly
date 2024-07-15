@@ -166,8 +166,8 @@ void interpret_line(char* line) {
         return;
     }
     
-    if (strncmp(trimmed_line, "print(", 6) == 0 && trimmed_line[strlen(trimmed_line)-1] == ')') {
-        char* args = trimmed_line + 6;
+    if (strncmp(trimmed_line, "nota(", 5) == 0 && trimmed_line[strlen(trimmed_line)-1] == ')') {
+        char* args = trimmed_line + 5;
         args[strlen(args)-1] = '\0';  // Remove closing parenthesis
         execute_print(args);
     }
