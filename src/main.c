@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include "xenly.h"
 
+// Main function
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         printf("Usage: xenly [input file]\n");
