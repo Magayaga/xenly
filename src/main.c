@@ -9,6 +9,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "xenly.h"
 
 // Main function
@@ -26,6 +27,7 @@ int main(int argc, char* argv[]) {
 
     char line[MAX_LINE_LENGTH];
     while (fgets(line, sizeof(line), file)) {
+        line[strcspn(line, "\n")] = 0;
         interpret_line(line);
     }
 

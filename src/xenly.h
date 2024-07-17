@@ -11,31 +11,32 @@
 #ifndef XENLY_H
 #define XENLY_H
 
+#include <stdbool.h>
+
 #define MAX_LINE_LENGTH 1000
 #define MAX_VARIABLES 100
-#define MAX_INPUT_LENGTH 1000
 
 typedef struct {
     char name[50];
-    double value;
-    char string_value[1000];
-    int is_string;
+    char type;  // 's' for string, 'i' for integer, 'f' for float, 'b' for boolean
+    union {
+        char s[100];
+        int i;
+        float f;
+        bool b;
+    } value;
 } Variable;
 
+// Function prototypes
+void process_line(char* line);
 void interpret_line(char* line);
-
-void add_variable(const char* name, double value, const char* string_value, int is_string);
-
-Variable* find_variable(const char* name);
-
-char* trim(char* str);
-
-int is_numeric(const char* str);
-
+void print_function(char* args);
+void var_declaration(char* args);
+void bool_declaration(char* args);
+char* get_variable_value(const char* name);
 double evaluate_expression(const char* expr);
-
-void execute_print(char* args);
-
-char* execute_input(char* prompt);
+char* trim(char* str);
+bool parse_bool(const char* value);
+char* remove_comments(char* line);
 
 #endif // XENLY_H
