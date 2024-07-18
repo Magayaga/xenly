@@ -7,7 +7,6 @@
  * It is available for Linux and Windows operating systems.
  *
  */
-
 #ifndef XENLY_H
 #define XENLY_H
 
@@ -29,14 +28,23 @@ typedef struct {
 
 // Function prototypes
 void process_line(char* line);
+
 void interpret_line(char* line);
+
 void print_function(char* args);
+
 void var_declaration(char* args);
+
 void bool_declaration(char* args);
+
 char* get_variable_value(const char* name);
+
 double evaluate_expression(const char* expr);
+
 char* trim(char* str);
+
 bool parse_bool(const char* value);
+
 char* remove_comments(char* line);
 
 #endif // XENLY_H

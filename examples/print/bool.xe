@@ -4,5 +4,7 @@
 
    (bool) true and false values
 */
-bool a = true
-bool b = false
+bool opening = true
+bool closing = false
+nota(opening)
+nota(closing)
