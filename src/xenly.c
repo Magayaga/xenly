@@ -64,8 +64,8 @@ char* remove_comments(char* line) {
 void interpret_line(char* line) {
     char* trimmed_line = trim(line);
     
-    if (strncmp(trimmed_line, "print(", 6) == 0) {
-        char* args = trimmed_line + 6;
+    if (strncmp(trimmed_line, "nota(", 5) == 0) {
+        char* args = trimmed_line + 5;
         char* end = strrchr(args, ')');
         if (end) *end = '\0';
         print_function(args);
