@@ -22,10 +22,10 @@ Xenly programming language should be command-line interfaces, web servers, and d
 
 ## Major implementations
 
-* [**Xenly**](https://github.com/magayaga/xenly) — Xenly can be interpreter and packager.
-* [**XVM**](https://github.com/magayaga/xvm) — Xenly can be virtual machine because source code into the bytecode like class-based programming language.
-* [**Xenlyc**](https://github.com/magayaga/xenlyc) — Xenly can be compiler and packager. It is the compiler front end for the Xenly programming language.
-* [**XenlyXI**](https://github.com/magayaga/xenlyxi) — Xenly can be interpreter.
+* [**Xenly**](https://github.com/magayaga/xenly) — Xenly can be an interpreter and package manager.
+* [**XVM**](https://github.com/magayaga/xvm) — Xenly can be a virtual machine because the source code is into the bytecode like a class-based programming language.
+* [**Xenlyc**](https://github.com/magayaga/xenlyc) — Xenly can be a compiler and package manager. It is the compiler front end for the Xenly programming language.
+* [**XenlyXI**](https://github.com/magayaga/xenlyxi) — Xenly can be an interpreter.
 
 ## Examples
 ### Hello, World! program
