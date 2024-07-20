@@ -22,6 +22,6 @@ jobs:
         go-version: '1.21'
 
     - name: Build xenly_math.go
-      run: go build -o math.so -buildmode=c-shared src/xenly_math.go
+      run: go build -o math.dylib -buildmode=c-shared src/libm/math/xenly_math.go
     - name: Build xenly_binary_math.go
-      run: go build -o binary_math.so -buildmode=c-shared src/xenly_binary_math.go
+      run: go build -o binary_math.dylib -buildmode=c-shared src/libm/binary_math/xenly_binary_math.go
