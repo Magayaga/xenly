@@ -7,13 +7,13 @@
 import os
 import platform
 
-def compile_with_gcc():
+def compile_with_compiler(compiler):
     # Define the source files and output file for xenly executable
     source_files = ["src/xenly.c", "src/print_info.c", "src/color.c", "src/project.c", "src/error.c"]
     output_file = "xenly"
     
     # Build the compile command for xenly executable
-    compile_command = ["gcc"] + source_files + ["-o", output_file, "-lm"]
+    compile_command = [compiler] + source_files + ["-o", output_file, "-lm"]
 
     # Join command parts into a single string for execution
     compile_command_str = " ".join(compile_command)
@@ -23,20 +23,19 @@ def compile_with_gcc():
     
     # Check if compilation was successful
     if compile_status == 0:
-        print("Compilation of xenly successful")
-        print("UPDATE LEVEL!")  # Indicate successful update or version
+        print(f"Compilation of xenly successful using {compiler}")
     else:
-        print(f"Compilation of xenly failed with error code {compile_status}")
+        print(f"Compilation of xenly failed with error code {compile_status} using {compiler}")
 
-def compile_math_library():
+def compile_math_library(compiler):
     # Define the source file and output file for math library
-    source_file = "src/libm/math/xenly_math.c"
+    source_file = "src/libm/xenly_math.c"
     if platform.system() == "Windows":
         output_file = "math.dll"
-        compile_command = f"gcc {source_file} -shared -o {output_file} -lm"
+        compile_command = f"{compiler} {source_file} -shared -o {output_file} -lm"
     elif platform.system() == "Linux":
         output_file = "math.so"
-        compile_command = f"gcc {source_file} -shared -o {output_file} -fPIC -lm"
+        compile_command = f"{compiler} {source_file} -shared -o {output_file} -fPIC -lm"
     else:
         print("Unsupported platform")
         return
@@ -46,19 +45,19 @@ def compile_math_library():
     
     # Check if compilation was successful
     if compile_status == 0:
-        print(f"Compilation of {output_file} successful")
+        print(f"Compilation of {output_file} successful using {compiler}")
     else:
-        print(f"Compilation of {output_file} failed with error code {compile_status}")
+        print(f"Compilation of {output_file} failed with error code {compile_status} using {compiler}")
 
-def compile_binary_math_library():
+def compile_binary_math_library(compiler):
     # Define the source file and output file for binary math library
     source_file = "src/libm/binary_math/xenly_binary_math.c"
     if platform.system() == "Windows":
         output_file = "binary_math.dll"
-        compile_command = f"gcc {source_file} -shared -o {output_file} -lm"
+        compile_command = f"{compiler} {source_file} -shared -o {output_file} -lm"
     elif platform.system() == "Linux":
         output_file = "binary_math.so"
-        compile_command = f"gcc {source_file} -shared -o {output_file} -fPIC -lm"
+        compile_command = f"{compiler} {source_file} -shared -o {output_file} -fPIC -lm"
     else:
         print("Unsupported platform")
         return
@@ -68,23 +67,34 @@ def compile_binary_math_library():
     
     # Check if compilation was successful
     if compile_status == 0:
-        print(f"Compilation of {output_file} successful")
+        print(f"Compilation of {output_file} successful using {compiler}")
     else:
-        print(f"Compilation of {output_file} failed with error code {compile_status}")
+        print(f"Compilation of {output_file} failed with error code {compile_status} using {compiler}")
 
 def run_tests_or_program():
     # Here you can define how to test your program or simply execute it
     # For demonstration purposes, let's assume running the compiled program
     os.system("./xenly")  # Replace with actual testing commands if applicable
 
-# Compile xenly program
-compile_with_gcc()
+def main():
+    # Choose compiler: "gcc" or "clang"
+    compiler = input("Enter the compiler you want to use (gcc/clang): ").strip()
 
-# Compile math library
-compile_math_library()
+    if compiler not in ["gcc", "clang"]:
+        print("Unsupported compiler. Please choose 'gcc' or 'clang'.")
+        return
 
-# Compile binary math library
-compile_binary_math_library()
+    # Compile xenly program
+    compile_with_compiler(compiler)
 
-# After successful compilation, run tests or execute the program
-run_tests_or_program()
+    # Compile math library
+    compile_math_library(compiler)
+
+    # Compile binary math library
+    compile_binary_math_library(compiler)
+
+    # After successful compilation, run tests or execute the program
+    run_tests_or_program()
+
+if __name__ == "__main__":
+    main()
