@@ -14,6 +14,20 @@
 #include <stdbool.h>
 #include "xenly.h"
 
+#define MAX_LINE_LENGTH 1000
+#define MAX_VARIABLES 100
+
+typedef struct {
+    char name[50];
+    char type;  // 's' for string, 'i' for integer, 'f' for float, 'b' for boolean
+    union {
+        char s[100];
+        int i;
+        float f;
+        bool b;
+    } value;
+} Variable;
+
 // Array to store all declared variables
 Variable variables[MAX_VARIABLES];
 int variable_count = 0;

@@ -22,7 +22,7 @@
 #endif
 
 // #define XENLY_RELEASEDATE
-#define XENLY_VERSION "0.1.0-nanopreview2"
+#define XENLY_VERSION "0.1.0-preview9"
 #define XENLY_AUTHORS "Cyril John Magayaga"
 
 // Print version

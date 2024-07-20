@@ -1,0 +1,8 @@
+[package]
+name = "xenly"
+version = "0.1.0-preview9"
+edition = "2021"
+
+[dependencies]
+colored = "2.1.0"
+winapi = {version = "0.3.9", features = ["sysinfoapi", "winbase"]}
