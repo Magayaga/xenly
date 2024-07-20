@@ -25,7 +25,7 @@ void initialize_project() {
     }
 
     // Write default "hello world" program to the source file
-    fprintf(source_file, "print(\"Hello, World!\")\n\nprint(2*9-6/3*5)\n");
+    fprintf(source_file, "nota(\"Hello, World!\")\n\nnota(2*9-6/3*5)\n");
     fclose(source_file);
     
     // Inform the user that the project has been initialized
@@ -62,7 +62,7 @@ void create_initialize_project(const char *project_name) {
     }
 
     // Write default "hello world" program to the source file
-    fprintf(source_file, "print(\"Hello, World!\")\n\nprint(2*9-6/3*5)\n");
+    fprintf(source_file, "nota(\"Hello, World!\")\n\nnota(2*9-6/3*5)\n");
 
     // Close the source file
     fclose(source_file);

@@ -15,13 +15,14 @@
 #if defined(_WIN32) || defined(_WIN64)
     // Windows-specific includes
     #include <windows.h>
+
 #elif defined(__linux__) || defined(__APPLE__) || defined(__ANDROID__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
     // Unix-like system-specific includes
     #include <sys/utsname.h>
 #endif
 
 // #define XENLY_RELEASEDATE
-#define XENLY_VERSION "0.1.0-nanopreview2"
+#define XENLY_VERSION "0.1.0-preview9"
 #define XENLY_AUTHORS "Cyril John Magayaga"
 
 // Print version
@@ -107,6 +108,7 @@ void print_dumpmachines() {
         else {
             perror("uname");
         }
+    
     #else
         printf("Unsupported platform\n");
     #endif
@@ -117,10 +119,13 @@ void print_operatingsystem() {
     // Print the compiler's operating system
     #if defined(_WIN32)
         printf("Windows\n");
+    
     #elif defined(__linux__)
         printf("Linux\n");
+    
     #elif defined(__unix__) || defined(__unix)
         printf("Unix\n");
+    
     #elif defined(__APPLE__) || defined(__MACH__)
         #include "TargetConditionals.h"
         #if TARGET_OS_MAC
@@ -132,16 +137,22 @@ void print_operatingsystem() {
         #elif TARGET_OS_WATCH
             printf("watchOS\n");
         #endif
+    
     #elif defined(__ANDROID__)
         printf("Android\n");
+    
     #elif defined(__FreeBSD__)
         printf("FreeBSD\n");
+    
     #elif defined(__DragonFly__)
         printf("DragonFlyBSD\n");
+    
     #elif defined(__OpenBSD__)
         printf("OpenBSD\n");
+    
     #elif defined(__NetBSD__)
         printf("NetBSD\n");
+    
     #else
         printf("Unknown/Segmentation fault\n");
     #endif

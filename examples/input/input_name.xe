@@ -1,2 +1,2 @@
 input("What your name?: ", your_name)
-print(your_name)
+nota(your_name)

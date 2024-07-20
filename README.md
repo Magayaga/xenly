@@ -20,21 +20,37 @@ Xenly programming language should be command-line interfaces, web servers, and d
 
 ![Introduction to Xenly](assets/xenly_introduction.gif)
 
+## Major implementations
+
+* [**Xenly**](https://github.com/magayaga/xenly) — Xenly can be an interpreter and package manager.
+* [**XVM**](https://github.com/magayaga/xvm) — Xenly can be a virtual machine because the source code is into the bytecode like a class-based programming language.
+* [**Xenlyc**](https://github.com/magayaga/xenlyc) — Xenly can be a compiler and package manager. It is the compiler front end for the Xenly programming language.
+* [**XenlyXI**](https://github.com/magayaga/xenlyxi) — Xenly can be an interpreter.
+
 ## Examples
 ### Hello, World! program
 The following shows how a **"Hello, World!"** program is written in Xenly programming language:
 
-```swift
-// “Hello, World!” program
-print("Hello, World!")
-```
+* `print` (v0.1.0-preview0 - v0.1.0-preview8)
+
+  ```swift
+  // “Hello, World!” program
+  print("Hello, World!")
+  ```
+
+* `nota` (v0.1.0-preview9 - present). `nota` is the Latin word for **"print"** and **"note"**.
+
+  ```swift
+  // “Hello, World!” program
+  nota("Hello, World!")
+  ```
 
 A **Xenly** variable is created the moment you first assign a value to it.
 
 ```swift
 // "var" variable to print()
 var hi = "Hello, World!"
-print($hi)
+print(hi)
 ```
 
 I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in C programming language.

@@ -17,14 +17,14 @@ if %ERRORLEVEL% EQU 0 (
 )
 
 rem Compile xenly.c with the selected compiler
-%compiler% src\xenly.c src\color.c src\error.c src\print_info.c src\project.c -o xenly.exe -lm
+%compiler% src\main.c src\xenly.c src\color.c src\error.c src\print_info.c src\project.c -o xenly.exe -lm -mconsole
 if %ERRORLEVEL% NEQ 0 (
     echo Compilation failed.
     exit /b 1
 )
 
-%compiler% src\xenly_math.c -shared -o math.dll -fPIC -lm
-%compiler% src\xenly_binary_math.c -shared -o binary_math.dll -fPIC -lm
+%compiler% src\libm\math\xenly_math.c -shared -o math.dll -fPIC -lm
+%compiler% src\libm\binary_math\xenly_binary_math.c -shared -o binary_math.dll -fPIC -lm
 if %ERRORLEVEL% NEQ 0 (
     echo Compilation failed.
     exit /b 1

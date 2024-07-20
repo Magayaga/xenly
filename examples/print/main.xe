@@ -4,4 +4,4 @@
    
    "Hello, World!" program
 */
-print("Hello, World!")
+nota("Hello, World!")

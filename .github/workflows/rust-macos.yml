@@ -17,6 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build xenly_math.rs
-      run: rustc --crate-type cdylib -o math.dylib src/xenly_math.rs
+      run: rustc --crate-type cdylib -o math.dylib src/libm/math/xenly_math.rs
     - name: Build xenly_binary_math.rs
-      run: rustc --crate-type cdylib -o binary_math.dylib src/xenly_binary_math.rs
+      run: rustc --crate-type cdylib -o binary_math.dylib src/libm/binary_math/xenly_binary_math.rs
