@@ -13,7 +13,7 @@ CFLAGS = -Wall -Wextra -g
 SRC_DIR = src/libm
 
 # Source files for the main program and shared library
-MAIN_SRC = $(SRC_DIR)/xenly.c $(SRC_DIR)/color.c $(SRC_DIR)/error.c $(SRC_DIR)/print_info.c $(SRC_DIR)/project.c
+MAIN_SRC = $(SRC_DIR)/xenly.c $(SRC_DIR)/color.c $(SRC_DIR)/main.c $(SRC_DIR)/print_info.c $(SRC_DIR)/project.c
 LIB_SRC = $(SRC_DIR)/math/xenly_math.c
 LIB_BIN_SRC = $(SRC_DIR)/binary_math/xenly_binary_math.c
 
