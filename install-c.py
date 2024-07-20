@@ -6,6 +6,7 @@
 #
 import os
 import platform
+import sys
 
 def compile_with_compiler(compiler):
     # Define the source files and output file for xenly executable
@@ -77,12 +78,16 @@ def run_tests_or_program():
     os.system("./xenly")  # Replace with actual testing commands if applicable
 
 def main():
-    # Choose compiler: "gcc" or "clang"
-    compiler = input("Enter the compiler you want to use (gcc/clang): ").strip()
+    if len(sys.argv) != 2:
+        print("Usage: python install_c.py <compiler>")
+        print("Where <compiler> is either 'gcc' or 'clang'")
+        sys.exit(1)
+
+    compiler = sys.argv[1].strip()
 
     if compiler not in ["gcc", "clang"]:
         print("Unsupported compiler. Please choose 'gcc' or 'clang'.")
-        return
+        sys.exit(1)
 
     # Compile xenly program
     compile_with_compiler(compiler)
