@@ -1,3 +1,11 @@
+//
+// XENLY - high-level and general-purpose programming language
+// created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+//
+// It is initially written in Rust programming language.
+//
+// It is available for Linux and Windows operating systems.
+//
 const std = @import("std");
 
 // Although this function looks imperative, note that its job is to
@@ -16,7 +24,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const lib = b.addStaticLibrary(.{
-        .name = "zig",
+        .name = "xenly",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = b.path("src/xenly.zig"),
@@ -30,7 +38,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     const exe = b.addExecutable(.{
-        .name = "zig",
+        .name = "xenly",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
