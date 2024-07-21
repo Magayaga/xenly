@@ -20,5 +20,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Running GCC/Clang for Python
-      run: python install-c.py
+    - name: Running GCC for Python
+      run: python install-c.py gcc
+    - name: Running Clang for Python
+      run: python install-c.py clang
