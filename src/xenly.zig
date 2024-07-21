@@ -2,7 +2,7 @@
 // XENLY - high-level and general-purpose programming language
 // created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
 //
-// It is initially written in Rust programming language.
+// It is initially written in Zig programming language.
 //
 // It is available for Linux and Windows operating systems.
 //
@@ -52,15 +52,23 @@ fn removeComments(line: []const u8) ![]const u8 {
             if (i + 1 < line.len and line[i] == '*' and line[i + 1] == '/') {
                 in_multi_line_comment = false;
                 i += 2;
-            } else {
+            }
+            
+            else {
                 i += 1;
             }
-        } else if (i + 1 < line.len and line[i] == '/' and line[i + 1] == '/') {
+        }
+        
+        else if (i + 1 < line.len and line[i] == '/' and line[i + 1] == '/') {
             break;
-        } else if (i + 1 < line.len and line[i] == '/' and line[i + 1] == '*') {
+        }
+        
+        else if (i + 1 < line.len and line[i] == '/' and line[i + 1] == '*') {
             in_multi_line_comment = true;
             i += 2;
-        } else {
+        }
+        
+        else {
             try result.append(line[i]);
             i += 1;
         }
@@ -75,9 +83,13 @@ fn interpretLine(line: []const u8) !void {
     if (std.mem.startsWith(u8, trimmed_line, "nota(")) {
         const args = trimmed_line[5 .. trimmed_line.len - 1];
         try printFunction(args);
-    } else if (std.mem.startsWith(u8, trimmed_line, "var ")) {
+    }
+    
+    else if (std.mem.startsWith(u8, trimmed_line, "var ")) {
         try varDeclaration(trimmed_line[4..]);
-    } else if (std.mem.startsWith(u8, trimmed_line, "bool ")) {
+    }
+    
+    else if (std.mem.startsWith(u8, trimmed_line, "bool ")) {
         try boolDeclaration(trimmed_line[5..]);
     }
 }
@@ -88,7 +100,9 @@ fn printFunction(args: []const u8) !void {
     if (trimmed_args[0] == '"' and trimmed_args[trimmed_args.len - 1] == '"') {
         const str = trimmed_args[1 .. trimmed_args.len - 1];
         std.debug.print("{s}\n", .{str});
-    } else {
+    }
+    
+    else {
         if (getVariableValue(trimmed_args)) |value| {
             switch (value) {
                 .String => |s| std.debug.print("{s}\n", .{s}),
@@ -96,7 +110,9 @@ fn printFunction(args: []const u8) !void {
                 .Float => |f| std.debug.print("{d}\n", .{f}),
                 .Boolean => |b| std.debug.print("{}\n", .{b}),
             }
-        } else {
+        }
+        
+        else {
             const result = try evaluateExpression(trimmed_args);
             std.debug.print("{d}\n", .{result});
         }
@@ -157,9 +173,13 @@ fn evaluateExpression(expr: []const u8) !f64 {
 fn parseBool(value: []const u8) !bool {
     if (std.mem.eql(u8, value, "true")) {
         return true;
-    } else if (std.mem.eql(u8, value, "false")) {
+    }
+    
+    else if (std.mem.eql(u8, value, "false")) {
         return false;
-    } else {
+    }
+    
+    else {
         std.debug.print("Error: Invalid boolean value '{s}'. Defaulting to false.\n", .{value});
         return false;
     }
