@@ -19,25 +19,39 @@ fn main() {
     if args.len() != 2 {
         eprintln!("Usage: xenly [input file]");
         return;
-    } else if args[1] == "--version" || args[1] == "-v" {
+    }
+    
+    else if args[1] == "--version" || args[1] == "-v" {
         print_info::print_version();
         return;
-    } else if args[1] == "--help" || args[1] == "-h" {
+    }
+    
+    else if args[1] == "--help" || args[1] == "-h" {
         print_info::print_help();
         return;
-    } else if args[1] == "--operatingsystem" || args[1] == "-os" {
+    }
+    
+    else if args[1] == "--operatingsystem" || args[1] == "-os" {
         print_info::print_operatingsystem();
         return;
-    } else if args[1] == "--dumpmachine" || args[1] == "-dm" {
+    }
+    
+    else if args[1] == "--dumpmachine" || args[1] == "-dm" {
         print_info::print_dumpmachines();
         return;
-    } else if args[1] == "--dumpversion" || args[1] == "-dv" {
+    }
+    
+    else if args[1] == "--dumpversion" || args[1] == "-dv" {
         print_info::print_dumpversion();
         return;
-    } else if args[1] == "--new-project" {
+    }
+    
+    else if args[1] == "--new-project" {
         project::initialize_project();
         return;
-    } else if args[1] == "--author" {
+    }
+    
+    else if args[1] == "--author" {
         print_info::print_author();
         return;
     }
@@ -50,7 +64,9 @@ fn main() {
                 xenly::process_line(&line);
             }
         }
-    } else {
+    }
+    
+    else {
         eprintln!("Error: Could not open file {}", filename);
     }
 }
