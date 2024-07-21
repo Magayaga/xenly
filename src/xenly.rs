@@ -46,16 +46,24 @@ impl Interpreter {
                     self.in_multi_line_comment = false;
                     chars.next();
                     chars.next();
-                } else {
+                }
+                
+                else {
                     chars.next();
                 }
-            } else if ch == '/' && chars.clone().nth(1) == Some('/') {
+            }
+            
+            else if ch == '/' && chars.clone().nth(1) == Some('/') {
                 break;  // Ignore rest of the line
-            } else if ch == '/' && chars.clone().nth(1) == Some('*') {
+            }
+            
+            else if ch == '/' && chars.clone().nth(1) == Some('*') {
                 self.in_multi_line_comment = true;
                 chars.next();
                 chars.next();
-            } else {
+            }
+            
+            else {
                 cleaned_line.push(ch);
                 chars.next();
             }
@@ -74,9 +82,13 @@ impl Interpreter {
         if trimmed_line.starts_with("nota(") {
             let args = &trimmed_line[5..trimmed_line.len() - 1]; // Remove "nota(" and ")"
             self.print_function(args);
-        } else if trimmed_line.starts_with("var ") {
+        }
+        
+        else if trimmed_line.starts_with("var ") {
             self.var_declaration(&trimmed_line[4..]);
-        } else if trimmed_line.starts_with("bool ") {
+        }
+        
+        else if trimmed_line.starts_with("bool ") {
             self.bool_declaration(&trimmed_line[5..]);
         }
     }
@@ -87,10 +99,14 @@ impl Interpreter {
         if trimmed_args.starts_with('"') && trimmed_args.ends_with('"') {
             // String literal
             println!("{}", &trimmed_args[1..trimmed_args.len() - 1]);
-        } else if let Some(value) = self.get_variable_value(trimmed_args) {
+        }
+        
+        else if let Some(value) = self.get_variable_value(trimmed_args) {
             // Variable
             println!("{}", value);
-        } else {
+        }
+        
+        else {
             // Assume it's a numeric expression
             let result = self.evaluate_expression(trimmed_args);
             println!("{}", result);
@@ -117,12 +133,16 @@ impl Interpreter {
                 name: name.to_string(),
                 value: VariableValue::String(value[1..value.len() - 1].to_string()),
             }
-        } else if value.contains('.') {
+        }
+        
+        else if value.contains('.') {
             Variable {
                 name: name.to_string(),
                 value: VariableValue::Float(f32::from_str(value).unwrap()),
             }
-        } else {
+        }
+        
+        else {
             Variable {
                 name: name.to_string(),
                 value: VariableValue::Integer(i32::from_str(value).unwrap()),
