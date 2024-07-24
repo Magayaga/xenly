@@ -63,3 +63,5 @@
 * On July 9, 2024, He announced a new virtual machine that enables a computer to run Xenly programs and programs written in other languages that are also compiled to Xenly bytecode are called **Xenly Virtual Machine**. It was originally written in **C** programming language.
 
 * On July 21, 2024, He announced adding **Xenly** Interpreter using **C**, **Rust**, and **Zig**. Next upcoming features of **Xenly** are `var` and `let` **variables** and fixing `import` **modules**.
+
+* On July 24, 2024, He announced **Xenly**'s source code due to typhoon Carina, strong weather in the Philippines.
