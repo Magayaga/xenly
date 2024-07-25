@@ -64,4 +64,4 @@
 
 * On July 21, 2024, He announced adding **Xenly** Interpreter using **C**, **Rust**, and **Zig**. Next upcoming features of **Xenly** are `var` and `let` **variables** and fixing `import` **modules**.
 
-* On July 24, 2024, He announced **Xenly**'s source code due to typhoon Carina, strong weather in the Philippines.
+* On July 24, 2024, He announced **Xenly**'s source code due to typhoon Carina, strong weather in the Philippines because the rain is heavy and the flood is rising.
