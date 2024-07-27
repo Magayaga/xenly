@@ -10,11 +10,14 @@ A variable declaration tells the compiler where and how much to create the stora
 
 ```swift
 var variable_name = value
+let variable_name = value
 ```
 
 **Example:** Swift program to demonstrate how to declare variables.
 
 ```swift
 var number = 42
+let pi = 3.14159
 nota(number)
+nota(pi)
 ```
