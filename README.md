@@ -48,9 +48,9 @@ The following shows how a **"Hello, World!"** program is written in Xenly progra
 A **Xenly** variable is created the moment you first assign a value to it.
 
 ```swift
-// "var" variable to print()
+// "var" variable to nota()
 var hi = "Hello, World!"
-print(hi)
+nota(hi)
 ```
 
 I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in C programming language.

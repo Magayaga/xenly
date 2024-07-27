@@ -4,6 +4,8 @@
 # 
 # It is initially written in Julia programming language.
 #
+# `xenly_numerical_analysis_math.jl` is the similar to the `xenly_numerical_analysis_math.c` in C programming language.
+#
 module xenly_numerical_analysis_math
 
 export xenly_gmres, xenly_conjugate_gradient, xenly_gaussian_elimination, xenly_newtons_method, xenly_hill_climbing, xenly_bisection_method, xenly_eulers_method

@@ -11,7 +11,7 @@ Single-line comments start with two forward slashes (`//`). Any text between `//
 
 ```swift
 // This is singled-lined
-print("Hello, World")
+nota("Hello, World")
 ```
 
 ### Multi-line comments
@@ -22,11 +22,13 @@ Multi-line comments start with `/*` and ends with `*/`. Any text between `/*` an
   This is multi-lined
   "Hello, World" program
 */
-print("Hello, World!")
+nota("Hello, World!")
 ```
 
 
 On June 13, 2024, [@magayaga](https://github.com/magayaga) announced that multi-line comments was not working for Xenly's `nanopreview` version now.
+
+On July 22, 2024, @magayaga announced that multi-line comments was working for Xenly's `preview` version now.
 
 ## Copyright
 
