@@ -12,9 +12,16 @@ A variable declaration tells the compiler where and how much to create the stora
 var variable_name = value
 ```
 
-**Example:** Swift program to demonstrate how to declare variables.
+**For Example**, Xenly program to demonstrate how to declare variables.
 
+1. Numbers
 ```swift
 var number = 42
 nota(number)
+```
+
+2. Strings
+```swift
+var string = "United States"
+nota(string)
 ```
