@@ -13,11 +13,18 @@ var variable_name = value
 let variable_name = value
 ```
 
-**Example:** Swift program to demonstrate how to declare variables.
+**For Example**, Xenly program to demonstrate how to declare variables.
 
+1. Numbers
 ```swift
 var number = 42
 let pi = 3.14159
 nota(number)
 nota(pi)
+```
+
+2. Strings
+```swift
+var string = "United States"
+nota(string)
 ```

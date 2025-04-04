@@ -144,6 +144,6 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 
 ## Copyright
 
-Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
+Copyright (c) 2023-2025 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
