@@ -14,9 +14,9 @@
   </a>
 </p>
 
-**Xenly** (formerly known as **Xenon**) is a **free and open-source** compiled high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in **C**, **Go**, and **Rust** programming languages.
+**Xenly** (formerly known as **Xenon**) is a **free and open-source** compiled high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces and applications It was originally written in **C**, **Go**, **Rust**, **C#**, and **Zig** programming languages.
 
-Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
+Xenly programming language should be command-line interfaces, web servers, and desktop applications. It's static and dynamic typing, readability, usability, and flexibility.
 
 ![Introduction to Xenly](assets/xenly_introduction.gif)
 
@@ -53,7 +53,7 @@ var hi = "Hello, World!"
 nota(hi)
 ```
 
-I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in C programming language.
+I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in the C programming language.
 
 The following shows how a **"Hello, World!"** program is written in [Hyzero](https://github.com/magayaga/Hyzero) programming language:
 
@@ -68,7 +68,7 @@ Here is the Hyzero programming language that was initially written in Python pro
 
 ### 1. Download the Xenly's source code
 
-You can download the git clone of the `xenly` programming language. It is the available for the **Windows** and **Linux** operating systems.
+You can download the git clone of the `xenly` programming language. It is available for the **Windows** and **Linux** operating systems.
 
 
 ```bash
