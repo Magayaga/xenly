@@ -7,13 +7,14 @@
  * It is available for Linux and Windows operating systems.
  *
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include "error.h"
+#include "data_structures.h"
 
-// Error
-void error(const char* message) {
-    fprintf(stderr, "Error: %s\n", message);
-    exit(EXIT_FAILURE);
+Variable variables[MAX_VARIABLES];
+int result_variables = 0;
 
-}
+Data data_storage[MAX_VARIABLES + MAX_OBJECTS + MAX_ARRAYS];
+int result_data = 0;
+
+Array arrays[MAX_ARRAYS];
+int result_arrays = 0;
+int multiline_comment = 0;

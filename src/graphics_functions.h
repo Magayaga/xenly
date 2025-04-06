@@ -7,13 +7,13 @@
  * It is available for Linux and Windows operating systems.
  *
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include "error.h"
+#ifndef GRAPHICS_FUNCTIONS_H
+#define GRAPHICS_FUNCTIONS_H
 
-// Error
-void error(const char* message) {
-    fprintf(stderr, "Error: %s\n", message);
-    exit(EXIT_FAILURE);
+typedef void (*draw_circle_t)(int, int, int);
 
-}
+extern draw_circle_t draw_circle;
+
+void load_2d_graphics_module(const char* module_name);
+
+#endif // GRAPHICS_FUNCTIONS_H

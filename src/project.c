@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "project.h"
 #include "color.h"
 
 // Initialize project

@@ -6,5 +6,5 @@
 */
 bool opening = true
 bool closing = false
-nota(opening)
-nota(closing)
+print(opening)
+print(closing)
