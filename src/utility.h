@@ -10,11 +10,16 @@
 #ifndef UTILITY_H
 #define UTILITY_H
 
+#include <stdbool.h>
+
 void execute_print(const char* arg);
 double evaluate_factor(const char** expression);
 double evaluate_arithmetic_expression(const char** expression);
 void execute_math_function(const char* line);
 void execute_var(const char* line);
 double evaluate_condition(const char* condition);
+
+char* trim(char* str); // Declaration of trim
+bool parse_bool(const char* value); // Declaration of parse_bool
 
 #endif // UTILITY_H

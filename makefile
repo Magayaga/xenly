@@ -7,13 +7,17 @@
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -g
+CFLAGS = -Wall -Wextra -g -fPIC
 
 # Source directory
 SRC_DIR = src
 
 # Source files for the main program and shared library
-MAIN_SRC = $(SRC_DIR)/*.c
+MAIN_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/binary_math_functions.c \
+           $(SRC_DIR)/color.c $(SRC_DIR)/data_structures.c \
+           $(SRC_DIR)/error.c $(SRC_DIR)/graphics_functions.c \
+           $(SRC_DIR)/math_functions.c $(SRC_DIR)/print_info.c \
+           $(SRC_DIR)/project.c $(SRC_DIR)/utility.c $(SRC_DIR)/variables.c
 LIB_SRC = $(SRC_DIR)/libm/math/xenly_math.c
 LIB_BIN_SRC = $(SRC_DIR)/libm/binary_math/xenly_binary_math.c
 
@@ -41,13 +45,13 @@ $(LIB_SO): $(LIB_OBJ)
 	@chmod +rx $@
 
 # Create the shared library from its object file
-$(LIB_BIN_SO): $(LIB_OBJ)
+$(LIB_BIN_SO): $(SRC_DIR)/binary_math_functions.o
 	$(CC) $(CFLAGS) -shared -o $@ $^ -lm
 	@chmod +rx $@
 
 # Compile source files to object files in the same directory
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -fPIC -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # Remove object files after building the main binary and shared library
 clean_objs:
@@ -55,7 +59,7 @@ clean_objs:
 
 # Clean all generated files: object files, binary, and shared library
 clean:
-	rm -f $(SRC_DIR)/*.o $(MAIN_BIN) $(LIB_SO)
+	rm -f $(SRC_DIR)/*.o $(MAIN_BIN) $(LIB_SO) $(LIB_BIN_SO)
 
 # Mark these targets as not corresponding to actual files
 .PHONY: all clean clean_objs

@@ -80,7 +80,7 @@ fn removeComments(line: []const u8) ![]const u8 {
 fn interpretLine(line: []const u8) !void {
     const trimmed_line = std.mem.trim(u8, line, &spaceCharacters);
 
-    if (std.mem.startsWith(u8, trimmed_line, "nota(")) {
+    if (std.mem.startsWith(u8, trimmed_line, "print(")) {
         const args = trimmed_line[5 .. trimmed_line.len - 1];
         try printFunction(args);
     }

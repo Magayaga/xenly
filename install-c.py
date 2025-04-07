@@ -10,7 +10,19 @@ import sys
 
 def compile_with_compiler(compiler):
     # Define the source files and output file for xenly executable
-    source_files = ["src/xenly.c", "src/print_info.c", "src/color.c", "src/project.c", "src/error.c"]
+    source_files = [
+        "src/main.c",
+        "src/binary_math_functions.c",
+        "src/color.c",
+        "src/data_structures.c",
+        "src/error.c",
+        "src/graphics_functions.c",
+        "src/math_functions.c",
+        "src/print_info.c",
+        "src/project.c",
+        "src/utility.c",
+        "src/variables.c"
+    ]
     output_file = "xenly"
     
     # Build the compile command for xenly executable
@@ -30,7 +42,7 @@ def compile_with_compiler(compiler):
 
 def compile_math_library(compiler):
     # Define the source file and output file for math library
-    source_file = "src/libm/xenly_math.c"
+    source_file = "src/libm/math/xenly_math.c"
     if platform.system() == "Windows":
         output_file = "math.dll"
         compile_command = f"{compiler} {source_file} -shared -o {output_file} -lm"

@@ -13,6 +13,8 @@
 #include <string.h>
 #include <ctype.h>
 
+int variable_count = 0;
+
 void var_declaration(char* args) {
     char* name = strtok(args, "=");
     char* value = strtok(NULL, "");

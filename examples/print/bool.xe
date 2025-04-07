@@ -8,3 +8,6 @@ bool opening = true
 bool closing = false
 print(opening)
 print(closing)
+
+then output is Error: Unknown constant or function
+Why is bool variable?

@@ -17,7 +17,7 @@ if %ERRORLEVEL% EQU 0 (
 )
 
 rem Compile xenly.c with the selected compiler
-%compiler% src\main.c src\xenly.c src\color.c src\error.c src\print_info.c src\project.c -o xenly.exe -lm -mconsole
+%compiler% src\main.c src\binary_math_functions.c src\color.c src\data_structures.c src\error.c src\graphics_functions.c src\math_functions.c src\print_info.c src\project.c src\utility.c src\variables.c -o xenly.exe -lm -mconsole
 if %ERRORLEVEL% NEQ 0 (
     echo Compilation failed.
     exit /b 1

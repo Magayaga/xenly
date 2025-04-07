@@ -88,8 +88,8 @@ impl Interpreter {
     fn interpret_line(&mut self, line: &str) {
         let trimmed_line = line.trim();
 
-        if trimmed_line.starts_with("nota(") {
-            let args = &trimmed_line[5..trimmed_line.len() - 1]; // Remove "nota(" and ")"
+        if trimmed_line.starts_with("print(") {
+            let args = &trimmed_line[5..trimmed_line.len() - 1]; // Remove "print(" and ")"
             self.print_function(args);
         }
         

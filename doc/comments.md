@@ -11,7 +11,7 @@ Single-line comments start with two forward slashes (`//`). Any text between `//
 
 ```swift
 // This is singled-lined
-nota("Hello, World")
+print("Hello, World")
 ```
 
 ### Multi-line comments
@@ -22,7 +22,7 @@ Multi-line comments start with `/*` and ends with `*/`. Any text between `/*` an
   This is multi-lined
   "Hello, World" program
 */
-nota("Hello, World!")
+print("Hello, World!")
 ```
 
 

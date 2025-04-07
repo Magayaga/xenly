@@ -10,6 +10,8 @@
 #ifndef XENLY_H
 #define XENLY_H
 
+#include <stdbool.h>
+
 #define MAX_VARIABLES 100
 #define MAX_LINE_LENGTH 1024
 

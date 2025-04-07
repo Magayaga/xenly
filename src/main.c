@@ -20,6 +20,7 @@
 #include "utility.h"
 
 // Main function
+// Main function
 int main(int argc, char* argv[]) {
     if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
         // Create initialize project
@@ -112,6 +113,16 @@ int main(int argc, char* argv[]) {
 
         else if (strncmp(line, "var", 3) == 0) {
             execute_var(line);
+        }
+
+        else if (strncmp(line, "bool", 4) == 0) {
+            char name[MAX_TOKEN_SIZE];
+            char value[MAX_TOKEN_SIZE];
+            if (sscanf(line, "bool %s = %s", name, value) == 2) {
+                add_variable(name, VAR_TYPE_BOOL, value);
+            } else {
+                error("Invalid boolean variable declaration");
+            }
         }
 
         else if (strncmp(line, "//", 2) == 0) {

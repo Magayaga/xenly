@@ -1,11 +1,11 @@
-# `nota()` function in Xenly
+# `print()` function in Xenly
 
-The `nota()` function prints the specified message to the screen, or other standard output device. **nota** is the Latin word for **print** and **note**.
+The `print()` function prints the specified message to the screen, or other standard output device. 
 
 **Example:**
 ```swift
 // "Hello, World!" program
-nota("Hello, World!")
+print("Hello, World!")
 ```
 
 ## Copyright

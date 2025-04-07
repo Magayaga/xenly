@@ -25,7 +25,7 @@ pub fn create_initialize_project(project_name: &str) {
         return;
     }
 
-    create_file(project_path, "main.xe", "nota(\"Hello, World!\")\n\nnota(2*9-6/3*5)\n");
+    create_file(project_path, "main.xe", "print(\"Hello, World!\")\n\nprint(2*9-6/3*5)\n");
 
     println!("Project {} created successfully.", project_name);
 }

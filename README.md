@@ -38,19 +38,12 @@ The following shows how a **"Hello, World!"** program is written in Xenly progra
   print("Hello, World!")
   ```
 
-* `nota` (v0.1.0-preview9 - present). `nota` is the Latin word for **"print"** and **"note"**.
-
-  ```swift
-  // “Hello, World!” program
-  nota("Hello, World!")
-  ```
-
 A **Xenly** variable is created the moment you first assign a value to it.
 
 ```swift
-// "var" variable to nota()
+// "var" variable to print()
 var hi = "Hello, World!"
-nota(hi)
+print(hi)
 ```
 
 I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in C programming language.

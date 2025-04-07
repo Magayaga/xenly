@@ -28,7 +28,20 @@ void execute_print(const char* arg) {
         int found = 0;
         for (int i = 0; i < result_variables; i++) {
             if (strcmp(variables[i].name, var_name) == 0) {
-                printf("%s\n", variables[i].value);
+                switch (variables[i].type) {
+                    case VAR_TYPE_INT:
+                        printf("%d\n", variables[i].value.intValue);
+                        break;
+                    case VAR_TYPE_FLOAT:
+                        printf("%lf\n", variables[i].value.floatValue);
+                        break;
+                    case VAR_TYPE_STRING:
+                        printf("%s\n", variables[i].value.stringValue);
+                        break;
+                    case VAR_TYPE_BOOL:
+                        printf("%s\n", variables[i].value.boolValue ? "true" : "false");
+                        break;
+                }
                 found = 1;
                 break;
             }
@@ -266,7 +279,7 @@ void execute_var(const char* line) {
 
     const char* value_ptr = value;
     double evaluated_value = evaluate_arithmetic_expression(&value_ptr);
-    snprintf(variables[result_variables].value, sizeof(variables[result_variables].value), "%lf", evaluated_value);
+    snprintf(variables[result_variables].value.stringValue, sizeof(variables[result_variables].value.stringValue), "%lf", evaluated_value);
 
     strcpy(variables[result_variables].name, name);
     result_variables++;
@@ -275,9 +288,39 @@ void execute_var(const char* line) {
 double evaluate_condition(const char* condition) {
     for (int i = 0; i < result_variables; i++) {
         if (strcmp(variables[i].name, condition) == 0) {
-            return strcmp(variables[i].value, "true") == 0 ? 1 : 0;
+            return strcmp(variables[i].value.stringValue, "true") == 0 ? 1 : 0;
         }
     }
 
     return atof(condition);
+}
+
+char* trim(char* str) {
+    char* end;
+
+    // Trim leading space
+    while (isspace((unsigned char)*str)) str++;
+
+    if (*str == 0)  // All spaces?
+        return str;
+
+    // Trim trailing space
+    end = str + strlen(str) - 1;
+    while (end > str && isspace((unsigned char)*end)) end--;
+
+    // Write new null terminator character
+    end[1] = '\0';
+
+    return str;
+}
+
+bool parse_bool(const char* value) {
+    if (strcmp(value, "true") == 0 || strcmp(value, "1") == 0) {
+        return true;
+    } else if (strcmp(value, "false") == 0 || strcmp(value, "0") == 0) {
+        return false;
+    } else {
+        fprintf(stderr, "Error: Invalid boolean value '%s'\n", value);
+        exit(EXIT_FAILURE);
+    }
 }

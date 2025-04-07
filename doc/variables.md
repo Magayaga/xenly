@@ -19,12 +19,12 @@ let variable_name = value
 ```swift
 var number = 42
 let pi = 3.14159
-nota(number)
-nota(pi)
+print(number)
+print(pi)
 ```
 
 2. Strings
 ```swift
 var string = "United States"
-nota(string)
+print(string)
 ```
