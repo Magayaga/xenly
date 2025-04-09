@@ -9,4 +9,4 @@ print("Hello, World!")
 ```
 
 ## Copyright
-Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
+Copyright (c) 2023-2025 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
