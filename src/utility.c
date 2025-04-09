@@ -267,6 +267,7 @@ void execute_var(const char* line) {
         error("Invalid 'var' line");
     }
 
+    // Check if the variable is already declared
     for (int i = 0; i < result_variables; i++) {
         if (strcmp(variables[i].name, name) == 0) {
             error("Variable already declared");
@@ -277,11 +278,34 @@ void execute_var(const char* line) {
         error("Maximum number of variables exceeded");
     }
 
-    const char* value_ptr = value;
-    double evaluated_value = evaluate_arithmetic_expression(&value_ptr);
-    snprintf(variables[result_variables].value.stringValue, sizeof(variables[result_variables].value.stringValue), "%lf", evaluated_value);
+    // Trim whitespace
+    char* trimmed_value = trim(value);
 
-    strcpy(variables[result_variables].name, name);
+    // Determine the type of the value
+    Variable new_variable;
+    strcpy(new_variable.name, name);
+    
+    if (trimmed_value[0] == '"' && trimmed_value[strlen(trimmed_value) - 1] == '"') {
+        // String value
+        new_variable.type = VAR_TYPE_STRING;
+        strncpy(new_variable.value.stringValue, trimmed_value + 1, strlen(trimmed_value) - 2);
+        new_variable.value.stringValue[strlen(trimmed_value) - 2] = '\0';
+    }
+    
+    else if (strchr(trimmed_value, '.') != NULL) {
+        // Floating-point value
+        new_variable.type = VAR_TYPE_FLOAT;
+        new_variable.value.floatValue = atof(trimmed_value);
+    }
+    
+    else {
+        // Integer value
+        new_variable.type = VAR_TYPE_INT;
+        new_variable.value.intValue = atoi(trimmed_value);
+    }
+
+    // Store the new variable
+    variables[result_variables] = new_variable;
     result_variables++;
 }
 
