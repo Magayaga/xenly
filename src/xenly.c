@@ -778,52 +778,63 @@ double evaluate_factor(const char** expression) {
     return result;
 }
 
-// Power
-double evaluate_power(const char** expression) {
-    // Evaluate base factor first
-    double base = evaluate_factor(expression);
+static void skip_whitespace(const char** expr) {
+    while (isspace(**expr)) (*expr)++;
+}
 
-    // Check for '**' operator
-    while (**expression == '*' && *(*expression + 1) == '*') {
-        // Skip the '**' operator
-        (*expression) += 2;
-        
-        // Evaluate exponent recursively
-        double exponent = evaluate_power(expression);
-        base = xenly_pow(base, exponent);
+double evaluate_power(const char** expr) {
+    skip_whitespace(expr);
+    // Parse the base (could be a number, parenthesized expr, or unary +/−)
+    double base = evaluate_factor(expr);
+    skip_whitespace(expr);
+
+    // While we see "**", consume it and parse the exponent (right-assoc)
+    while (**expr == '*' && *(*expr + 1) == '*') {
+        (*expr) += 2;               // skip both '*' characters
+        // Recursively parse the _right_ side of **
+        double exponent = evaluate_power(expr);
+        base = pow(base, exponent);
+        skip_whitespace(expr);
     }
+
     return base;
 }
 
 // Term
-double evaluate_term(const char** expression) {
-    // Evaluate a term (power) in an arithmetic expression
-    double result = evaluate_power(expression);
+double evaluate_term(const char** expr) {
+    skip_whitespace(expr);
+    double result = evaluate_power(expr);
+    skip_whitespace(expr);
 
-    while (**expression == '*' || **expression == '/' || **expression == '%') {
-        char operator = **expression;
-        (*expression)++;
+    for (;;) {
+        if (**expr == '*' && *(*expr + 1) != '*') {
+            // Single '*' → multiplication
+            (*expr)++;
+            double rhs = evaluate_power(expr);
+            result *= rhs;
 
-        double factor = evaluate_power(expression);
-        switch (operator) {
-            case '*':
-                result *= factor;
-                break;
-            
-            case '/':
-                if (factor == 0.0) {
-                    error("Division by zero");
-                }
-                result /= factor;
-                break;
-            
-            case '%':
-                if (factor == 0.0) {
-                    error("Modulo by zero");
-                }
-                result = fmod(result, factor);
-                break;
         }
+        
+        else if (**expr == '/') {
+            (*expr)++;
+            double rhs = evaluate_power(expr);
+            if (rhs == 0.0) error("Division by zero");
+            result /= rhs;
+
+        }
+        
+        else if (**expr == '%') {
+            (*expr)++;
+            double rhs = evaluate_power(expr);
+            if (rhs == 0.0) error("Modulo by zero");
+            result = fmod(result, rhs);
+
+        }
+        
+        else {
+            break;  // no more * / % at this level
+        }
+        skip_whitespace(expr);
     }
     return result;
 }
