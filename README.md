@@ -14,18 +14,11 @@
   </a>
 </p>
 
-**Xenly** (formerly known as **Xenon**) is a **free and open-source** compiled high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in **C**, **Go**, and **Rust** programming languages.
+**Xenly** (formerly known as **Xenon**) is a **free and open-source** high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in **C**, **Go**, and **Rust** programming languages.
 
 Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
 
 ![Introduction to Xenly](assets/xenly_introduction.gif)
-
-## Major implementations
-
-* [**Xenly**](https://github.com/magayaga/xenly) — Xenly can be an interpreter and package manager.
-* [**XVM**](https://github.com/magayaga/xvm) — Xenly can be a virtual machine because the source code is into the bytecode like a class-based programming language.
-* [**Xenlyc**](https://github.com/magayaga/xenlyc) — Xenly can be a compiler and package manager. It is the compiler front end for the Xenly programming language.
-* [**XenlyXI**](https://github.com/magayaga/xenlyxi) — Xenly can be an interpreter.
 
 ## Examples
 ### Hello, World! program
@@ -137,6 +130,7 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 
 ## Copyright
 
-Copyright (c) 2023-2025 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
+Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
