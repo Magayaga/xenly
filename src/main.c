@@ -4,161 +4,178 @@
  *
  * It is initially written in C programming language.
  *
- * It is available for Linux and Windows operating systems.
+ * It is available for Linux and macOS operating systems.
  *
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "error.h"
-#include "print_info.h"
-#include "project.h"
-#include "data_structures.h"
-#include "math_functions.h"
-#include "binary_math_functions.h"
-#include "graphics_functions.h"
-#include "utility.h"
 
-// Main function
-// Main function
-int main(int argc, char* argv[]) {
-    if (argc == 3 && (strcmp(argv[1], "--create-project") == 0)) {
-        // Create initialize project
-        create_initialize_project(argv[2]);
+#include "lexer.h"
+#include "parser.h"
+#include "interpreter.h"
+
+// ─── Read entire file into a heap-allocated string ───────────────────────────
+static char *read_file(const char *path, size_t *out_len) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *buf = (char *)malloc((size_t)size + 1);
+    if (!buf) { fclose(f); return NULL; }
+
+    size_t read = fread(buf, 1, (size_t)size, f);
+    fclose(f);
+    buf[read] = '\0';
+    if (out_len) *out_len = read;
+    return buf;
+}
+
+// ─── Print usage info ────────────────────────────────────────────────────────
+static void print_usage(const char *prog) {
+    printf("\n");
+    printf("  \033[1;36m╔══════════════════════════════════════╗\033[0m\n");
+    printf("  \033[1;36m║   ██╗  ██╗ ███╗   ██╗ ███████╗ ██╗  ║\033[0m\n");
+    printf("  \033[1;36m║   ██║  ██║ ████╗  ██║ ██╔════╝ ██║  ║\033[0m\n");
+    printf("  \033[1;36m║   ███████║ ██╔██╗ ██║ █████╗   ██║  ║\033[0m\n");
+    printf("  \033[1;36m║   ██╔══██║ ██║╚██╗██║ ██╔══╝   ██║  ║\033[0m\n");
+    printf("  \033[1;36m║   ██║  ██║ ██║ ╚████║ ███████╗ ██║  ║\033[0m\n");
+    printf("  \033[1;36m║   ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚══════╝ ╚═╝  ║\033[0m\n");
+    printf("  \033[1;36m╚══════════════════════════════════════╝\033[0m\n");
+    printf("\n");
+    printf("  \033[1;33mUsage:\033[0m  %s <file.xe>\n", prog);
+    printf("  \033[1;33mFlags:\033[0m  --version    Show version\n");
+    printf("          --help       Show this help\n");
+    printf("          --tokens     Dump token stream\n");
+    printf("          --ast        Dump AST tree\n\n");
+    printf("  \033[1;32mExamples:\033[0m\n");
+    printf("          %s main.xe\n", prog);
+    printf("          %s --tokens main.xe\n", prog);
+    printf("          %s --ast main.xe\n\n", prog);
+}
+
+// ─── Dump Token Stream ───────────────────────────────────────────────────────
+static void dump_tokens(const char *source, size_t len) {
+    Lexer *lexer = lexer_create(source, len);
+    printf("\n  \033[1;33m── Token Stream ──────────────────────────\033[0m\n\n");
+    int count = 0;
+    while (1) {
+        Token t = lexer_next_token(lexer);
+        if (t.type == TOKEN_NEWLINE) { token_destroy(&t); continue; }
+        printf("  \033[0;90m%3d\033[0m  \033[1;36m%-12s\033[0m",
+               ++count, token_type_name(t.type));
+        if (t.value && t.type != TOKEN_EOF)
+            printf(" \033[0;33m\"%s\"\033[0m", t.value);
+        printf("  \033[0;90m(line %d)\033[0m\n", t.line);
+        if (t.type == TOKEN_EOF) { token_destroy(&t); break; }
+        token_destroy(&t);
+    }
+    printf("\n");
+    lexer_destroy(lexer);
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+int main(int argc, char **argv) {
+    const char *filename   = NULL;
+    int        dump_tok    = 0;
+    int        dump_ast    = 0;
+
+    // ── Parse CLI args ─────────────────────────────────────────────────────
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        }
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
+            printf("\n  \033[1;36mXenly\033[0m v0.1.0  (\033[0;90mbuilt with C\033[0m)\n\n");
+            return 0;
+        }
+        if (strcmp(argv[i], "--tokens") == 0) { dump_tok = 1; continue; }
+        if (strcmp(argv[i], "--ast")    == 0) { dump_ast = 1; continue; }
+        if (argv[i][0] != '-') { filename = argv[i]; continue; }
+
+        fprintf(stderr, "\033[1;31m[Xenly] Unknown flag: %s\033[0m\n", argv[i]);
+        return 1;
     }
 
-    if (argc != 2) {
-        error("Usage: xenly [input file]");
-    }
-
-    else if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0)) {
-        print_version();
+    if (!filename) {
+        print_usage(argv[0]);
         return 0;
     }
 
-    else if (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
-        print_help();
+    // ── Read source file ───────────────────────────────────────────────────
+    size_t src_len = 0;
+    char  *source  = read_file(filename, &src_len);
+    if (!source) {
+        fprintf(stderr, "\033[1;31m[Xenly Error] Cannot open file '%s'.\033[0m\n", filename);
+        return 1;
+    }
+
+    // ── Token dump mode ────────────────────────────────────────────────────
+    if (dump_tok) {
+        dump_tokens(source, src_len);
+        free(source);
         return 0;
     }
 
-    else if (argc == 2 && (strcmp(argv[1], "--operatingsystem" ) == 0 || strcmp(argv[1], "-os") == 0)) {
-        print_operatingsystem();
+    // ── Lex ────────────────────────────────────────────────────────────────
+    Lexer *lexer = lexer_create(source, src_len);
+
+    // ── Parse ──────────────────────────────────────────────────────────────
+    Parser *parser = parser_create(lexer);
+    ASTNode *program = parser_parse(parser);
+
+    if (parser->had_error) {
+        ast_node_destroy(program);
+        parser_destroy(parser);
+        lexer_destroy(lexer);
+        free(source);
+        return 1;
+    }
+
+    // ── AST dump mode ──────────────────────────────────────────────────────
+    if (dump_ast) {
+        printf("\n  \033[1;33m── AST ───────────────────────────────────\033[0m\n\n");
+        ast_print(program, 2);
+        printf("\n");
+        ast_node_destroy(program);
+        parser_destroy(parser);
+        lexer_destroy(lexer);
+        free(source);
         return 0;
     }
 
-    else if (argc == 2 && (strcmp(argv[1], "--dumpmachine") == 0 || strcmp(argv[1], "-dm") == 0)) {
-        print_dumpmachines();
-        return 0;
-    }
+    // ── Interpret ──────────────────────────────────────────────────────────
+    Interpreter *interp = interpreter_create();
 
-    else if (argc == 2 && (strcmp(argv[1], "--dumpversion") == 0 || strcmp(argv[1], "-dv") == 0)) {
-        print_dumpversion();
-        return 0;
-    }
-
-    else if (argc == 2 && (strcmp(argv[1], "--new-project") == 0)) {
-        initialize_project();
-        return 0;
-    }
-
-    else if (strcmp(argv[1], "--author") == 0) {
-        print_author();
-        return 0;
-    }
-
-    FILE* input_file = fopen(argv[1], "r");
-    if (input_file == NULL) {
-        error("Unable to open input file");
-    }
-
-    char line[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
-    while (fgets(line, sizeof(line), input_file)) {
-        line[strcspn(line, "\n")] = '\0';
-
-        if (strncmp(line, "import ", 7) == 0) {
-            char module_name[MAX_TOKEN_SIZE];
-            sscanf(line + 7, "%s", module_name);
-
-            // import math
-            if (strcmp(module_name, "math") == 0) {
-                load_math_module("math");
-            }
-            
-            // import binary_math
-            else if (strcmp(module_name, "binary_math") == 0) {
-                load_binary_math_module("binary_math");
-            }
-
-            // import 2d_graphics
-            else if (strcmp(module_name, "2d_graphics") == 0) {
-                load_2d_graphics_module("2d_graphics");
-            }
-            
-            else {
-                fprintf(stderr, "Error: Unknown module '%s'\n", module_name);
-            }
-        }
-
-        else if (strncmp(line, "print(", 6) == 0 && line[strlen(line) - 1] == ')') {
-            char argument[MAX_TOKEN_SIZE]; // Increased size to match the constant MAX_TOKEN_SIZE
-            strncpy(argument, line + 6, strlen(line) - 7);
-            argument[strlen(line) - 7] = '\0';
-
-            execute_print(argument);
-        }
-
-        else if (strchr(line, '(') && strchr(line, ')')) {
-            execute_math_function(line);
-        }
-
-        else if (strncmp(line, "var", 3) == 0) {
-            execute_var(line);
-        }
-
-        else if (strncmp(line, "bool", 4) == 0) {
-            char name[MAX_TOKEN_SIZE];
-            char value[MAX_TOKEN_SIZE];
-            if (sscanf(line, "bool %s = %s", name, value) == 2) {
-                add_variable(name, VAR_TYPE_BOOL, value);
-            } else {
-                error("Invalid boolean variable declaration");
-            }
-        }
-
-        else if (strncmp(line, "//", 2) == 0) {
-            continue;
-        }
-
-        else if (multiline_comment == 0) {
-            // Check if the line starts with "/*"
-            if (strncmp(line, "/*", 2) == 0) {
-                multiline_comment = 0;
-                // If the line contains both "/*" and "*/" on the same line
-                if (strstr(line, "*/") != NULL) {
-                    multiline_comment = 0;
-                }
-                
-                continue;
-            }
-        }
-
-        else if (multiline_comment == 1) {
-            // Check if the line contains "*/"
-            if (strstr(line, "*/") != NULL) {
-                multiline_comment = 0;
-                continue;
-            }
-            
-            else {
-                continue;
-            }
-        }
-
-        else {
-            error("Invalid statement");
+    // Set source directory for relative module imports
+    {
+        const char *slash = strrchr(filename, '/');
+        if (slash) {
+            size_t dlen = (size_t)(slash - filename);
+            char *dir = (char *)malloc(dlen + 1);
+            strncpy(dir, filename, dlen);
+            dir[dlen] = '\0';
+            interpreter_set_source_dir(interp, dir);
+            free(dir);
+        } else {
+            interpreter_set_source_dir(interp, ".");
         }
     }
 
-    fclose(input_file);
-    return 0;
+    Value *result = interpreter_run(interp, program);
+
+    // ── Cleanup ────────────────────────────────────────────────────────────
+    int exit_code = interp->had_error ? 1 : 0;
+    value_destroy(result);
+    interpreter_destroy(interp);
+    ast_node_destroy(program);
+    parser_destroy(parser);
+    lexer_destroy(lexer);
+    free(source);
+
+    return exit_code;
 }

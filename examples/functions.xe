@@ -1,0 +1,65 @@
+# ─── Functions Demo ──────────────────────────────────────
+# fn keyword declares a function.
+# Functions can return values with 'return'.
+
+# ── Simple function ────────────────────────────────────────
+fn greet(name) {
+    print("Hello,", name + "!")
+}
+
+greet("Alice")
+greet("Bob")
+
+# ── Function with return value ─────────────────────────────
+fn add(a, b) {
+    return a + b
+}
+
+var result = add(10, 20)
+print("10 + 20 =", result)
+
+# ── Recursive function: factorial ──────────────────────────
+fn factorial(n) {
+    if (n <= 1) {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("5! =", factorial(5))
+print("10! =", factorial(10))
+
+# ── Recursive function: fibonacci ──────────────────────────
+fn fib(n) {
+    if (n <= 0) {
+        return 0
+    }
+    if (n == 1) {
+        return 1
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+print("fib(10) =", fib(10))
+
+# ── Function returning a computed value ────────────────────
+fn is_even(n) {
+    if (n % 2 == 0) {
+        return true
+    }
+    return false
+}
+
+print("4 is even?", is_even(4))
+print("7 is even?", is_even(7))
+
+# ── Nested function calls ──────────────────────────────────
+fn square(x) {
+    return x * x
+}
+
+fn sum_of_squares(a, b) {
+    return square(a) + square(b)
+}
+
+print("sum_of_squares(3, 4) =", sum_of_squares(3, 4))

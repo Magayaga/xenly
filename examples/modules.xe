@@ -1,0 +1,52 @@
+# ─── Modules Demo ────────────────────────────────────────
+# 'import' loads a standard library module.
+# Call functions with: module.function(args)
+
+# ── Math Module ────────────────────────────────────────────
+import "math"
+
+print("=== Math Module ===")
+print("abs(-42)    =", math.abs(-42))
+print("sqrt(144)   =", math.sqrt(144))
+print("pow(2, 10)  =", math.pow(2, 10))
+print("floor(3.7)  =", math.floor(3.7))
+print("ceil(3.2)   =", math.ceil(3.2))
+print("round(3.5)  =", math.round(3.5))
+print("max(10, 25) =", math.max(10, 25))
+print("min(10, 25) =", math.min(10, 25))
+print("sin(0)      =", math.sin(0))
+print("cos(0)      =", math.cos(0))
+print("log(1)      =", math.log(1))
+print("random()    =", math.random())
+
+# ── String Module ──────────────────────────────────────────
+import "string"
+
+print("")
+print("=== String Module ===")
+
+var s = "  Hello, Xenly World!  "
+print("original  :", s)
+print("trim      :", string.trim(s))
+print("upper     :", string.upper(s))
+print("lower     :", string.lower(s))
+print("len       :", string.len(s))
+
+var word = "Xenly"
+print("reverse   :", string.reverse(word))
+print("repeat x3 :", string.repeat(word, 3))
+print("contains  :", string.contains("Hello Xenly", "Xenly"))
+
+var sentence = "The quick brown fox"
+print("replace   :", string.replace(sentence, "quick", "slow"))
+print("substr    :", string.substr(sentence, 4, 5))
+
+# ── IO Module ──────────────────────────────────────────────
+import "io"
+
+print("")
+print("=== IO Module ===")
+io.write("io.write does ")
+io.write("not add a newline.")
+io.writeln("")
+io.writeln("io.writeln", "adds", "a newline!")

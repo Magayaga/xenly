@@ -12,16 +12,11 @@ def compile_with_compiler(compiler):
     # Define the source files and output file for xenly executable
     source_files = [
         "src/main.c",
-        "src/binary_math_functions.c",
-        "src/color.c",
-        "src/data_structures.c",
-        "src/error.c",
-        "src/graphics_functions.c",
-        "src/math_functions.c",
-        "src/print_info.c",
-        "src/project.c",
-        "src/utility.c",
-        "src/variables.c"
+        "src/ast.c",
+        "src/interpreter.c",
+        "src/lexer.c",
+        "src/modules.c",
+        "src/parser.c"
     ]
     output_file = "xenly"
     
@@ -62,28 +57,6 @@ def compile_math_library(compiler):
     else:
         print(f"Compilation of {output_file} failed with error code {compile_status} using {compiler}")
 
-def compile_binary_math_library(compiler):
-    # Define the source file and output file for binary math library
-    source_file = "src/libm/binary_math/xenly_binary_math.c"
-    if platform.system() == "Windows":
-        output_file = "binary_math.dll"
-        compile_command = f"{compiler} {source_file} -shared -o {output_file} -lm"
-    elif platform.system() == "Linux":
-        output_file = "binary_math.so"
-        compile_command = f"{compiler} {source_file} -shared -o {output_file} -fPIC -lm"
-    else:
-        print("Unsupported platform")
-        return
-
-    # Execute compilation command for binary math library
-    compile_status = os.system(compile_command)
-    
-    # Check if compilation was successful
-    if compile_status == 0:
-        print(f"Compilation of {output_file} successful using {compiler}")
-    else:
-        print(f"Compilation of {output_file} failed with error code {compile_status} using {compiler}")
-
 def run_tests_or_program():
     # Here you can define how to test your program or simply execute it
     # For demonstration purposes, let's assume running the compiled program
@@ -103,12 +76,6 @@ def main():
 
     # Compile xenly program
     compile_with_compiler(compiler)
-
-    # Compile math library
-    compile_math_library(compiler)
-
-    # Compile binary math library
-    compile_binary_math_library(compiler)
 
     # After successful compilation, run tests or execute the program
     run_tests_or_program()

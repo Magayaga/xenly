@@ -1,0 +1,27 @@
+# mathutils — exported math helpers
+
+export fn clamp(val, lo, hi) {
+    if (val < lo) { return lo }
+    if (val > hi) { return hi }
+    return val
+}
+
+export fn lerp(a, b, t) {
+    return a + (b - a) * t
+}
+
+export fn sign(n) {
+    if (n > 0) { return 1 }
+    if (n < 0) { return -1 }
+    return 0
+}
+
+# Internal helper — NOT exported
+fn _square(x) { return x * x }
+
+export fn distance(x1, y1, x2, y2) {
+    import "math"
+    var dx = x2 - x1
+    var dy = y2 - y1
+    return math.sqrt(_square(dx) + _square(dy))
+}

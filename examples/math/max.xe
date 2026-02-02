@@ -1,4 +1,0 @@
-import math
-
-// The max(x,y) function can be used to find the highest value of x and y:
-xenly_max(9, 3, 10, 13, 4)

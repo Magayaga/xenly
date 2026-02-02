@@ -1,4 +1,0 @@
-// Gammma function
-print(gamma(4/3))
-print(gamma(3))
-print(gamma(4))

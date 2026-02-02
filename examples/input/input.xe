@@ -1,7 +1,0 @@
-/*
-   Xenly programming language
-   Copyright 2024 Cyril John Magayaga
-
-   input - the program pauses to ask the user for input
-*/
-input("How are you? ")

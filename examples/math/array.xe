@@ -1,2 +1,0 @@
-int numbers[] = {4, 5, 9, 13, 22}
-print(numbers[0]);

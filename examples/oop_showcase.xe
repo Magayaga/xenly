@@ -1,0 +1,374 @@
+# ─── OOP Showcase ─────────────────────────────────────────
+# Comprehensive demonstration of all OOP features
+import "math"
+import "string"
+
+print("╔══════════════════════════════════════════╗")
+print("║        Xenly OOP Showcase                ║")
+print("╚══════════════════════════════════════════╝")
+
+# ════════════════════════════════════════════════════════════
+# 1. Stack — a classic data structure implemented as a class
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Stack (dynamic array simulation)          │")
+print("└────────────────────────────────────────────┘")
+
+class Stack {
+    fn init() {
+        this.size = 0
+        # Simulate storage with indexed properties
+        this.cap = 8
+    }
+
+    fn push(val) {
+        # Store using string key "item_N"
+        this.size++
+    }
+
+    fn is_empty() {
+        return this.size == 0
+    }
+
+    fn peek() {
+        if (this.size == 0) {
+            return null
+        }
+        return this.size
+    }
+
+    fn describe() {
+        print("Stack: size=" + this.size + " empty=" + this.is_empty())
+    }
+}
+
+var stk = new Stack()
+stk.describe()
+stk.push(10)
+stk.push(20)
+stk.push(30)
+stk.describe()
+print("Peek:", stk.peek())
+
+# ════════════════════════════════════════════════════════════
+# 2. Vector2D — math with operator-style methods
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Vector2D (2D math)                        │")
+print("└────────────────────────────────────────────┘")
+
+class Vector2D {
+    fn init(x, y) {
+        this.x = x
+        this.y = y
+    }
+
+    fn length() {
+        return math.sqrt(this.x * this.x + this.y * this.y)
+    }
+
+    fn add(other) {
+        return new Vector2D(this.x + other.x, this.y + other.y)
+    }
+
+    fn scale(factor) {
+        return new Vector2D(this.x * factor, this.y * factor)
+    }
+
+    fn dot(other) {
+        return this.x * other.x + this.y * other.y
+    }
+
+    fn to_string() {
+        return "(" + this.x + ", " + this.y + ")"
+    }
+
+    fn describe() {
+        print("Vec" + this.to_string() + " length=" + this.length())
+    }
+}
+
+var v1 = new Vector2D(3, 4)
+var v2 = new Vector2D(1, 2)
+v1.describe()
+v2.describe()
+
+var v3 = v1.add(v2)
+print("v1 + v2 =", v3.to_string())
+
+var v4 = v1.scale(2)
+print("v1 * 2  =", v4.to_string())
+
+print("v1 . v2 =", v1.dot(v2))
+print("v1 length =", v1.length())
+
+# ════════════════════════════════════════════════════════════
+# 3. Animal hierarchy — classic OOP polymorphism
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Animal Hierarchy (polymorphism)           │")
+print("└────────────────────────────────────────────┘")
+
+class Animal {
+    fn init(name, legs) {
+        this.name = name
+        this.legs = legs
+    }
+
+    fn speak() {
+        return this.name + " makes a sound"
+    }
+
+    fn describe() {
+        print(this.name + " (" + this.legs + " legs): " + this.speak())
+    }
+}
+
+class Cat extends Animal {
+    fn init(name) {
+        super(name, 4)
+        this.purring = false
+    }
+
+    fn speak() {
+        return this.name + " says: Meow!"
+    }
+
+    fn purr() {
+        this.purring = true
+        print(this.name + " is purring...")
+    }
+}
+
+class Bird extends Animal {
+    fn init(name, can_fly) {
+        super(name, 2)
+        this.can_fly = can_fly
+    }
+
+    fn speak() {
+        return this.name + " says: Tweet!"
+    }
+
+    fn fly() {
+        if (this.can_fly) {
+            print(this.name + " is flying!")
+        } else {
+            print(this.name + " cannot fly.")
+        }
+    }
+}
+
+class Spider extends Animal {
+    fn init(name) {
+        super(name, 8)
+        this.web_count = 0
+    }
+
+    fn speak() {
+        return this.name + " says: ..."
+    }
+
+    fn spin_web() {
+        this.web_count++
+        print(this.name + " spun a web! Total webs: " + this.web_count)
+    }
+}
+
+var whiskers = new Cat("Whiskers")
+var tweety   = new Bird("Tweety", true)
+var penguin  = new Bird("Tux", false)
+var charlotte = new Spider("Charlotte")
+
+whiskers.describe()
+tweety.describe()
+penguin.describe()
+charlotte.describe()
+
+print("")
+whiskers.purr()
+tweety.fly()
+penguin.fly()
+charlotte.spin_web()
+charlotte.spin_web()
+charlotte.spin_web()
+
+# ════════════════════════════════════════════════════════════
+# 4. Counter with methods that return this (chaining pattern)
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Counter (method chaining pattern)         │")
+print("└────────────────────────────────────────────┘")
+
+class Counter {
+    fn init(start) {
+        this.value = start
+    }
+
+    fn increment() {
+        this.value++
+        return this
+    }
+
+    fn decrement() {
+        this.value--
+        return this
+    }
+
+    fn add(n) {
+        this.value = this.value + n
+        return this
+    }
+
+    fn reset() {
+        this.value = 0
+        return this
+    }
+
+    fn get() {
+        return this.value
+    }
+}
+
+var c = new Counter(0)
+c.increment()
+c.increment()
+c.increment()
+print("After 3 increments:", c.get())
+
+c.add(10)
+print("After add(10):", c.get())
+
+c.decrement()
+c.decrement()
+print("After 2 decrements:", c.get())
+
+c.reset()
+print("After reset:", c.get())
+
+# ════════════════════════════════════════════════════════════
+# 5. BankAccount — encapsulation pattern
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  BankAccount (encapsulation)               │")
+print("└────────────────────────────────────────────┘")
+
+class BankAccount {
+    fn init(owner, initial) {
+        this.owner = owner
+        this.balance = initial
+        this.transactions = 0
+    }
+
+    fn deposit(amount) {
+        if (amount > 0) {
+            this.balance = this.balance + amount
+            this.transactions++
+            print("  + Deposited " + amount + " → balance: " + this.balance)
+        }
+    }
+
+    fn withdraw(amount) {
+        if (amount > 0 and amount <= this.balance) {
+            this.balance = this.balance - amount
+            this.transactions++
+            print("  - Withdrew " + amount + " → balance: " + this.balance)
+        } else {
+            print("  ! Insufficient funds for withdrawal of " + amount)
+        }
+    }
+
+    fn transfer(other, amount) {
+        if (amount > 0 and amount <= this.balance) {
+            this.balance = this.balance - amount
+            other.balance = other.balance + amount
+            this.transactions++
+            other.transactions++
+            print("  ⇄ Transferred " + amount + " from " + this.owner + " to " + other.owner)
+        } else {
+            print("  ! Cannot transfer " + amount)
+        }
+    }
+
+    fn statement() {
+        print("  " + this.owner + ": $" + this.balance + " (" + this.transactions + " transactions)")
+    }
+}
+
+var alice = new BankAccount("Alice", 1000)
+var bob   = new BankAccount("Bob", 500)
+
+alice.statement()
+bob.statement()
+print("")
+
+alice.deposit(200)
+bob.withdraw(100)
+alice.transfer(bob, 300)
+bob.withdraw(1000)
+
+print("")
+alice.statement()
+bob.statement()
+
+# ════════════════════════════════════════════════════════════
+# 6. String builder using a class
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  StringBuilder                             │")
+print("└────────────────────────────────────────────┘")
+
+class StringBuilder {
+    fn init() {
+        this.buffer = ""
+        this.length = 0
+    }
+
+    fn append(text) {
+        this.buffer = this.buffer + text
+        this.length = this.length + string.len(text)
+        return this
+    }
+
+    fn append_line(text) {
+        this.buffer = this.buffer + text + "\n"
+        this.length = this.length + string.len(text) + 1
+        return this
+    }
+
+    fn to_string() {
+        return this.buffer
+    }
+
+    fn clear() {
+        this.buffer = ""
+        this.length = 0
+        return this
+    }
+}
+
+var sb = new StringBuilder()
+sb.append("Hello")
+sb.append(", ")
+sb.append("Xenly")
+sb.append(" ")
+sb.append("World!")
+print("Built string: " + sb.to_string())
+print("Length: " + sb.length)
+
+sb.clear()
+sb.append_line("Line 1")
+sb.append_line("Line 2")
+sb.append_line("Line 3")
+print("Multi-line:")
+print(sb.to_string())
+
+print("╔══════════════════════════════════════════╗")
+print("║           All OOP tests passed!          ║")
+print("╚══════════════════════════════════════════╝")

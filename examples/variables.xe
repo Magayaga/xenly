@@ -1,0 +1,44 @@
+# ─── Variables Demo ──────────────────────────────────────
+# var declares a variable. Types are dynamic.
+
+var name = "Xenly"
+var version = 0.1
+var is_cool = true
+var nothing = null
+
+print("Language:", name)
+print("Version:", version)
+print("Cool?", is_cool)
+print("Nothing:", nothing)
+
+# ── Reassignment ──────────────────────────────────────────
+name = "Xenly Lang"
+print("Updated name:", name)
+
+# ── String concatenation with + ──────────────────────────
+var greeting = "Hello, " + name + "!"
+print(greeting)
+
+# ── Arithmetic ────────────────────────────────────────────
+var x = 10
+var y = 3
+print("x + y =", x + y)
+print("x - y =", x - y)
+print("x * y =", x * y)
+print("x / y =", x / y)
+print("x % y =", x % y)
+
+# ── Compound assignment ──────────────────────────────────
+x += 5
+print("x after += 5:", x)
+x -= 3
+print("x after -= 3:", x)
+x *= 2
+print("x after *= 2:", x)
+
+# ── Increment / Decrement ────────────────────────────────
+x++
+print("x after ++:", x)
+x--
+x--
+print("x after -- twice:", x)

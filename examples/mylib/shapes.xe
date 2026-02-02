@@ -1,0 +1,40 @@
+# shapes — exported shape classes
+
+export class Vec2 {
+    fn init(x, y) {
+        this.x = x
+        this.y = y
+    }
+    fn to_string() {
+        return "(" + this.x + ", " + this.y + ")"
+    }
+    fn add(other) {
+        return new Vec2(this.x + other.x, this.y + other.y)
+    }
+    fn length() {
+        import "math"
+        return math.sqrt(this.x * this.x + this.y * this.y)
+    }
+}
+
+export class Rect {
+    fn init(x, y, w, h) {
+        this.x = x
+        this.y = y
+        this.w = w
+        this.h = h
+    }
+    fn area() {
+        return this.w * this.h
+    }
+    fn contains(px, py) {
+        if (px < this.x) { return false }
+        if (px > this.x + this.w) { return false }
+        if (py < this.y) { return false }
+        if (py > this.y + this.h) { return false }
+        return true
+    }
+    fn to_string() {
+        return "Rect(" + this.x + "," + this.y + " " + this.w + "x" + this.h + ")"
+    }
+}

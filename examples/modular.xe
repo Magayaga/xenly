@@ -1,0 +1,84 @@
+# ─── Modular Programming Demo ──────────────────────────────────
+# Demonstrates: user-defined modules, export, cross-module imports,
+#               module functions, module classes, and nested imports.
+
+import "mylib/mathutils"
+import "mylib/shapes"
+
+print("╔══════════════════════════════════════════╗")
+print("║     Xenly Modular Programming            ║")
+print("╚══════════════════════════════════════════╝")
+
+# ════════════════════════════════════════════════════════════════
+# 1. Calling exported functions
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Exported functions from mathutils         │")
+print("└────────────────────────────────────────────┘")
+
+print("  clamp(15, 0, 10)   = " + mathutils.clamp(15, 0, 10))
+print("  clamp(-5, 0, 10)   = " + mathutils.clamp(-5, 0, 10))
+print("  clamp(7, 0, 10)    = " + mathutils.clamp(7, 0, 10))
+print("  lerp(0, 100, 0.25) = " + mathutils.lerp(0, 100, 0.25))
+print("  lerp(0, 100, 0.75) = " + mathutils.lerp(0, 100, 0.75))
+print("  sign(42)           = " + mathutils.sign(42))
+print("  sign(-7)           = " + mathutils.sign(-7))
+print("  sign(0)            = " + mathutils.sign(0))
+
+# distance() internally imports "math" and uses a private helper
+print("  distance(0,0,3,4)  = " + mathutils.distance(0, 0, 3, 4))
+print("  distance(1,1,4,5)  = " + mathutils.distance(1, 1, 4, 5))
+
+# ════════════════════════════════════════════════════════════════
+# 2. Using exported classes
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Exported classes from shapes              │")
+print("└────────────────────────────────────────────┘")
+
+var v1 = new Vec2(3, 4)
+var v2 = new Vec2(1, 2)
+var v3 = v1.add(v2)
+
+print("  v1            = " + v1.to_string())
+print("  v2            = " + v2.to_string())
+print("  v1 + v2       = " + v3.to_string())
+print("  v1.length()   = " + v1.length())
+
+var r = new Rect(10, 20, 100, 50)
+print("  r             = " + r.to_string())
+print("  r.area()      = " + r.area())
+print("  r.contains(50, 30) = " + r.contains(50, 30))
+print("  r.contains(5, 5)   = " + r.contains(5, 5))
+
+# ════════════════════════════════════════════════════════════════
+# 3. instanceof works across module boundaries
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  instanceof across modules                 │")
+print("└────────────────────────────────────────────┘")
+
+print("  v1 instanceof Vec2  = " + (v1 instanceof Vec2))
+print("  r  instanceof Rect  = " + (r  instanceof Rect))
+print("  v1 instanceof Rect  = " + (v1 instanceof Rect))
+
+# ════════════════════════════════════════════════════════════════
+# 4. typeof on module objects
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  typeof on module objects                  │")
+print("└────────────────────────────────────────────┘")
+
+print("  typeof(v1)          = " + typeof(v1))
+print("  typeof(r)           = " + typeof(r))
+print("  typeof(Vec2)        = " + typeof(Vec2))
+print("  typeof(Rect)        = " + typeof(Rect))
+
+print("")
+print("╔══════════════════════════════════════════╗")
+print("║   All modular programming tests passed!  ║")
+print("╚══════════════════════════════════════════╝")

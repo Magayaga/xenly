@@ -1,0 +1,93 @@
+# ═══════════════════════════════════════════════════════════════
+#  Xenly — Imperative Programming Features
+# ═══════════════════════════════════════════════════════════════
+# This example demonstrates imperative programming patterns.
+# NOTE: Some features shown here are aspirational (future roadmap)
+
+print("╔══════════════════════════════════════════╗")
+print("║   Imperative Programming in Xenly        ║")
+print("╚══════════════════════════════════════════╝")
+
+# ═══════════════════════════════════════════════════════════════
+# Current: While loops (working)
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  While loops (current)                     │")
+print("└────────────────────────────────────────────┘")
+
+var i = 0
+while (i < 5) {
+    print("  i =", i)
+    i = i + 1
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Future: For loops
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  For loops (future)                        │")
+print("└────────────────────────────────────────────┘")
+print("  Syntax: for (var i = 0; i < 10; i++) { ... }")
+print("  Would provide: init, condition, increment in one line")
+
+# ═══════════════════════════════════════════════════════════════
+# Future: Break and continue
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Break/continue (future)                   │")
+print("└────────────────────────────────────────────┘")
+print("  break    — exit loop early")
+print("  continue — skip to next iteration")
+
+# ═══════════════════════════════════════════════════════════════
+# Current workaround for break
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("Current workaround (find first > 10):")
+var j = 0
+var found = false
+while (j < 20 and not found) {
+    if (j * j > 10) {
+        found = true
+    } else {
+        j = j + 1
+    }
+}
+print("  Found:", j)
+
+# ═══════════════════════════════════════════════════════════════
+# Current: Conditional state modification (working)
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  State modification (current)              │")
+print("└────────────────────────────────────────────┘")
+
+var sum = 0
+var k = 1
+while (k <= 10) {
+    sum = sum + k
+    k = k + 1
+}
+print("  Sum 1..10 =", sum)
+
+# ═══════════════════════════════════════════════════════════════
+# Current: Compound assignments (working)
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Compound assignment (current)             │")
+print("└────────────────────────────────────────────┘")
+
+var x = 10
+x = x + 5   # Future: x += 5
+x = x * 2   # Future: x *= 2
+print("  x =", x)
+
+print("")
+print("╔══════════════════════════════════════════╗")
+print("║   Imperative patterns working in Xenly   ║")
+print("╚══════════════════════════════════════════╝")

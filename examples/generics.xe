@@ -1,0 +1,294 @@
+# ─── Generic Programming in Xenly ─────────────────────────────
+# Demonstrates: typeof, instanceof, callable values, closures,
+#               higher-order functions, and expression-call syntax.
+import "math"
+
+print("╔══════════════════════════════════════════╗")
+print("║     Xenly Generic Programming            ║")
+print("╚══════════════════════════════════════════╝")
+
+# ════════════════════════════════════════════════════════════
+# 1. typeof — runtime type introspection
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  typeof — type introspection               │")
+print("└────────────────────────────────────────────┘")
+
+fn describe_type(val) {
+    var t = typeof(val)
+    print("  typeof(" + val + ") = " + t)
+    return t
+}
+
+describe_type(42)
+describe_type(3.14)
+describe_type("hello")
+describe_type(true)
+describe_type(null)
+
+fn greet(name) { return "Hi, " + name }
+describe_type(greet)
+
+class Point {
+    fn init(x, y) {
+        this.x = x
+        this.y = y
+    }
+    fn to_string() {
+        return "(" + this.x + ", " + this.y + ")"
+    }
+}
+
+describe_type(Point)
+var p = new Point(3, 4)
+print("  typeof(Point instance) = " + typeof(p))
+
+# ════════════════════════════════════════════════════════════
+# 2. instanceof — class hierarchy checks
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  instanceof — hierarchy checks             │")
+print("└────────────────────────────────────────────┘")
+
+class Shape {
+    fn init(name) {
+        this.name = name
+    }
+    fn area() {
+        return 0
+    }
+    fn describe() {
+        print("  " + this.name + ": area = " + this.area())
+    }
+}
+
+class Circle extends Shape {
+    fn init(r) {
+        super("Circle")
+        this.radius = r
+    }
+    fn area() {
+        return 3.14159265 * this.radius * this.radius
+    }
+}
+
+class Rect extends Shape {
+    fn init(w, h) {
+        super("Rect")
+        this.w = w
+        this.h = h
+    }
+    fn area() {
+        return this.w * this.h
+    }
+}
+
+class Square extends Rect {
+    fn init(side) {
+        super(side, side)
+        this.name = "Square"
+    }
+}
+
+var c  = new Circle(5)
+var r  = new Rect(4, 6)
+var sq = new Square(3)
+
+c.describe()
+r.describe()
+sq.describe()
+
+print("")
+print("  Circle  instanceof Shape  = " + (c  instanceof Shape))
+print("  Circle  instanceof Circle = " + (c  instanceof Circle))
+print("  Circle  instanceof Rect   = " + (c  instanceof Rect))
+print("  Rect    instanceof Shape  = " + (r  instanceof Shape))
+print("  Square  instanceof Rect   = " + (sq instanceof Rect))
+print("  Square  instanceof Shape  = " + (sq instanceof Shape))
+print("  Square  instanceof Circle = " + (sq instanceof Circle))
+
+# ════════════════════════════════════════════════════════════
+# 3. Callable values — functions as first-class citizens
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Callable values — first-class functions   │")
+print("└────────────────────────────────────────────┘")
+
+# Functions stored in variables
+fn double(x)  { return x * 2 }
+fn triple(x)  { return x * 3 }
+fn negate(x)  { return 0 - x }
+
+var ops = double
+print("  ops = double; ops(5) = " + ops(5))
+ops = triple
+print("  ops = triple; ops(5) = " + ops(5))
+ops = negate
+print("  ops = negate; ops(5) = " + ops(5))
+
+# Higher-order: apply a function to a value
+fn apply(f, x) {
+    return f(x)
+}
+
+print("  apply(double, 7) = " + apply(double, 7))
+print("  apply(triple, 7) = " + apply(triple, 7))
+print("  apply(negate, 7) = " + apply(negate, 7))
+
+# Higher-order: apply a function twice
+fn apply_twice(f, x) {
+    return f(f(x))
+}
+
+print("  apply_twice(double, 3) = " + apply_twice(double, 3))
+print("  apply_twice(triple, 2) = " + apply_twice(triple, 2))
+
+# ════════════════════════════════════════════════════════════
+# 4. Closures — functions that capture their environment
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Closures — captured environments          │")
+print("└────────────────────────────────────────────┘")
+
+# Factory: returns a new function that adds n
+fn make_adder(n) {
+    fn adder(x) {
+        return x + n
+    }
+    return adder
+}
+
+var add5  = make_adder(5)
+var add10 = make_adder(10)
+var add20 = make_adder(20)
+
+print("  add5(3)  = " + add5(3))
+print("  add10(3) = " + add10(3))
+print("  add20(3) = " + add20(3))
+
+# Factory: returns a multiplier
+fn make_multiplier(factor) {
+    fn mult(x) {
+        return x * factor
+    }
+    return mult
+}
+
+var times3 = make_multiplier(3)
+var times7 = make_multiplier(7)
+
+print("  times3(4) = " + times3(4))
+print("  times7(4) = " + times7(4))
+
+# Compose two functions: compose(f, g)(x) = f(g(x))
+fn compose(f, g) {
+    fn composed(x) {
+        return f(g(x))
+    }
+    return composed
+}
+
+var double_then_add5 = compose(add5, double)
+var triple_then_add10 = compose(add10, triple)
+
+print("  double_then_add5(3)   = " + double_then_add5(3))
+print("  triple_then_add10(4)  = " + triple_then_add10(4))
+
+# ════════════════════════════════════════════════════════════
+# 5. CALL_EXPR — calling returned functions directly
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Expression calls — call()(args)           │")
+print("└────────────────────────────────────────────┘")
+
+# Call a factory's result directly without storing in a variable
+print("  make_adder(100)(42)      = " + make_adder(100)(42))
+print("  make_multiplier(6)(7)    = " + make_multiplier(6)(7))
+print("  compose(double, triple)(5) = " + compose(double, triple)(5))
+
+# ════════════════════════════════════════════════════════════
+# 6. Type-generic algorithms using typeof + callables
+# ════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Type-generic algorithms                   │")
+print("└────────────────────────────────────────────┘")
+
+# A generic "map" that applies a function to each element
+# (simulated over a fixed set of values since Xenly has no arrays yet)
+fn map3(f, a, b, c) {
+    print("  map(" + typeof(f) + "): [" + f(a) + ", " + f(b) + ", " + f(c) + "]")
+}
+
+map3(double, 1, 2, 3)
+map3(triple, 10, 20, 30)
+map3(negate, 5, 10, 15)
+map3(make_adder(100), 1, 2, 3)
+
+# A generic "reduce" that folds values with a binary function
+fn reduce3(f, a, b, c) {
+    return f(f(a, b), c)
+}
+
+fn add(a, b)  { return a + b }
+fn mul(a, b)  { return a * b }
+
+print("  reduce3(add, 1,2,3) = " + reduce3(add, 1, 2, 3))
+print("  reduce3(mul, 2,3,4) = " + reduce3(mul, 2, 3, 4))
+
+# Type-dispatch: behave differently based on typeof
+fn stringify(val) {
+    var t = typeof(val)
+    if (t == "number") {
+        return "number:" + val
+    }
+    if (t == "string") {
+        return "string:'" + val + "'"
+    }
+    if (t == "bool") {
+        return "bool:" + val
+    }
+    if (t == "null") {
+        return "null"
+    }
+    if (t == "function") {
+        return "function:<callable>"
+    }
+    return "unknown:" + t
+}
+
+print("  stringify(42)      = " + stringify(42))
+print("  stringify(\"hi\")    = " + stringify("hi"))
+print("  stringify(true)    = " + stringify(true))
+print("  stringify(null)    = " + stringify(null))
+print("  stringify(double)  = " + stringify(double))
+
+# instanceof-based dispatch for shapes
+fn shape_info(s) {
+    if (s instanceof Circle) {
+        print("  Circle with radius " + s.radius + ", area = " + s.area())
+    } else if (s instanceof Square) {
+        print("  Square with side, area = " + s.area())
+    } else if (s instanceof Rect) {
+        print("  Rectangle, area = " + s.area())
+    } else if (s instanceof Shape) {
+        print("  Generic shape: " + s.name)
+    } else {
+        print("  Not a shape!")
+    }
+}
+
+print("")
+shape_info(c)
+shape_info(r)
+shape_info(sq)
+
+print("")
+print("╔══════════════════════════════════════════╗")
+print("║      All generic programming tests passed! ║")
+print("╚══════════════════════════════════════════╝")

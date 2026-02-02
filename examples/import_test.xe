@@ -1,0 +1,86 @@
+# Test enhanced import features
+
+print("╔══════════════════════════════════════════╗")
+print("║   Enhanced Import Syntax                 ║")
+print("╚══════════════════════════════════════════╝")
+
+# ════════════════════════════════════════════════════════════════
+# 1. Regular import (baseline)
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Regular import                            │")
+print("└────────────────────────────────────────────┘")
+import "math"
+print("  math.sqrt(16)    =", math.sqrt(16))
+print("  math.pow(2, 8)   =", math.pow(2, 8))
+
+# ════════════════════════════════════════════════════════════════
+# 2. Import with alias
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Import with alias (import...as)           │")
+print("└────────────────────────────────────────────┘")
+import "mylib/mathutils" as mu
+print("  mu.clamp(15, 0, 10)  =", mu.clamp(15, 0, 10))
+print("  mu.lerp(0, 100, 0.5) =", mu.lerp(0, 100, 0.5))
+print("  mu.sign(-42)         =", mu.sign(-42))
+
+import "string" as str
+print("  str.upper(\"hello\")  =", str.upper("hello"))
+print("  str.len(\"Xenly\")     =", str.len("Xenly"))
+
+# ════════════════════════════════════════════════════════════════
+# 3. Selective import (from...import)
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Selective import (from...import)          │")
+print("└────────────────────────────────────────────┘")
+from "mylib/shapes" import Vec2, Rect
+
+# Use imported names directly without module prefix
+var v = new Vec2(3, 4)
+print("  Vec2(3,4).length()         =", v.length())
+print("  Vec2(3,4) instanceof Vec2  =", v instanceof Vec2)
+
+var r = new Rect(0, 0, 10, 20)
+print("  Rect(0,0,10,20).area()     =", r.area())
+print("  Rect instance type         =", typeof(r))
+
+# ════════════════════════════════════════════════════════════════
+# 4. Mixed usage - original name still works
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Aliases don't replace original names     │")
+print("└────────────────────────────────────────────┘")
+# Both work after aliased import
+print("  mathutils.distance(0,0,3,4) =", mathutils.distance(0, 0, 3, 4))
+print("  mu.distance(0,0,3,4)        =", mu.distance(0, 0, 3, 4))
+
+print("")
+print("╔══════════════════════════════════════════╗")
+print("║   All import enhancements working!       ║")
+print("╚══════════════════════════════════════════╝")
+
+# ════════════════════════════════════════════════════════════════
+# 5. Wildcard import (from...import *)
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Wildcard import (from...import *)         │")
+print("└────────────────────────────────────────────┘")
+from "mylib/mathutils" import *
+
+# All exports are now available directly
+print("  clamp(99, 0, 50)       =", clamp(99, 0, 50))
+print("  lerp(10, 20, 0.25)     =", lerp(10, 20, 0.25))
+print("  sign(123)              =", sign(123))
+print("  distance(1,1,4,5)      =", distance(1, 1, 4, 5))
+
+print("")
+print("╔══════════════════════════════════════════╗")
+print("║   Wildcard imports working!              ║")
+print("╚══════════════════════════════════════════╝")

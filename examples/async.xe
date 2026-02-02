@@ -1,0 +1,100 @@
+# ─── Async/Concurrent Programming Preview ───────────────────
+# Demonstrates: async fn, spawn, await
+# NOTE: Current implementation executes immediately (no true concurrency).
+#       This is a syntax preview for a future async runtime.
+
+print("╔══════════════════════════════════════════╗")
+print("║     Xenly Async Syntax Preview           ║")
+print("╚══════════════════════════════════════════╝")
+
+# ════════════════════════════════════════════════════════════════
+# 1. Async function declarations
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  async fn declarations                     │")
+print("└────────────────────────────────────────────┘")
+
+async fn compute(n) {
+    print("  Computing", n, "^2...")
+    return n * n
+}
+
+async fn fetch(id) {
+    print("  Fetching data for ID", id)
+    return "data_" + id
+}
+
+# Regular (non-async) function for comparison
+fn regular_work(x) {
+    print("  Regular work with", x)
+    return x + 100
+}
+
+# ════════════════════════════════════════════════════════════════
+# 2. Spawn — fire and forget
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  spawn — fire-and-forget execution         │")
+print("└────────────────────────────────────────────┘")
+
+print("Spawning tasks...")
+spawn compute(5)
+spawn compute(10)
+spawn fetch(101)
+spawn fetch(102)
+print("All tasks spawned (in full impl, would run concurrently)")
+
+# ════════════════════════════════════════════════════════════════
+# 3. Await — wait for result
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  await — wait for async result             │")
+print("└────────────────────────────────────────────┘")
+
+var result1 = await compute(7)
+print("Result from compute(7):", result1)
+
+var result2 = await fetch(999)
+print("Result from fetch(999):", result2)
+
+# ════════════════════════════════════════════════════════════════
+# 4. Mixing async and regular functions
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Mixing async and regular functions        │")
+print("└────────────────────────────────────────────┘")
+
+var a = await compute(3)
+var b = regular_work(5)
+print("async result:", a)
+print("regular result:", b)
+
+# ════════════════════════════════════════════════════════════════
+# 5. Async functions in expressions
+# ════════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Async in expressions                      │")
+print("└────────────────────────────────────────────┘")
+
+var sum = await compute(4) + await compute(6)
+print("Sum of compute(4) + compute(6):", sum)
+
+# ════════════════════════════════════════════════════════════════
+# Future: What a full implementation would enable
+# ════════════════════════════════════════════════════════════════
+print("")
+print("╔══════════════════════════════════════════╗")
+print("║  Future: Full Async Runtime              ║")
+print("╚══════════════════════════════════════════╝")
+print("  • Task scheduler — cooperative multitasking")
+print("  • Channels — communication between tasks")
+print("  • sleep(ms) — yield control and resume later")
+print("  • Blocking send/recv on channels")
+print("  • True concurrent execution patterns")
+print("")
+print("Current: Syntax preview (immediate execution)")

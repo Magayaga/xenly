@@ -1,4 +1,0 @@
-import math
-
-// min(x,y) function can be used to find the lowest value of x and y:
-xenly_min(9, 3, 10, 13, 4)

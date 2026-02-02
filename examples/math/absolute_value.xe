@@ -1,5 +1,0 @@
-import math
-
-// Absolute value function returns the absolute value of a number:
-xenly_abs(-9)
-xenly_abs(12)

@@ -1,4 +1,0 @@
-var z = 3
-print($z)
-var y = 9*3
-print($y)

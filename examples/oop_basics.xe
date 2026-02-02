@@ -1,0 +1,82 @@
+# ─── OOP Basics ──────────────────────────────────────────
+# class, new, this, properties, methods
+
+# ── Simple class with init and a method ────────────────────
+class Dog {
+    fn init(name, breed) {
+        this.name = name
+        this.breed = breed
+        this.tricks = 0
+    }
+
+    fn bark() {
+        print(this.name + " says: Woof!")
+    }
+
+    fn learn_trick() {
+        this.tricks++
+        print(this.name + " learned a trick! Total:", this.tricks)
+    }
+
+    fn describe() {
+        print(this.name + " is a " + this.breed + " who knows " + this.tricks + " tricks.")
+    }
+}
+
+var rex = new Dog("Rex", "German Shepherd")
+var buddy = new Dog("Buddy", "Golden Retriever")
+
+rex.bark()
+buddy.bark()
+
+rex.learn_trick()
+rex.learn_trick()
+rex.learn_trick()
+buddy.learn_trick()
+
+rex.describe()
+buddy.describe()
+
+# ── Class with computed properties ──────────────────────────
+print("")
+
+class Rectangle {
+    fn init(w, h) {
+        this.width = w
+        this.height = h
+    }
+
+    fn area() {
+        return this.width * this.height
+    }
+
+    fn perimeter() {
+        return 2 * (this.width + this.height)
+    }
+
+    fn is_square() {
+        return this.width == this.height
+    }
+
+    fn describe() {
+        print("Rectangle " + this.width + "x" + this.height +
+              " | area=" + this.area() +
+              " | perimeter=" + this.perimeter() +
+              " | square=" + this.is_square())
+    }
+}
+
+var r1 = new Rectangle(5, 3)
+var r2 = new Rectangle(4, 4)
+var r3 = new Rectangle(10, 2)
+
+r1.describe()
+r2.describe()
+r3.describe()
+
+# ── Mutating properties after construction ─────────────────
+print("")
+print("Resizing r1 to 7x7:")
+r1.width = 7
+r1.height = 7
+r1.describe()

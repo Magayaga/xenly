@@ -1,0 +1,112 @@
+# ─── OOP Inheritance ─────────────────────────────────────
+# extends, super(), method override, polymorphism
+
+# ── Base class ──────────────────────────────────────────────
+class Shape {
+    fn init(name) {
+        this.name = name
+    }
+
+    fn area() {
+        return 0
+    }
+
+    fn describe() {
+        print(this.name + ": area = " + this.area())
+    }
+}
+
+# ── Circle extends Shape ───────────────────────────────────
+class Circle extends Shape {
+    fn init(radius) {
+        super("Circle")
+        this.radius = radius
+    }
+
+    fn area() {
+        return 3.14159 * this.radius * this.radius
+    }
+
+    fn circumference() {
+        return 2 * 3.14159 * this.radius
+    }
+}
+
+# ── Rect extends Shape ─────────────────────────────────────
+class Rect extends Shape {
+    fn init(w, h) {
+        super("Rectangle")
+        this.width = w
+        this.height = h
+    }
+
+    fn area() {
+        return this.width * this.height
+    }
+
+    fn perimeter() {
+        return 2 * (this.width + this.height)
+    }
+}
+
+# ── Square extends Rect (two-level inheritance) ────────────
+class Square extends Rect {
+    fn init(side) {
+        super(side, side)
+        this.name = "Square"
+        this.side = side
+    }
+
+    fn diagonal() {
+        return this.side * 1.41421
+    }
+}
+
+# ── Test all shapes ────────────────────────────────────────
+print("=== Shapes ===")
+var c = new Circle(5)
+var r = new Rect(6, 4)
+var s = new Square(7)
+
+c.describe()
+r.describe()
+s.describe()
+
+# ── Circle-specific methods ────────────────────────────────
+print("")
+print("=== Circle Details ===")
+print("Radius:", c.radius)
+print("Area:", c.area())
+print("Circumference:", c.circumference())
+
+# ── Rect-specific methods ──────────────────────────────────
+print("")
+print("=== Rectangle Details ===")
+print("Dimensions:", r.width, "x", r.height)
+print("Area:", r.area())
+print("Perimeter:", r.perimeter())
+
+# ── Square inherits Rect methods + adds its own ────────────
+print("")
+print("=== Square Details ===")
+print("Side:", s.side)
+print("Area (inherited):", s.area())
+print("Perimeter (inherited):", s.perimeter())
+print("Diagonal (own):", s.diagonal())
+
+# ── Deep inheritance: verify fields propagate ──────────────
+print("")
+print("=== Inheritance Chain ===")
+print("Square name (set in Square.init):", s.name)
+print("Square width (set by Rect.init via super):", s.width)
+print("Square height (set by Rect.init via super):", s.height)
+
+# ── Multiple instances are independent ─────────────────────
+print("")
+print("=== Independence ===")
+var s1 = new Square(3)
+var s2 = new Square(10)
+print("s1 area:", s1.area())
+print("s2 area:", s2.area())
+print("s1 side:", s1.side)
+print("s2 side:", s2.side)

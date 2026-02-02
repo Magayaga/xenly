@@ -1,0 +1,139 @@
+# ─────────────────────────────────────────────────────────
+#   X E N L Y   —   Full Feature Showcase
+# ─────────────────────────────────────────────────────────
+
+import "math"
+import "string"
+
+# ── Variables & Types ──────────────────────────────────────
+var title = "Xenly Showcase"
+var pi    = 3.14159
+var debug = false
+
+print("╔══════════════════════════════════════╗")
+print("║     " + title + "                ║")
+print("╚══════════════════════════════════════╝")
+print("")
+
+# ── Functions ──────────────────────────────────────────────
+fn clamp(value, lo, hi) {
+    if (value < lo) {
+        return lo
+    }
+    if (value > hi) {
+        return hi
+    }
+    return value
+}
+
+fn repeat_string(s, n) {
+    var result = ""
+    var i = 0
+    while (i < n) {
+        result = result + s
+        i++
+    }
+    return result
+}
+
+fn banner(text) {
+    var border = repeat_string("─", 40)
+    print("┌" + border + "┐")
+    print("│  " + text + repeat_string(" ", 38 - string.len(text)) + "│")
+    print("└" + border + "┘")
+}
+
+# ── Demonstrate clamp ──────────────────────────────────────
+banner("Clamp Function")
+print("  clamp(5, 0, 10)   =", clamp(5, 0, 10))
+print("  clamp(-5, 0, 10)  =", clamp(-5, 0, 10))
+print("  clamp(15, 0, 10)  =", clamp(15, 0, 10))
+print("")
+
+# ── Recursive: GCD ─────────────────────────────────────────
+fn gcd(a, b) {
+    if (b == 0) {
+        return a
+    }
+    return gcd(b, a % b)
+}
+
+banner("Greatest Common Divisor")
+print("  gcd(48, 18) =", gcd(48, 18))
+print("  gcd(100, 75) =", gcd(100, 75))
+print("  gcd(17, 13) =", gcd(17, 13))
+print("")
+
+# ── While loop: collatz sequence ───────────────────────────
+fn collatz_steps(n) {
+    var steps = 0
+    while (n != 1) {
+        if (n % 2 == 0) {
+            n = n / 2
+        } else {
+            n = n * 3 + 1
+        }
+        steps++
+    }
+    return steps
+}
+
+banner("Collatz Conjecture")
+var nums = 7
+while (nums <= 27) {
+    print("  collatz(" + nums + ") =", collatz_steps(nums), "steps")
+    nums += 5
+}
+print("")
+
+# ── Math module usage ──────────────────────────────────────
+banner("Math Operations")
+print("  sqrt(2)     =", math.sqrt(2))
+print("  pow(2,8)    =", math.pow(2, 8))
+print("  floor(pi)   =", math.floor(pi))
+print("  ceil(pi)    =", math.ceil(pi))
+print("")
+
+# ── String module usage ────────────────────────────────────
+banner("String Operations")
+var msg = "hello xenly"
+print("  original  :", msg)
+print("  upper     :", string.upper(msg))
+print("  reverse   :", string.reverse(msg))
+print("  len       :", string.len(msg))
+print("  contains  :", string.contains(msg, "xenly"))
+print("")
+
+# ── Logical operators ──────────────────────────────────────
+banner("Logic")
+print("  true and true  =", true and true)
+print("  true and false =", true and false)
+print("  true or false  =", true or false)
+print("  not true       =", not true)
+print("  not false      =", not false)
+print("")
+
+# ── Nested function: power-of-two checker ──────────────────
+fn is_power_of_two(n) {
+    if (n <= 0) {
+        return false
+    }
+    while (n > 1) {
+        if (n % 2 != 0) {
+            return false
+        }
+        n = n / 2
+    }
+    return true
+}
+
+banner("Powers of Two")
+var check = 1
+while (check <= 128) {
+    if (is_power_of_two(check)) {
+        print("  " + check + " is a power of 2")
+    }
+    check++
+}
+print("")
+print("Done!")

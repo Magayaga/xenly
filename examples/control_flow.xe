@@ -1,0 +1,74 @@
+# ─── Control Flow Demo ───────────────────────────────────
+# if / else if / else  and  while loops
+
+# ── If / Else If / Else ────────────────────────────────────
+fn classify(n) {
+    if (n > 0) {
+        print(n, "is positive")
+    } else if (n < 0) {
+        print(n, "is negative")
+    } else {
+        print(n, "is zero")
+    }
+}
+
+classify(42)
+classify(-7)
+classify(0)
+
+# ── While Loop: countdown ──────────────────────────────────
+print("")
+print("Countdown:")
+var i = 5
+while (i > 0) {
+    print(i)
+    i--
+}
+print("Go!")
+
+# ── While Loop: sum 1..100 ─────────────────────────────────
+var sum = 0
+var n = 1
+while (n <= 100) {
+    sum += n
+    n++
+}
+print("")
+print("Sum of 1 to 100 =", sum)
+
+# ── FizzBuzz (1 to 20) ─────────────────────────────────────
+print("")
+print("FizzBuzz:")
+var fb = 1
+while (fb <= 20) {
+    if (fb % 15 == 0) {
+        print("FizzBuzz")
+    } else if (fb % 3 == 0) {
+        print("Fizz")
+    } else if (fb % 5 == 0) {
+        print("Buzz")
+    } else {
+        print(fb)
+    }
+    fb++
+}
+
+# ── Nested loops: multiplication table (1-5) ─────────────
+print("")
+print("Multiplication Table (1-5):")
+var row = 1
+while (row <= 5) {
+    var col = 1
+    var line = ""
+    while (col <= 5) {
+        var product = row * col
+        # Simple padding: add space
+        if (product < 10) {
+            line = line + " "
+        }
+        line = line + product + " "
+        col++
+    }
+    print(line)
+    row++
+}

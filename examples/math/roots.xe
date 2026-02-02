@@ -1,6 +1,0 @@
-import math
-
-// roots of number
-xenly_sqrt(4)
-xenly_cbrt(729)
-xenly_ffrt(759375)
