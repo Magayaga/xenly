@@ -4,7 +4,7 @@ A variable provides us with named storage that our programs can manipulate. Each
 
 Variables are statically types means once they are declared with a certain type, then their type cannot be changed, only their value can be changed.
 
-## Declaring Swift Variables
+## Declaring Xenly Variables
 
 A variable declaration tells the compiler where and how much to create the storage for the variable. They are always declared before their use and they are declared using the var keyword.
 
@@ -28,3 +28,11 @@ print(pi)
 var string = "United States"
 print(string)
 ```
+
+# Xenly's documentation
+
+Official documentation of **Xenly** programming language was written in **Markdown**.
+
+## Copyright
+
+Copyright (c) 2024-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.

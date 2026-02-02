@@ -123,4 +123,4 @@ You'll need to install our build dependencies (`git`, `gcc` for Windows, `clang`
 
 ## Copyright
 
-Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
+Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.

@@ -32,4 +32,4 @@ On July 22, 2024, @magayaga announced that multi-line comments was working for X
 
 ## Copyright
 
-Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
+Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
