@@ -1,4 +1,5 @@
-# mathutils — exported math helpers
+# ─── mathutils ── exported utility functions ──────────────────
+import "math"
 
 export fn clamp(val, lo, hi) {
     if (val < lo) { return lo }
@@ -16,12 +17,8 @@ export fn sign(n) {
     return 0
 }
 
-# Internal helper — NOT exported
-fn _square(x) { return x * x }
-
 export fn distance(x1, y1, x2, y2) {
-    import "math"
     var dx = x2 - x1
     var dy = y2 - y1
-    return math.sqrt(_square(dx) + _square(dy))
+    return math.sqrt(dx * dx + dy * dy)
 }

@@ -1,65 +1,58 @@
-#
-# XENLY - high-level and general-purpose programming language
-# created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
-# 
-# It is initially written in C programming language.
-#
+# ─── Xenly Language Makefile ─────────────────────────────────────────────────
+CC      = gcc
+CFLAGS  = -Wall -Wextra -O2 -std=c11 -D_POSIX_C_SOURCE=200809L
+LDFLAGS = -lm
 
-# Compiler and flags
-CC = gcc
-CFLAGS = -Wall -Wextra -g -fPIC
+# ─── Interpreter ─────────────────────────────────────────────────────────────
+TARGET  = xenly
+INTERP_SRCS = src/main.c src/lexer.c src/ast.c src/parser.c \
+              src/interpreter.c src/modules.c src/typecheck.c
+INTERP_OBJS = $(INTERP_SRCS:.c=.o)
 
-# Source directory
-SRC_DIR = src
+# ─── Native Compiler ─────────────────────────────────────────────────────────
+XENLYC  = xenlyc
 
-# Source files for the main program and shared library
-MAIN_SRC = $(SRC_DIR)/main.c $(SRC_DIR)/binary_math_functions.c \
-           $(SRC_DIR)/color.c $(SRC_DIR)/data_structures.c \
-           $(SRC_DIR)/error.c $(SRC_DIR)/graphics_functions.c \
-           $(SRC_DIR)/math_functions.c $(SRC_DIR)/print_info.c \
-           $(SRC_DIR)/project.c $(SRC_DIR)/utility.c $(SRC_DIR)/variables.c
-LIB_SRC = $(SRC_DIR)/libm/math/xenly_math.c
-LIB_BIN_SRC = $(SRC_DIR)/libm/binary_math/xenly_binary_math.c
+# xenlyc driver + frontend (shares lexer / parser / ast with interpreter)
+XENLYC_SRCS = src/xenlyc_main.c src/lexer.c src/ast.c src/parser.c src/codegen.c
+XENLYC_OBJS = $(XENLYC_SRCS:.c=.o)
 
-# Object files corresponding to the source files
-MAIN_OBJ = $(MAIN_SRC:.c=.o)
-LIB_OBJ = $(LIB_SRC:.c=.o)
+# Runtime library: everything a compiled binary needs at run-time.
+# xly_rt.c  — value ops, print, module dispatch shim
+# modules.c — the 100 stdlib native functions (shared with interpreter)
+RT_SRCS  = src/xly_rt.c src/modules.c
+RT_OBJS  = $(RT_SRCS:.c=.o)
+RT_LIB   = libxly_rt.a
 
-# Output binary and shared library names
-MAIN_BIN = xenly
-LIB_SO = math.so
-LIB_BIN_SO = binary_math.so
+# ─── Default: build everything ───────────────────────────────────────────────
+all: $(TARGET) $(XENLYC) $(RT_LIB)
 
-# Default target: build the main binary and then clean object files
-all: $(MAIN_BIN) clean_objs
-	@echo "Adding current directory to LD_LIBRARY_PATH"
-	@export LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:.
+# ─── Interpreter ─────────────────────────────────────────────────────────────
+$(TARGET): $(INTERP_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# Link the main binary from object files and shared library
-$(MAIN_BIN): $(MAIN_OBJ) $(LIB_SO) $(LIB_BIN_SO)
-	$(CC) $(CFLAGS) -o $@ $(MAIN_OBJ) -ldl -lm
+# ─── Compiler driver ─────────────────────────────────────────────────────────
+$(XENLYC): $(XENLYC_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-# Create the shared library from its object file
-$(LIB_SO): $(LIB_OBJ)
-	$(CC) $(CFLAGS) -shared -o $@ $^ -lm
-	@chmod +rx $@
+# ─── Runtime library ─────────────────────────────────────────────────────────
+$(RT_LIB): $(RT_OBJS)
+	ar rcs $@ $^
 
-# Create the shared library from its object file
-$(LIB_BIN_SO): $(SRC_DIR)/binary_math_functions.o
-	$(CC) $(CFLAGS) -shared -o $@ $^ -lm
-	@chmod +rx $@
+# ─── Generic .c → .o ────────────────────────────────────────────────────────
+src/%.o: src/%.c
+	$(CC) $(CFLAGS) -Isrc -c -o $@ $<
 
-# Compile source files to object files in the same directory
-$(SRC_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# ─── Convenience targets ─────────────────────────────────────────────────────
+run: $(TARGET)
+	./$(TARGET) examples/hello.xe
 
-# Remove object files after building the main binary and shared library
-clean_objs:
-	rm -f $(SRC_DIR)/*.o
+compile: $(XENLYC) $(RT_LIB)
+	./$(XENLYC) examples/hello.xe -o hello_compiled
+	./hello_compiled
 
-# Clean all generated files: object files, binary, and shared library
+# ─── Clean ───────────────────────────────────────────────────────────────────
 clean:
-	rm -f $(SRC_DIR)/*.o $(MAIN_BIN) $(LIB_SO) $(LIB_BIN_SO)
+	rm -f src/*.o $(TARGET) $(XENLYC) $(RT_LIB)
+	rm -f *.s *.o a.out hello_compiled
 
-# Mark these targets as not corresponding to actual files
-.PHONY: all clean clean_objs
+.PHONY: all run compile clean

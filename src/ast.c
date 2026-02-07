@@ -43,11 +43,15 @@ void ast_node_destroy(ASTNode *node) {
     free(node->children);
     // Free params
     if (node->params) {
-        for (size_t i = 0; i < node->param_count; i++)
+        for (size_t i = 0; i < node->param_count; i++) {
             free(node->params[i].name);
+            free(node->params[i].type_annotation);
+        }
         free(node->params);
     }
     free(node->str_value);
+    free(node->type_annotation);
+    free(node->return_type);
     free(node);
 }
 
@@ -65,6 +69,10 @@ static const char *node_type_name(NodeType t) {
         case NODE_RETURN:         return "RETURN";
         case NODE_IF:             return "IF";
         case NODE_WHILE:          return "WHILE";
+        case NODE_FOR:            return "FOR";
+        case NODE_FOR_IN:         return "FOR_IN";
+        case NODE_BREAK:          return "BREAK";
+        case NODE_CONTINUE:       return "CONTINUE";
         case NODE_PRINT:          return "PRINT";
         case NODE_INPUT:          return "INPUT";
         case NODE_IMPORT:         return "IMPORT";
@@ -98,6 +106,8 @@ void ast_print(ASTNode *node, int indent) {
     printf("[%s]", node_type_name(node->type));
 
     if (node->str_value)  printf(" str=\"%s\"", node->str_value);
+    if (node->type_annotation) printf(" type:%s", node->type_annotation);
+    if (node->return_type) printf(" returns:%s", node->return_type);
     if (node->type == NODE_NUMBER) printf(" num=%.6g", node->num_value);
     if (node->type == NODE_BOOL)   printf(" bool=%s", node->bool_value ? "true" : "false");
     if (node->type == NODE_FN_DECL && node->params) {
@@ -105,6 +115,8 @@ void ast_print(ASTNode *node, int indent) {
         for (size_t i = 0; i < node->param_count; i++) {
             if (i) printf(", ");
             printf("%s", node->params[i].name);
+            if (node->params[i].type_annotation)
+                printf(":%s", node->params[i].type_annotation);
         }
         printf(")");
     }

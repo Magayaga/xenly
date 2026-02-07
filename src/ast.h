@@ -25,6 +25,13 @@ typedef enum {
     NODE_RETURN,            // return expr
     NODE_IF,                // if (cond) { body } else { body }
     NODE_WHILE,             // while (cond) { body }
+    NODE_FOR,               // for (init; cond; update) { body }
+    NODE_FOR_IN,            // for (var x in arr) { body }
+    NODE_BREAK,             // break
+    NODE_CONTINUE,          // continue
+    NODE_DO_WHILE,          // do { body } while (cond)
+    NODE_SWITCH,            // switch (expr) { case val: stmts... }
+    NODE_TERNARY,           // cond ? true_expr : false_expr
     NODE_PRINT,             // print(expr, expr, ...)
     NODE_INPUT,             // input("prompt")
     NODE_IMPORT,            // import "module" [as alias] | from "module" import name1, name2
@@ -58,6 +65,18 @@ typedef enum {
     // Concurrency
     NODE_SPAWN,             // spawn expr  — launches async function in background
     NODE_AWAIT,             // await expr  — calls async function and waits for result
+
+    // Functional programming
+    NODE_ARRAY_LITERAL,     // [expr, expr, ...]  — array literal
+    NODE_ARROW_FN,          // (params) => expr  — arrow function
+    NODE_NULLISH,           // expr ?? default  — null coalescing
+    NODE_INDEX,             // arr[index]  — array/object indexing
+
+    // Functional programming
+
+    // Concurrency
+
+    // Modular programming
 } NodeType;
 
 // Forward declarations
@@ -67,6 +86,7 @@ typedef struct Param   Param;
 // ─── Function Parameter ─────────────────────────────────────────────────────
 struct Param {
     char *name;
+    char *type_annotation;  // optional: "number", "string", "bool", "any", or NULL
 };
 
 // ─── AST Node ────────────────────────────────────────────────────────────────
@@ -87,6 +107,10 @@ struct ASTNode {
     // Function declarations: parameter list
     Param   *params;
     size_t   param_count;
+
+    // Type annotations (gradual typing)
+    char    *type_annotation;      // for variables: var x: number
+    char    *return_type;          // for functions: fn foo(): number
 
     // Compound assign operator type (stored as string: "+=", "-=", etc.)
     // reuses str_value

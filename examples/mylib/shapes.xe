@@ -1,19 +1,19 @@
-# shapes — exported shape classes
+# ─── shapes ── exported Vec2 and Rect classes ──────────────────
+import "math"
 
 export class Vec2 {
     fn init(x, y) {
         this.x = x
         this.y = y
     }
-    fn to_string() {
-        return "(" + this.x + ", " + this.y + ")"
+    fn length() {
+        return math.sqrt(this.x * this.x + this.y * this.y)
     }
     fn add(other) {
         return new Vec2(this.x + other.x, this.y + other.y)
     }
-    fn length() {
-        import "math"
-        return math.sqrt(this.x * this.x + this.y * this.y)
+    fn to_string() {
+        return "(" + this.x + ", " + this.y + ")"
     }
 }
 
@@ -28,13 +28,14 @@ export class Rect {
         return this.w * this.h
     }
     fn contains(px, py) {
-        if (px < this.x) { return false }
-        if (px > this.x + this.w) { return false }
-        if (py < this.y) { return false }
-        if (py > this.y + this.h) { return false }
-        return true
+        if (px >= this.x and px <= this.x + this.w) {
+            if (py >= this.y and py <= this.y + this.h) {
+                return true
+            }
+        }
+        return false
     }
     fn to_string() {
-        return "Rect(" + this.x + "," + this.y + " " + this.w + "x" + this.h + ")"
+        return "Rect(" + this.x + "," + this.y + "," + this.w + "," + this.h + ")"
     }
 }

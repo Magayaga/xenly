@@ -64,23 +64,3 @@ print("")
 print("╔══════════════════════════════════════════╗")
 print("║   All import enhancements working!       ║")
 print("╚══════════════════════════════════════════╝")
-
-# ════════════════════════════════════════════════════════════════
-# 5. Wildcard import (from...import *)
-# ════════════════════════════════════════════════════════════════
-print("")
-print("┌────────────────────────────────────────────┐")
-print("│  Wildcard import (from...import *)         │")
-print("└────────────────────────────────────────────┘")
-from "mylib/mathutils" import *
-
-# All exports are now available directly
-print("  clamp(99, 0, 50)       =", clamp(99, 0, 50))
-print("  lerp(10, 20, 0.25)     =", lerp(10, 20, 0.25))
-print("  sign(123)              =", sign(123))
-print("  distance(1,1,4,5)      =", distance(1, 1, 4, 5))
-
-print("")
-print("╔══════════════════════════════════════════╗")
-print("║   Wildcard imports working!              ║")
-print("╚══════════════════════════════════════════╝")

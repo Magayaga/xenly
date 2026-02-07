@@ -15,6 +15,8 @@
 // ─── Forward declarations (grammar hierarchy) ───────────────────────────────
 static ASTNode *parse_statement(Parser *p);
 static ASTNode *parse_expression(Parser *p);
+static ASTNode *parse_nullish(Parser *p);
+static ASTNode *parse_nullish(Parser *p);
 static ASTNode *parse_or(Parser *p);
 static ASTNode *parse_and(Parser *p);
 static ASTNode *parse_equality(Parser *p);
@@ -94,6 +96,16 @@ static ASTNode *parse_statement(Parser *p) {
         node->str_value = strdup(p->current.value);
         advance(p);
 
+        // Optional type annotation: var x: number
+        if (match(p, TOKEN_COLON)) {
+            if (!check(p, TOKEN_IDENTIFIER)) {
+                error_at(p, "Expected type name after ':'.");
+            } else {
+                node->type_annotation = strdup(p->current.value);
+                advance(p);
+            }
+        }
+
         // Optional initializer
         if (match(p, TOKEN_ASSIGN)) {
             ast_node_add_child(node, parse_expression(p));
@@ -134,13 +146,35 @@ static ASTNode *parse_statement(Parser *p) {
                 if (!check(p, TOKEN_IDENTIFIER)) { error_at(p, "Expected parameter name."); break; }
                 if (count >= cap) { cap *= 2; params = (Param *)realloc(params, sizeof(Param) * cap); }
                 params[count].name = strdup(p->current.value);
-                count++;
+                params[count].type_annotation = NULL;
                 advance(p);
+                
+                // Optional type annotation: param: type
+                if (match(p, TOKEN_COLON)) {
+                    if (!check(p, TOKEN_IDENTIFIER)) {
+                        error_at(p, "Expected type name after ':'.");
+                    } else {
+                        params[count].type_annotation = strdup(p->current.value);
+                        advance(p);
+                    }
+                }
+                
+                count++;
             } while (match(p, TOKEN_COMMA));
         }
         expect(p, TOKEN_RPAREN, "Expected ')' after parameters.");
         node->params     = params;
         node->param_count = count;
+
+        // Optional return type: fn foo(): number
+        if (match(p, TOKEN_COLON)) {
+            if (!check(p, TOKEN_IDENTIFIER)) {
+                error_at(p, "Expected return type after ':'.");
+            } else {
+                node->return_type = strdup(p->current.value);
+                advance(p);
+            }
+        }
 
         skip_newlines(p);
         // Body block
@@ -239,6 +273,268 @@ static ASTNode *parse_statement(Parser *p) {
         return node;
     }
 
+
+
+    // do-while: do { body } while (cond)
+    if (check(p, TOKEN_DO)) {
+        advance(p);
+        ASTNode *node = ast_node_create(NODE_DO_WHILE, p->current.line);
+        skip_newlines(p);
+        
+        expect(p, TOKEN_LBRACE, "Expected '{' after 'do'.");
+        ASTNode *body = ast_node_create(NODE_BLOCK, p->current.line);
+        skip_newlines(p);
+        while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+            ASTNode *s = parse_statement(p);
+            if (s) ast_node_add_child(body, s);
+            skip_newlines(p);
+        }
+        expect(p, TOKEN_RBRACE, "Expected '}' to close do body.");
+        ast_node_add_child(node, body);
+        skip_newlines(p);
+        
+        expect(p, TOKEN_WHILE, "Expected 'while' after do body.");
+        expect(p, TOKEN_LPAREN, "Expected '(' after 'while' in do-while.");
+        ast_node_add_child(node, parse_expression(p));  // condition
+        expect(p, TOKEN_RPAREN, "Expected ')' after do-while condition.");
+        skip_newlines(p);
+        return node;
+    }
+
+    // break
+    if (check(p, TOKEN_BREAK)) {
+        ASTNode *node = ast_node_create(NODE_BREAK, p->current.line);
+        advance(p);
+        skip_newlines(p);
+        return node;
+    }
+
+    // continue
+    if (check(p, TOKEN_CONTINUE)) {
+        ASTNode *node = ast_node_create(NODE_CONTINUE, p->current.line);
+        advance(p);
+        skip_newlines(p);
+        return node;
+    }
+
+    // for
+    if (check(p, TOKEN_FOR)) {
+        advance(p);
+        int line = p->current.line;
+        expect(p, TOKEN_LPAREN, "Expected '(' after 'for'.");
+
+        // Detect for-in: for (var x in expr) or for (x in expr)
+        // Peek: if we see VAR IDENT IN  or  IDENT IN  → for-in
+        int is_for_in = 0;
+        char *iter_var = NULL;
+        if (check(p, TOKEN_VAR)) {
+            // Check if next-next is IN
+            // Save state: advance past VAR, read IDENT, check IN
+            advance(p);  // consume VAR
+            if (check(p, TOKEN_IDENTIFIER)) {
+                iter_var = strdup(p->current.value);
+                advance(p);  // consume IDENT
+                if (check(p, TOKEN_IN)) {
+                    is_for_in = 1;
+                    advance(p);  // consume IN
+                } else {
+                    // Not for-in — this is "var IDENT = expr" C-style init
+                    ASTNode *init_node = ast_node_create(NODE_VAR_DECL, line);
+                    init_node->str_value = iter_var;  // takes ownership
+                    iter_var = NULL;
+                    if (check(p, TOKEN_ASSIGN)) {
+                        advance(p);  // consume =
+                        ast_node_add_child(init_node, parse_expression(p));
+                    }
+                    expect(p, TOKEN_SEMICOLON, "Expected ';' after for init.");
+                    ASTNode *cond = check(p, TOKEN_SEMICOLON) ? NULL : parse_expression(p);
+                    expect(p, TOKEN_SEMICOLON, "Expected ';' after for condition.");
+                    ASTNode *update = check(p, TOKEN_RPAREN) ? NULL : parse_expression(p);
+                    expect(p, TOKEN_RPAREN, "Expected ')' after for clauses.");
+                    skip_newlines(p);
+                    expect(p, TOKEN_LBRACE, "Expected '{' for for body.");
+                    ASTNode *body = ast_node_create(NODE_BLOCK, line);
+                    skip_newlines(p);
+                    while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+                        ASTNode *s = parse_statement(p);
+                        if (s) ast_node_add_child(body, s);
+                        skip_newlines(p);
+                    }
+                    expect(p, TOKEN_RBRACE, "Expected '}' to close for body.");
+                    ASTNode *node = ast_node_create(NODE_FOR, line);
+                    ast_node_add_child(node, init_node);
+                    ast_node_add_child(node, cond ? cond : ast_node_create(NODE_BOOL, line));
+                    if (!cond) node->children[1]->bool_value = 1;
+                    ast_node_add_child(node, update ? update : ast_node_create(NODE_NULL, line));
+                    ast_node_add_child(node, body);
+                    skip_newlines(p);
+                    return node;
+                }
+            }
+        } else if (check(p, TOKEN_IDENTIFIER)) {
+            // Could be: IDENT IN  (for-in without var)  or  IDENT = ... (C-style init)
+            // Save and peek
+            char *maybe_var = strdup(p->current.value);
+            advance(p);  // consume IDENT
+            if (check(p, TOKEN_IN)) {
+                iter_var = maybe_var;
+                is_for_in = 1;
+                advance(p);  // consume IN
+            } else {
+                // Not for-in — this is the start of a C-style init expression.
+                // We already consumed the IDENT. We need to handle the rest as an expression.
+                // The identifier is now consumed; build an IDENT node and continue parsing
+                // the init as an assignment or expression statement.
+                // Simplest: reconstruct. We have IDENT already consumed. Check for = (assign).
+                ASTNode *init_node = NULL;
+                if (check(p, TOKEN_ASSIGN)) {
+                    advance(p);  // consume =
+                    ASTNode *val = parse_expression(p);
+                    init_node = ast_node_create(NODE_ASSIGN, line);
+                    init_node->str_value = maybe_var;  // takes ownership
+                    ast_node_add_child(init_node, val);
+                    maybe_var = NULL;  // transferred
+                } else {
+                    // Bare expression statement starting with identifier
+                    // Just wrap identifier as expression
+                    init_node = ast_node_create(NODE_IDENTIFIER, line);
+                    init_node->str_value = maybe_var;
+                    maybe_var = NULL;
+                }
+                if (maybe_var) free(maybe_var);
+
+                // Now parse rest of C-style for: ; cond ; update
+                expect(p, TOKEN_SEMICOLON, "Expected ';' after for init.");
+                ASTNode *cond = check(p, TOKEN_SEMICOLON) ? NULL : parse_expression(p);
+                expect(p, TOKEN_SEMICOLON, "Expected ';' after for condition.");
+                ASTNode *update = check(p, TOKEN_RPAREN) ? NULL : parse_expression(p);
+                expect(p, TOKEN_RPAREN, "Expected ')' after for clauses.");
+                skip_newlines(p);
+
+                expect(p, TOKEN_LBRACE, "Expected '{' for for body.");
+                ASTNode *body = ast_node_create(NODE_BLOCK, line);
+                skip_newlines(p);
+                while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+                    ASTNode *s = parse_statement(p);
+                    if (s) ast_node_add_child(body, s);
+                    skip_newlines(p);
+                }
+                expect(p, TOKEN_RBRACE, "Expected '}' to close for body.");
+
+                ASTNode *node = ast_node_create(NODE_FOR, line);
+                ast_node_add_child(node, init_node ? init_node : ast_node_create(NODE_NULL, line));
+                ast_node_add_child(node, cond ? cond : ast_node_create(NODE_BOOL, line));  // default true
+                if (!cond) node->children[1]->bool_value = 1;
+                ast_node_add_child(node, update ? update : ast_node_create(NODE_NULL, line));
+                ast_node_add_child(node, body);
+                skip_newlines(p);
+                return node;
+            }
+        }
+
+        if (is_for_in) {
+            // for-in: parse iterable expression, then body
+            ASTNode *iterable = parse_expression(p);
+            expect(p, TOKEN_RPAREN, "Expected ')' after for-in iterable.");
+            skip_newlines(p);
+
+            expect(p, TOKEN_LBRACE, "Expected '{' for for-in body.");
+            ASTNode *body = ast_node_create(NODE_BLOCK, line);
+            skip_newlines(p);
+            while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+                ASTNode *s = parse_statement(p);
+                if (s) ast_node_add_child(body, s);
+                skip_newlines(p);
+            }
+            expect(p, TOKEN_RBRACE, "Expected '}' to close for-in body.");
+
+            ASTNode *node = ast_node_create(NODE_FOR_IN, line);
+            node->str_value = iter_var;  // takes ownership
+            ast_node_add_child(node, iterable);
+            ast_node_add_child(node, body);
+            skip_newlines(p);
+            return node;
+        }
+
+        // C-style for: for (init; cond; update) { body }
+        // init can be: var decl, assignment, or empty
+        ASTNode *init_node = NULL;
+        if (check(p, TOKEN_VAR)) {
+            advance(p);
+            ASTNode *decl = ast_node_create(NODE_VAR_DECL, p->current.line);
+            decl->str_value = strdup(p->current.value);
+            expect(p, TOKEN_IDENTIFIER, "Expected variable name in for init.");
+            if (check(p, TOKEN_ASSIGN)) {
+                advance(p);
+                ast_node_add_child(decl, parse_expression(p));
+            }
+            init_node = decl;
+        } else if (!check(p, TOKEN_SEMICOLON)) {
+            init_node = parse_expression(p);
+        }
+        expect(p, TOKEN_SEMICOLON, "Expected ';' after for init.");
+
+        ASTNode *cond = check(p, TOKEN_SEMICOLON) ? NULL : parse_expression(p);
+        expect(p, TOKEN_SEMICOLON, "Expected ';' after for condition.");
+
+        ASTNode *update = check(p, TOKEN_RPAREN) ? NULL : parse_expression(p);
+        expect(p, TOKEN_RPAREN, "Expected ')' after for clauses.");
+        skip_newlines(p);
+
+        expect(p, TOKEN_LBRACE, "Expected '{' for for body.");
+        ASTNode *body = ast_node_create(NODE_BLOCK, line);
+        skip_newlines(p);
+        while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+            ASTNode *s = parse_statement(p);
+            if (s) ast_node_add_child(body, s);
+            skip_newlines(p);
+        }
+        expect(p, TOKEN_RBRACE, "Expected '}' to close for body.");
+
+        ASTNode *node = ast_node_create(NODE_FOR, line);
+        ast_node_add_child(node, init_node ? init_node : ast_node_create(NODE_NULL, line));
+        ast_node_add_child(node, cond ? cond : ast_node_create(NODE_BOOL, line));
+        if (!cond) node->children[1]->bool_value = 1;  // default condition = true
+        ast_node_add_child(node, update ? update : ast_node_create(NODE_NULL, line));
+        ast_node_add_child(node, body);
+        skip_newlines(p);
+        return node;
+    }
+
+    // break
+    if (check(p, TOKEN_BREAK)) {
+        advance(p);
+        ASTNode *node = ast_node_create(NODE_BREAK, p->current.line);
+        skip_newlines(p);
+        return node;
+    }
+
+    // continue
+    if (check(p, TOKEN_CONTINUE)) {
+        advance(p);
+        ASTNode *node = ast_node_create(NODE_CONTINUE, p->current.line);
+        skip_newlines(p);
+        return node;
+    }
+
+
+
+    // break
+    if (check(p, TOKEN_BREAK)) {
+        advance(p);
+        ASTNode *node = ast_node_create(NODE_BREAK, p->current.line);
+        skip_newlines(p);
+        return node;
+    }
+
+    // continue
+    if (check(p, TOKEN_CONTINUE)) {
+        advance(p);
+        ASTNode *node = ast_node_create(NODE_CONTINUE, p->current.line);
+        skip_newlines(p);
+        return node;
+    }
+
     // print
     if (check(p, TOKEN_PRINT)) {
         advance(p);
@@ -293,6 +589,19 @@ static ASTNode *parse_statement(Parser *p) {
         }
         expect(p, TOKEN_RBRACE, "Expected '}' to close class body.");
         skip_newlines(p);
+        return node;
+    }
+
+    // export fn / export class
+    if (check(p, TOKEN_EXPORT)) {
+        advance(p);
+        if (!check(p, TOKEN_FN) && !check(p, TOKEN_CLASS)) {
+            error_at(p, "Expected 'fn' or 'class' after 'export'.");
+            return ast_node_create(NODE_EXPORT, p->current.line);
+        }
+        ASTNode *decl = parse_statement(p);   // recursion: parses the fn or class decl
+        ASTNode *node = ast_node_create(NODE_EXPORT, decl ? decl->line : p->current.line);
+        if (decl) ast_node_add_child(node, decl);
         return node;
     }
 
@@ -408,7 +717,19 @@ static ASTNode *parse_statement(Parser *p) {
 
 // ─── Expression Grammar (precedence climbing) ───────────────────────────────
 static ASTNode *parse_expression(Parser *p) {
-    return parse_or(p);
+    return parse_nullish(p);
+}
+
+// ?? (null coalescing) — lower precedence than or
+static ASTNode *parse_nullish(Parser *p) {
+    ASTNode *left = parse_or(p);
+    while (match(p, TOKEN_NULLISH)) {
+        ASTNode *node = ast_node_create(NODE_NULLISH, p->previous.line);
+        ast_node_add_child(node, left);
+        ast_node_add_child(node, parse_or(p));
+        left = node;
+    }
+    return left;
 }
 
 static ASTNode *parse_or(Parser *p) {
@@ -535,7 +856,7 @@ static ASTNode *parse_call(Parser *p) {
 
     // ── Postfix loop: handles (), .prop, .method(), ++, -- repeatedly ─────────
     while (1) {
-        // ── Function call: ident(args) -> NODE_FN_CALL ─────────────────────
+        // ── Function call: expr(args) ─────────────────────────────────────────
         if (expr->type == NODE_IDENTIFIER && match(p, TOKEN_LPAREN)) {
             ASTNode *call = ast_node_create(NODE_FN_CALL, expr->line);
             call->str_value = strdup(expr->str_value);
@@ -546,22 +867,6 @@ static ASTNode *parse_call(Parser *p) {
             }
             expect(p, TOKEN_RPAREN, "Expected ')' after arguments.");
             ast_node_destroy(expr);
-            expr = call;
-            continue;
-        }
-
-        // ── Generic call: expr(args) -> NODE_CALL_EXPR ───────────────────────
-        // Handles: fn_returning_fn()(args), obj.method()(args), etc.
-        if (expr->type != NODE_IDENTIFIER && match(p, TOKEN_LPAREN)) {
-            ASTNode *call = ast_node_create(NODE_CALL_EXPR, expr->line);
-            ast_node_add_child(call, expr);  // children[0] = callable expression
-            // children[1..n] = arguments
-            if (!check(p, TOKEN_RPAREN)) {
-                do {
-                    ast_node_add_child(call, parse_expression(p));
-                } while (match(p, TOKEN_COMMA));
-            }
-            expect(p, TOKEN_RPAREN, "Expected ')' after arguments.");
             expr = call;
             continue;
         }
@@ -595,6 +900,26 @@ static ASTNode *parse_call(Parser *p) {
                 ast_node_add_child(pget, expr); // children[0] = object expression
                 expr = pget;
             }
+            continue;
+        }
+
+        // ── Array/string indexing: expr[index] → NODE_INDEX ────────────────
+        if (match(p, TOKEN_LBRACKET)) {
+            ASTNode *index_node = ast_node_create(NODE_INDEX, expr->line);
+            ast_node_add_child(index_node, expr);                    // children[0] = array/string
+            ast_node_add_child(index_node, parse_expression(p));     // children[1] = index
+            expect(p, TOKEN_RBRACKET, "Expected ']' after index.");
+            expr = index_node;
+            continue;
+        }
+
+        // ── Array/string indexing: expr[index] → NODE_INDEX ────────────────
+        if (match(p, TOKEN_LBRACKET)) {
+            ASTNode *index_node = ast_node_create(NODE_INDEX, expr->line);
+            ast_node_add_child(index_node, expr);                    // children[0] = array/string
+            ast_node_add_child(index_node, parse_expression(p));     // children[1] = index
+            expect(p, TOKEN_RBRACKET, "Expected ']' after index.");
+            expr = index_node;
             continue;
         }
 
@@ -718,6 +1043,18 @@ static ASTNode *parse_primary(Parser *p) {
     if (check(p, TOKEN_NULL)) {
         ASTNode *node = ast_node_create(NODE_NULL, p->current.line);
         advance(p);
+        return node;
+    }
+    // Array literal: [expr, expr, ...]
+    if (check(p, TOKEN_LBRACKET)) {
+        advance(p);
+        ASTNode *node = ast_node_create(NODE_ARRAY_LITERAL, p->current.line);
+        if (!check(p, TOKEN_RBRACKET)) {
+            do {
+                ast_node_add_child(node, parse_expression(p));
+            } while (match(p, TOKEN_COMMA));
+        }
+        expect(p, TOKEN_RBRACKET, "Expected ']' after array elements.");
         return node;
     }
     // input("prompt")

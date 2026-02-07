@@ -21,8 +21,11 @@ typedef enum {
     VAL_NULL,
     VAL_FUNCTION,   // user-defined fn
     VAL_RETURN,     // sentinel: wraps a return value
+    VAL_BREAK,      // sentinel: signals break
+    VAL_CONTINUE,   // sentinel: signals continue
     VAL_CLASS,      // a class definition
     VAL_INSTANCE,   // an instantiated object
+    VAL_ARRAY,      // a dynamic array of Values
 } ValueType;
 
 typedef struct Value Value;
@@ -65,6 +68,9 @@ struct Value {
     Value        *inner;            // for VAL_RETURN: wraps the actual return value
     ClassDef     *class_def;        // for VAL_CLASS
     InstanceData *instance;         // for VAL_INSTANCE
+    Value       **array;            // for VAL_ARRAY: owned array of Value*
+    size_t        array_len;        // for VAL_ARRAY: number of elements
+    size_t        array_cap;        // for VAL_ARRAY: allocated capacity
 };
 
 // ─── Environment (scope chain) ───────────────────────────────────────────────
@@ -132,6 +138,11 @@ typedef struct {
     // Async runtime: task queue for spawn
     Task        *task_queue;        // linked list of spawned tasks
     Task        *task_queue_tail;
+
+    // Array registry: all allocated arrays, freed at shutdown
+    Value      **all_arrays;        // flat array of every VAL_ARRAY ever created
+    size_t       all_arrays_count;
+    size_t       all_arrays_cap;
 } Interpreter;
 
 // ─── API ─────────────────────────────────────────────────────────────────────
@@ -145,6 +156,7 @@ Value *value_number(double n);
 Value *value_string(const char *s);
 Value *value_bool(int b);
 Value *value_null(void);
+Value *value_array(Value **items, size_t len);   // takes ownership of items array and each item
 void   value_destroy(Value *v);
 char  *value_to_string(Value *v);   // returns a newly allocated string
 

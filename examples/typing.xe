@@ -1,93 +1,88 @@
 # ═══════════════════════════════════════════════════════════════
-#  Xenly — Imperative Programming Features
+#  Xenly — Gradual Typing / Type Annotations
 # ═══════════════════════════════════════════════════════════════
-# This example demonstrates imperative programming patterns.
-# NOTE: Some features shown here are aspirational (future roadmap)
 
 print("╔══════════════════════════════════════════╗")
-print("║   Imperative Programming in Xenly        ║")
+print("║   Gradual Typing in Xenly                ║")
 print("╚══════════════════════════════════════════╝")
 
 # ═══════════════════════════════════════════════════════════════
-# Current: While loops (working)
+# Without type annotations (fully dynamic, default)
 # ═══════════════════════════════════════════════════════════════
 print("")
 print("┌────────────────────────────────────────────┐")
-print("│  While loops (current)                     │")
+print("│  Without annotations (dynamic)             │")
 print("└────────────────────────────────────────────┘")
 
-var i = 0
-while (i < 5) {
-    print("  i =", i)
-    i = i + 1
-}
+var x = 42
+var name = "Alice"
+var flag = true
 
-# ═══════════════════════════════════════════════════════════════
-# Future: For loops
-# ═══════════════════════════════════════════════════════════════
-print("")
-print("┌────────────────────────────────────────────┐")
-print("│  For loops (future)                        │")
-print("└────────────────────────────────────────────┘")
-print("  Syntax: for (var i = 0; i < 10; i++) { ... }")
-print("  Would provide: init, condition, increment in one line")
-
-# ═══════════════════════════════════════════════════════════════
-# Future: Break and continue
-# ═══════════════════════════════════════════════════════════════
-print("")
-print("┌────────────────────────────────────────────┐")
-print("│  Break/continue (future)                   │")
-print("└────────────────────────────────────────────┘")
-print("  break    — exit loop early")
-print("  continue — skip to next iteration")
-
-# ═══════════════════════════════════════════════════════════════
-# Current workaround for break
-# ═══════════════════════════════════════════════════════════════
-print("")
-print("Current workaround (find first > 10):")
-var j = 0
-var found = false
-while (j < 20 and not found) {
-    if (j * j > 10) {
-        found = true
-    } else {
-        j = j + 1
-    }
-}
-print("  Found:", j)
-
-# ═══════════════════════════════════════════════════════════════
-# Current: Conditional state modification (working)
-# ═══════════════════════════════════════════════════════════════
-print("")
-print("┌────────────────────────────────────────────┐")
-print("│  State modification (current)              │")
-print("└────────────────────────────────────────────┘")
-
-var sum = 0
-var k = 1
-while (k <= 10) {
-    sum = sum + k
-    k = k + 1
-}
-print("  Sum 1..10 =", sum)
-
-# ═══════════════════════════════════════════════════════════════
-# Current: Compound assignments (working)
-# ═══════════════════════════════════════════════════════════════
-print("")
-print("┌────────────────────────────────────────────┐")
-print("│  Compound assignment (current)             │")
-print("└────────────────────────────────────────────┘")
-
-var x = 10
-x = x + 5   # Future: x += 5
-x = x * 2   # Future: x *= 2
 print("  x =", x)
+print("  name =", name)
+print("  flag =", flag)
+
+# ═══════════════════════════════════════════════════════════════
+# With type annotations (gradual typing)
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  With type annotations                     │")
+print("└────────────────────────────────────────────┘")
+
+var age: number = 30
+var city: string = "Paris"
+var active: bool = true
+
+print("  age: number =", age)
+print("  city: string =", city)
+print("  active: bool =", active)
+
+# ═══════════════════════════════════════════════════════════════
+# Type-annotated functions
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Type-annotated functions                  │")
+print("└────────────────────────────────────────────┘")
+
+fn add(a: number, b: number): number {
+    return a + b
+}
+
+fn greet(name: string): string {
+    return "Hello, " + name + "!"
+}
+
+fn is_adult(age: number): bool {
+    return age >= 18
+}
+
+print("  add(10, 20) =", add(10, 20))
+print("  greet(\"Bob\") =", greet("Bob"))
+print("  is_adult(25) =", is_adult(25))
+print("  is_adult(15) =", is_adult(15))
+
+# ═══════════════════════════════════════════════════════════════
+# Type inference
+# ═══════════════════════════════════════════════════════════════
+print("")
+print("┌────────────────────────────────────────────┐")
+print("│  Type inference (optional annotations)     │")
+print("└────────────────────────────────────────────┘")
+
+var inferred = 100      # inferred as number
+var computed = 5 * 10   # inferred as number
+var message = "test"    # inferred as string
+
+print("  inferred =", inferred)
+print("  computed =", computed)
+print("  message =", message)
 
 print("")
 print("╔══════════════════════════════════════════╗")
-print("║   Imperative patterns working in Xenly   ║")
+print("║   Gradual typing working!                ║")
 print("╚══════════════════════════════════════════╝")
+print("")
+print("Try: ./xenly examples/typing.xe --typecheck")
+print("     to enable type checking mode")

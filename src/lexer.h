@@ -26,6 +26,14 @@ typedef enum {
     TOKEN_IF,           // if
     TOKEN_ELSE,         // else
     TOKEN_WHILE,        // while
+    TOKEN_FOR,          // for
+    TOKEN_DO,           // do
+    TOKEN_BREAK,        // break
+    TOKEN_CONTINUE,     // continue
+    TOKEN_IN,           // in
+    TOKEN_SWITCH,       // switch
+    TOKEN_CASE,         // case
+    TOKEN_DEFAULT,      // default
     TOKEN_IMPORT,       // import
     TOKEN_AS,           // as
     TOKEN_FROM,         // from
@@ -68,16 +76,22 @@ typedef enum {
     TOKEN_STAREQ,       // *=
     TOKEN_SLASHEQ,      // /=
     TOKEN_PLUSPLUS,     // ++
-    TOKEN_MINUSMINUS,  // --
+    TOKEN_MINUSMINUS,   // --
+    TOKEN_ARROW,        // =>
+    TOKEN_NULLISH,      // ??
+    TOKEN_OPTCHAIN,     // ?.
 
     // Delimiters
     TOKEN_LPAREN,       // (
     TOKEN_RPAREN,       // )
     TOKEN_LBRACE,       // {
     TOKEN_RBRACE,       // }
+    TOKEN_LBRACKET,     // [
+    TOKEN_RBRACKET,     // ]
     TOKEN_COMMA,        // ,
     TOKEN_DOT,          // .
     TOKEN_COLON,        // :
+    TOKEN_QUESTION,     // ? (for ternary)
     TOKEN_SEMICOLON,    // ; (optional, newline also works)
     TOKEN_NEWLINE,      // \n
 

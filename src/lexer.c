@@ -66,6 +66,13 @@ static const Keyword keywords[] = {
     { "if",     TOKEN_IF },
     { "else",   TOKEN_ELSE },
     { "while",  TOKEN_WHILE },
+    { "for",    TOKEN_FOR },
+    { "do",     TOKEN_DO },
+    { "break",  TOKEN_BREAK },
+    { "continue", TOKEN_CONTINUE },
+    { "switch", TOKEN_SWITCH },
+    { "case",   TOKEN_CASE },
+    { "default", TOKEN_DEFAULT },
     { "import", TOKEN_IMPORT },
     { "as",     TOKEN_AS },
     { "from",   TOKEN_FROM },
@@ -84,8 +91,18 @@ static const Keyword keywords[] = {
     { "spawn",      TOKEN_SPAWN },
     { "await",      TOKEN_AWAIT },
     { "sleep",      TOKEN_SLEEP },
+    { "async",      TOKEN_ASYNC },
+    { "spawn",      TOKEN_SPAWN },
+    { "await",      TOKEN_AWAIT },
+    { "sleep",      TOKEN_SLEEP },
     { "typeof",  TOKEN_TYPEOF },
     { "instanceof", TOKEN_INSTANCEOF },
+    { "typeof",  TOKEN_TYPEOF },
+    { "instanceof", TOKEN_INSTANCEOF },
+    { "for",        TOKEN_FOR },
+    { "break",      TOKEN_BREAK },
+    { "continue",   TOKEN_CONTINUE },
+    { "in",         TOKEN_IN },
     { "and",     TOKEN_AND },
     { "or",     TOKEN_OR },
     { "not",    TOKEN_NOT },
@@ -197,6 +214,7 @@ Token lexer_next_token(Lexer *l) {
     switch (c) {
         case '=':
             if (n == '=') { lexer_advance(l); return make_token(TOKEN_EQ,   "==", startLine, startCol); }
+            if (n == '>') { lexer_advance(l); return make_token(TOKEN_ARROW, "=>", startLine, startCol); }
             return make_token(TOKEN_ASSIGN, "=", startLine, startCol);
         case '!':
             if (n == '=') { lexer_advance(l); return make_token(TOKEN_NEQ,  "!=", startLine, startCol); }
@@ -223,6 +241,10 @@ Token lexer_next_token(Lexer *l) {
             return make_token(TOKEN_SLASH, "/", startLine, startCol);
         case '%':
             return make_token(TOKEN_PERCENT, "%", startLine, startCol);
+        case '?':
+            if (n == '?') { lexer_advance(l); return make_token(TOKEN_NULLISH, "??", startLine, startCol); }
+            if (n == '.') { lexer_advance(l); return make_token(TOKEN_OPTCHAIN, "?.", startLine, startCol); }
+            return make_token(TOKEN_ERROR, "?", startLine, startCol);
     }
 
     // ── Single-char Tokens ───────────────────────────────────────────────────
@@ -231,6 +253,8 @@ Token lexer_next_token(Lexer *l) {
         case ')': return make_token(TOKEN_RPAREN,    ")", startLine, startCol);
         case '{': return make_token(TOKEN_LBRACE,    "{", startLine, startCol);
         case '}': return make_token(TOKEN_RBRACE,    "}", startLine, startCol);
+        case '[': return make_token(TOKEN_LBRACKET,  "[", startLine, startCol);
+        case ']': return make_token(TOKEN_RBRACKET,  "]", startLine, startCol);
         case ',': return make_token(TOKEN_COMMA,     ",", startLine, startCol);
         case '.': return make_token(TOKEN_DOT,       ".", startLine, startCol);
         case ':': return make_token(TOKEN_COLON,     ":", startLine, startCol);
@@ -252,6 +276,10 @@ const char *token_type_name(TokenType type) {
         case TOKEN_VAR: return "VAR"; case TOKEN_FN: return "FN";
         case TOKEN_RETURN: return "RETURN"; case TOKEN_IF: return "IF";
         case TOKEN_ELSE: return "ELSE"; case TOKEN_WHILE: return "WHILE";
+        case TOKEN_FOR: return "FOR"; case TOKEN_DO: return "DO";
+        case TOKEN_BREAK: return "BREAK"; case TOKEN_CONTINUE: return "CONTINUE";
+        case TOKEN_SWITCH: return "SWITCH"; case TOKEN_CASE: return "CASE";
+        case TOKEN_DEFAULT: return "DEFAULT"; case TOKEN_QUESTION: return "?";
         case TOKEN_IMPORT: return "IMPORT";
         case TOKEN_AS:     return "AS";
         case TOKEN_FROM:   return "FROM";
@@ -268,6 +296,7 @@ const char *token_type_name(TokenType type) {
         case TOKEN_AWAIT:   return "AWAIT";
         case TOKEN_SLEEP:   return "SLEEP";
         case TOKEN_TYPEOF: return "TYPEOF"; case TOKEN_INSTANCEOF: return "INSTANCEOF";
+        case TOKEN_IN: return "IN";
         case TOKEN_PLUS: return "+"; case TOKEN_MINUS: return "-";
         case TOKEN_STAR: return "*"; case TOKEN_SLASH: return "/";
         case TOKEN_PERCENT: return "%"; case TOKEN_ASSIGN: return "=";
@@ -278,6 +307,9 @@ const char *token_type_name(TokenType type) {
         case TOKEN_NOT: return "NOT";
         case TOKEN_LPAREN: return "("; case TOKEN_RPAREN: return ")";
         case TOKEN_LBRACE: return "{"; case TOKEN_RBRACE: return "}";
+        case TOKEN_LBRACKET: return "["; case TOKEN_RBRACKET: return "]";
+        case TOKEN_ARROW: return "=>"; case TOKEN_NULLISH: return "??";
+        case TOKEN_OPTCHAIN: return "?.";
         case TOKEN_COMMA: return ","; case TOKEN_DOT: return ".";
         case TOKEN_NEWLINE: return "NL"; case TOKEN_EOF: return "EOF";
         default: return "???";

@@ -16,9 +16,12 @@
 // Returns 1 if module was found and populated, 0 otherwise.
 int modules_get(const char *name, Module *out);
 
-// ─── Individual module initializers (called internally) ─────────────────────
+// ─── Individual module initializers ──────────────────────────────────────────
 Module module_math(void);
 Module module_string(void);
 Module module_io(void);
+Module module_array(void);
+Module module_os(void);
+Module module_type(void);
 
 #endif // MODULES_H

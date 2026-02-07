@@ -1,0 +1,113 @@
+# ═══════════════════════════════════════════════════════
+#  Xenly — For Loops, Break, Continue
+# ═══════════════════════════════════════════════════════
+import "array"
+import "math"
+import "io"
+
+# ─── 1. Basic C-style for loop ─────────────────────────
+print("── C-style for ──")
+var sum = 0
+for (var i = 0; i < 5; i++) {
+    sum = sum + i
+}
+print("sum 0..4 =", sum)
+
+# ─── 2. Counting down ──────────────────────────────────
+print("── Countdown ──")
+for (var i = 5; i > 0; i--) {
+    print(i)
+}
+print("Go!")
+
+# ─── 3. For-in over array ──────────────────────────────
+print("── For-in ──")
+var fruits = array.of("apple", "banana", "cherry")
+for (var fruit in fruits) {
+    print(fruit)
+}
+
+# ─── 4. For-in over range ──────────────────────────────
+print("── For-in range ──")
+var total = 0
+for (var n in array.range(1, 6)) {
+    total = total + n
+}
+print("sum 1..5 =", total)
+
+# ─── 5. Break ──────────────────────────────────────────
+print("── Break ──")
+var found = -1
+for (var i = 0; i < 100; i++) {
+    if (i * i > 50) {
+        found = i
+        break
+    }
+}
+print("first i where i*i > 50:", found)
+
+# ─── 6. Continue ───────────────────────────────────────
+print("── Continue (evens only) ──")
+var evens = array.empty()
+for (var i = 0; i < 10; i++) {
+    if (math.fmod(i, 2) != 0) {
+        continue
+    }
+    evens = array.push(evens, i)
+}
+print("evens:", evens)
+
+# ─── 7. Nested for loops ───────────────────────────────
+print("── Nested (multiplication table 3x3) ──")
+for (var i = 1; i < 4; i++) {
+    for (var j = 1; j < 4; j++) {
+        if (j > 1) {
+            io.write(" ")
+        }
+        io.write(i * j)
+    }
+    io.writeln()
+}
+
+# ─── 8. Break in nested loop (inner only) ─────────────
+print("── Nested break ──")
+for (var i = 0; i < 3; i++) {
+    for (var j = 0; j < 5; j++) {
+        if (j == 2) {
+            break
+        }
+        io.write(i)
+        io.write(",")
+        io.writeln(j)
+    }
+}
+
+# ─── 9. While with break and continue ──────────────────
+print("── While break/continue ──")
+var x = 0
+var whileSum = 0
+while (x < 20) {
+    x = x + 1
+    if (math.fmod(x, 3) == 0) {
+        continue
+    }
+    if (x > 10) {
+        break
+    }
+    whileSum = whileSum + x
+}
+print("whileSum =", whileSum)
+
+# ─── 10. For-in with break ─────────────────────────────
+print("── For-in break ──")
+var nums = array.of(2, 4, 6, 7, 8, 10)
+var allEven = true
+for (var n in nums) {
+    if (math.fmod(n, 2) != 0) {
+        allEven = false
+        break
+    }
+}
+print("allEven =", allEven)
+
+print("── All for-loop tests passed ──")
