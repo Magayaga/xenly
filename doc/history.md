@@ -67,3 +67,9 @@
 * On July 24, 2024, He announced **Xenly**'s source code due to typhoon Carina, strong weather in the Philippines because the rain is heavy and the flood is rising.
 
 * On July 26, 2024, He announced that upcoming features of Xenly programming language are `fn` means define a function and more statements.
+
+* On March 29, 2025, He announced that the fixed Xenly Interpreter was written in the C programming language due to the fixing of Xenly's source code.
+  
+* On April 6, 2025, He wrote “I want to print() function returns but should be don’t nota() function”. In addition, xenly.c was returned because this is the longest code in a split of the many files.
+  
+* On February 8, 2026, He announced that new native compiler and redesign of interpreter of Xenly programming language then new upcoming releases (**alpha** and **beta**).
