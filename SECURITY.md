@@ -1,5 +1,4 @@
 # SECURITY POLICY
-## Security
 
 **Magayaga** takes the security of our software products and services seriously, which includes all source code repositories managed through our GitHub profiles and private organizations, which include [Magayaga](https://github.com/magayaga).
 
@@ -42,6 +41,6 @@ We prefer all communications to be in _English_.
 
 ## Copyright
 
-Copyright (c) 2023-2024 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
+Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
