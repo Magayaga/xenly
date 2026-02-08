@@ -14,7 +14,7 @@
   </a>
 </p>
 
-**Xenly** (formerly known as **Xenon**) is a **free and open-source** high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in **C**, **Go**, and **Rust** programming languages.
+**Xenly** (formerly known as **Xenon**) is a **free and open-source** high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in **C** programming language.
 
 Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
 
@@ -52,9 +52,9 @@ Here is the Hyzero programming language that was initially written in Python pro
 
 ## Getting Started
 
-### 1. Download the Xenly's source code
+### 1. Download Xenly's source code
 
-You can download the git clone of the `xenly` programming language. It is the available for the **Windows** and **Linux** operating systems.
+You can download the git clone of the `xenly` programming language. It is available for the **macOS**, **WSL**, and **Linux** operating systems.
 
 
 ```bash
@@ -65,13 +65,12 @@ $ xenly
 
 ### 2. Install the Xenly's source code
 
-You can run the program `makefile` for Linux, `make.bat` for Windows, and `main.sh` for both Windows and Linux.
+You can run the program `makefile` for Linux and `main.sh` for both WSL and Linux.
 
 ```bash
-# Run the program (makefile, bash script, or batchfile)
+# Run the program (makefile or bash script)
 $ make
 $ bash main.sh
-$ ./make.bat
 
 # Run the binary code
 $ ./xenly
@@ -87,7 +86,7 @@ $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
 
 ### 4. Check permissions and paths (Linux)
 
-Ensure that the libraries has the correct permissions and is in the directory where `xenly` expects to find it. Ensure the library is readable and executable:
+Ensure that the libraries have the correct permissions and are in the directory where `xenly` expects to find them. Ensure the library is readable and executable:
 
 ```bash
 $ chmod +rx <libraries>
@@ -133,4 +132,5 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
