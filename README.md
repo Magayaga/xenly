@@ -24,12 +24,10 @@ Xenly programming language should be command-line interfaces, web servers, and d
 ### Hello, World! program
 The following shows how a **"Hello, World!"** program is written in Xenly programming language:
 
-* `print` (v0.1.0-preview0 - v0.1.0-preview8)
-
-  ```swift
-  // “Hello, World!” program
-  print("Hello, World!")
-  ```
+```swift
+// “Hello, World!” program
+print("Hello, World!")
+```
 
 A **Xenly** variable is created the moment you first assign a value to it.
 
@@ -38,17 +36,6 @@ A **Xenly** variable is created the moment you first assign a value to it.
 var hi = "Hello, World!"
 print(hi)
 ```
-
-I know all high-level programming languages like **Python**, **Ruby**, **Lua**, and **Julia** were initially written in C programming language.
-
-The following shows how a **"Hello, World!"** program is written in [Hyzero](https://github.com/magayaga/Hyzero) programming language:
-
-```python
-# “Hello, World!” program
-write("Hello, World!")
-```
-
-Here is the Hyzero programming language that was initially written in Python programming language like interpreter, high-level, and functional.
 
 ## Getting Started
 
@@ -63,7 +50,7 @@ $ git clone https://github.com/xenly
 $ xenly
 ```
 
-### 2. Install the Xenly's source code
+### 2. Install Xenly's source code
 
 You can run the program `makefile` for Linux and `main.sh` for both WSL and Linux.
 
@@ -74,40 +61,20 @@ $ bash main.sh
 
 # Run the binary code
 $ ./xenly
+$ ./xenlyc
 ```
 
-### 3. Set the Library paths (Linux)
-
-Make sure the shared library path is correctly set so that the system can find the libraries. Set the `LD_LIBRARY_PATH` environment variable to include the directory containing libraries (`math.so`, `graphics.so`, and more).
-
-```bash
-$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
-```
-
-### 4. Check permissions and paths (Linux)
-
-Ensure that the libraries have the correct permissions and are in the directory where `xenly` expects to find them. Ensure the library is readable and executable:
-
-```bash
-$ chmod +rx <libraries>
-```
-
-For example,
-
-```bash
-$ chmod +rx math.so
-```
-
-Confirm that `math.so` is in the same directory as xenly or in a directory listed in `LD_LIBRARY_PATH`.
-
-### 5. Testing programs
+### 3. Testing programs
 
 ```bash
 # Xenly's version information
 ./xenly -v
 
-# Running xenly's examples
-./xenly examples/print/main.xe
+# Running xenly's examples (Interpreter)
+./xenly examples/hello.xe
+
+# Running xenlyc's examples (Native compiler)
+./xenlyc examples/hello.xe -o hello 
 ```
 
 ## Source Code Organization
@@ -132,5 +99,6 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
