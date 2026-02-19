@@ -1,0 +1,85 @@
+// Performance Benchmark
+print("=== Performance Benchmark ===")
+print()
+
+// Benchmark 1: Sum loop
+print("1. Sum loop (200000)...")
+var sum = 0
+var i = 0
+while (i < 200000) {
+    sum = sum + i
+    i = i + 1
+}
+print("   Sum:", sum)
+print()
+
+// Benchmark 2: Nested loops
+print("2. Nested loops (1000x1000)...")
+var total = 0
+var outer = 0
+while (outer < 1000) {
+    var inner = 0
+    while (inner < 1000) {
+        total = total + 1
+        inner = inner + 1
+    }
+    outer = outer + 1
+}
+print("   Total:", total)
+print()
+
+// Benchmark 3: Arithmetic
+print("3. Arithmetic (1000000)...")
+var arith = 0
+var k = 0
+while (k < 1000000) {
+    arith = arith + k * 2
+    k = k + 1
+}
+print("   Result:", arith)
+print()
+
+// Benchmark 4: Function calls
+fn compute(x) {
+    return x * 2 + 1
+}
+
+print("4. Function calls (100000)...")
+var result = 0
+var j = 0
+while (j < 100000) {
+    result = compute(j)
+    j = j + 1
+}
+print("   Result:", result)
+print()
+
+// Benchmark 5: Comparisons
+print("5. Comparisons (1000000)...")
+var count = 0
+var m = 0
+while (m < 1000000) {
+    if (m > 500000) {
+        count = count + 1
+    }
+    m = m + 1
+}
+print("   Count:", count)
+print()
+
+// Benchmark 6: Mixed operations
+print("6. Mixed operations (500000)...")
+var mixed = 0
+var n = 0
+while (n < 500000) {
+    const temp1 = n * 3
+    const temp2 = temp1 + 10
+    if (temp2 > 100) {
+        mixed = mixed + 1
+    }
+    n = n + 1
+}
+print("   Result:", mixed)
+print()
+
+print("✅ Benchmark complete!")

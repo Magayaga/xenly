@@ -1,0 +1,38 @@
+// Declarative Programming
+print("Declarative Programming")
+print()
+
+// Declarative: WHAT not HOW
+print("Declarative Style")
+print()
+
+// Validation (declarative rules)
+fn isValid(age) {
+    if (age < 0) {
+        return false
+    }
+    if (age > 150) {
+        return false
+    }
+    return true
+}
+
+print(isValid(30))
+print(isValid(-5))
+print()
+
+// Transformation
+fn double(x) {
+    return x * 2
+}
+
+print(double(5))
+print(double(10))
+print()
+
+print("Benefits:")
+print("  Clear intent")
+print("  Less code")
+print("  Maintainable")
+print()
+print("Complete!")

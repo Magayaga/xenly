@@ -1,12 +1,3 @@
-/*
- * XENLY - high-level and general-purpose programming language
- * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
- *
- * It is initially written in C programming language.
- *
- * It is available for Linux and macOS operating systems.
- *
- */
 #include "interpreter.h"
 #include "modules.h"
 #include "lexer.h"
@@ -75,12 +66,22 @@ Value *value_array(Value **items, size_t len) {
     return v;
 }
 
+Value *value_variant(const char *tag, Value **fields, size_t field_count) {
+    Value *v = (Value *)calloc(1, sizeof(Value));
+    v->type = VAL_ENUM_VARIANT;
+    v->variant.tag = strdup(tag);
+    v->variant.fields = fields;  // takes ownership
+    v->variant.field_count = field_count;
+    return v;
+}
+
 void value_destroy(Value *v) {
     if (!v) return;
     // Shared reference types are NOT freed here — their lifetime is managed by
     // the environment that owns them (global scope, class method table, etc.).
     // They are only freed during interpreter shutdown via interpreter_destroy.
-    if (v->type == VAL_FUNCTION || v->type == VAL_CLASS || v->type == VAL_INSTANCE || v->type == VAL_ARRAY)
+    if (v->type == VAL_FUNCTION || v->type == VAL_CLASS || v->type == VAL_INSTANCE || 
+        v->type == VAL_ARRAY || v->type == VAL_ENUM_VARIANT)
         return;
     if (v->str)   free(v->str);
     if (v->inner) value_destroy(v->inner);
@@ -153,6 +154,36 @@ char *value_to_string(Value *v) {
             out[pos]   = '\0';
             return out;
         }
+        case VAL_ENUM_VARIANT: {
+            // Build "VariantName" or "VariantName(field1, field2, ...)"
+            size_t cap = 256, pos = 0;
+            char *out = (char *)malloc(cap);
+            size_t tag_len = strlen(v->variant.tag);
+            if (pos + tag_len >= cap) { cap *= 2; out = (char *)realloc(out, cap); }
+            memcpy(out + pos, v->variant.tag, tag_len);
+            pos += tag_len;
+            
+            if (v->variant.field_count > 0) {
+                if (pos + 1 >= cap) { cap *= 2; out = (char *)realloc(out, cap); }
+                out[pos++] = '(';
+                for (size_t i = 0; i < v->variant.field_count; i++) {
+                    if (i > 0) {
+                        if (pos + 2 >= cap) { cap *= 2; out = (char *)realloc(out, cap); }
+                        out[pos++] = ','; out[pos++] = ' ';
+                    }
+                    char *field_str = value_to_string(v->variant.fields[i]);
+                    size_t flen = strlen(field_str);
+                    while (pos + flen >= cap) { cap *= 2; out = (char *)realloc(out, cap); }
+                    memcpy(out + pos, field_str, flen);
+                    pos += flen;
+                    free(field_str);
+                }
+                if (pos + 1 >= cap) { cap *= 2; out = (char *)realloc(out, cap); }
+                out[pos++] = ')';
+            }
+            out[pos] = '\0';
+            return out;
+        }
         default: return strdup("<unknown>");
     }
 }
@@ -161,11 +192,19 @@ char *value_to_string(Value *v) {
 Environment *env_create(Environment *parent) {
     Environment *e = (Environment *)calloc(1, sizeof(Environment));
     e->parent = parent;
+    e->refcount = 1;  // starts with refcount 1
     return e;
+}
+
+void env_retain(Environment *env) {
+    if (env) env->refcount++;
 }
 
 void env_destroy(Environment *env) {
     if (!env) return;
+    env->refcount--;
+    if (env->refcount > 0) return;  // still referenced elsewhere
+    
     EnvEntry *cur = env->entries;
     while (cur) {
         EnvEntry *next = cur->next;
@@ -194,6 +233,10 @@ void env_set(Environment *env, const char *name, Value *val) {
     // Check if already exists in THIS scope → update
     for (EnvEntry *e = env->entries; e; e = e->next) {
         if (strcmp(e->name, name) == 0) {
+            if (e->is_const) {
+                fprintf(stderr, "\033[1;31m[Xenly Error] Cannot reassign const variable '%s'.\033[0m\n", name);
+                return;
+            }
             value_destroy(e->value);
             e->value = val;
             return;
@@ -203,6 +246,17 @@ void env_set(Environment *env, const char *name, Value *val) {
     EnvEntry *entry = (EnvEntry *)malloc(sizeof(EnvEntry));
     entry->name  = strdup(name);
     entry->value = val;
+    entry->is_const = 0;  // mutable by default
+    entry->next  = env->entries;
+    env->entries = entry;
+}
+
+void env_set_const(Environment *env, const char *name, Value *val) {
+    // Set immutable binding
+    EnvEntry *entry = (EnvEntry *)malloc(sizeof(EnvEntry));
+    entry->name  = strdup(name);
+    entry->value = val;
+    entry->is_const = 1;  // immutable
     entry->next  = env->entries;
     env->entries = entry;
 }
@@ -222,6 +276,10 @@ static int env_update(Environment *env, const char *name, Value *val) {
     for (Environment *e = env; e; e = e->parent) {
         for (EnvEntry *entry = e->entries; entry; entry = entry->next) {
             if (strcmp(entry->name, name) == 0) {
+                if (entry->is_const) {
+                    fprintf(stderr, "\033[1;31m[Xenly Error] Cannot reassign const variable '%s'.\033[0m\n", name);
+                    return 0;
+                }
                 value_destroy(entry->value);
                 entry->value = val;
                 return 1;
@@ -235,8 +293,23 @@ static int env_update(Environment *env, const char *name, Value *val) {
 static void value_destroy_deep(Value *v) {
     if (!v) return;
     if (v->str) free(v->str);
-    if (v->fn) {
+    // Only free FnDef if we own it (not a shared reference)
+    if (v->fn && !v->fn_shared) {
+        // Release the closure environment (decrement refcount)
+        if (v->fn->closure)
+            env_destroy(v->fn->closure);
         free(v->fn->name);
+        // Only free params for variant constructors (body == NULL)
+        // Regular functions borrow params from AST
+        if (v->fn->body == NULL && v->fn->params) {
+            for (size_t i = 0; i < v->fn->param_count; i++) {
+                free(v->fn->params[i].name);
+                if (v->fn->params[i].type_annotation) {
+                    free(v->fn->params[i].type_annotation);
+                }
+            }
+            free(v->fn->params);
+        }
         free(v->fn);
     }
     if (v->inner) value_destroy_deep(v->inner);
@@ -272,6 +345,15 @@ static void value_destroy_deep(Value *v) {
             free(v->instance->fields);
         }
         free(v->instance);
+    }
+    if (v->type == VAL_ENUM_VARIANT) {
+        if (v->variant.tag) free(v->variant.tag);
+        if (v->variant.fields) {
+            for (size_t i = 0; i < v->variant.field_count; i++) {
+                value_destroy_deep(v->variant.fields[i]);
+            }
+            free(v->variant.fields);
+        }
     }
     free(v);
 }
@@ -315,12 +397,40 @@ void interpreter_destroy(Interpreter *interp) {
     // Use deep destroy at shutdown — this frees shared types (classes, instances,
     // functions) that value_destroy skips during normal execution.
     env_destroy_deep(interp->global);
-    // Destroy loaded modules
+    // Destroy loaded native modules
     for (size_t i = 0; i < interp->module_count; i++) {
         free(interp->modules[i].name);
         // functions array is statically allocated per module, don't free individual fns
     }
     free(interp->modules);
+    // Destroy loaded user modules
+    for (size_t i = 0; i < interp->user_module_count; i++) {
+        free(interp->user_modules[i].name);
+        free(interp->user_modules[i].filepath);
+        // exports env was set as a shared flat env; destroy it deeply
+        if (interp->user_modules[i].exports) {
+            EnvEntry *cur = interp->user_modules[i].exports->entries;
+            while (cur) {
+                EnvEntry *next = cur->next;
+                free(cur->name);
+                // Values are shared with global; don't deep-destroy here
+                free(cur);
+                cur = next;
+            }
+            free(interp->user_modules[i].exports);
+        }
+        // ast is owned by the module; destroy it
+        if (interp->user_modules[i].ast)
+            ast_node_destroy(interp->user_modules[i].ast);
+    }
+    free(interp->user_modules);
+    // Free the circular-import loading stack (should be empty, but defensive)
+    for (size_t i = 0; i < interp->loading_count; i++)
+        free(interp->loading_files[i]);
+    free(interp->loading_files);
+    // Free the array registry (the arrays themselves were freed by env_destroy_deep)
+    free(interp->all_arrays);
+    free(interp->source_dir);
     free(interp);
 }
 
@@ -636,6 +746,53 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         return value_null();
     }
 
+    // ── CONST DECL ─────────────────────────────────────────────────────────
+    case NODE_CONST_DECL: {
+        Value *val = eval(interp, node->children[0], env);
+        env_set_const(env, node->str_value, val);
+        return value_null();
+    }
+
+    // ── ENUM DECL ──────────────────────────────────────────────────────────
+    case NODE_ENUM_DECL: {
+        // Enum creates variant constructor functions in the current scope
+        // Each variant becomes a function that creates a VAL_ENUM_VARIANT
+        // Variants with no params are created as values directly
+        for (size_t i = 0; i < node->child_count; i++) {
+            ASTNode *variant = node->children[i];
+            const char *variant_name = variant->str_value;
+            size_t param_count = variant->param_count;
+            
+            if (param_count == 0) {
+                // Parameterless variant: create the value directly
+                Value *variant_val = value_variant(variant_name, NULL, 0);
+                env_set(env, variant_name, variant_val);
+            } else {
+                // Variant with params: create a constructor function
+                FnDef *constructor = (FnDef *)malloc(sizeof(FnDef));
+                constructor->name = strdup(variant_name);
+                // Deep copy params
+                constructor->param_count = param_count;
+                constructor->params = (Param *)malloc(sizeof(Param) * param_count);
+                for (size_t j = 0; j < param_count; j++) {
+                    constructor->params[j].name = strdup(variant->params[j].name);
+                    constructor->params[j].type_annotation = variant->params[j].type_annotation 
+                        ? strdup(variant->params[j].type_annotation) : NULL;
+                }
+                constructor->body = NULL;  // NULL body means it's a variant constructor
+                constructor->closure = env;  // capture environment
+                constructor->is_async = 0;
+                
+                Value *constructor_val = (Value *)calloc(1, sizeof(Value));
+                constructor_val->type = VAL_FUNCTION;
+                constructor_val->fn = constructor;
+                
+                env_set(env, variant_name, constructor_val);
+            }
+        }
+        return value_null();
+    }
+
     // ── ASSIGN ─────────────────────────────────────────────────────────────
     case NODE_ASSIGN: {
         Value *val = eval(interp, node->children[0], env);
@@ -717,13 +874,15 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
     // ── FN DECL ────────────────────────────────────────────────────────────
     case NODE_FN_DECL: {
         Value *fnval = (Value *)calloc(1, sizeof(Value));
-        fnval->type = VAL_FUNCTION;
+        fnval->type      = VAL_FUNCTION;
+        fnval->fn_shared = 0;  // this Value owns the FnDef
         fnval->fn   = (FnDef *)malloc(sizeof(FnDef));
         fnval->fn->name       = strdup(node->str_value);
         fnval->fn->params     = node->params;
         fnval->fn->param_count = node->param_count;
         fnval->fn->body       = node->children[0]; // the block
         fnval->fn->closure    = env;               // capture current env
+        env_retain(env);                           // increment refcount
         env_set(env, node->str_value, fnval);
         return value_null();
     }
@@ -739,21 +898,90 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         }
         FnDef *fn = fnval->fn;
 
-        // Evaluate arguments
-        size_t argc = node->child_count;
-        Value **args = (Value **)malloc(sizeof(Value *) * argc);
-        for (size_t i = 0; i < argc; i++)
-            args[i] = eval(interp, node->children[i], env);
+        // Separate positional and named arguments
+        size_t positional_count = 0;
+        ASTNode **named_args = NULL;
+        size_t named_count = 0;
+        
+        for (size_t i = 0; i < node->child_count; i++) {
+            if (node->children[i]->type == NODE_NAMED_ARG) {
+                named_count++;
+                named_args = realloc(named_args, sizeof(ASTNode*) * named_count);
+                named_args[named_count - 1] = node->children[i];
+            } else {
+                positional_count++;
+            }
+        }
+
+        // Evaluate positional arguments
+        Value **args = (Value **)malloc(sizeof(Value *) * positional_count);
+        size_t arg_idx = 0;
+        for (size_t i = 0; i < node->child_count; i++) {
+            if (node->children[i]->type != NODE_NAMED_ARG) {
+                args[arg_idx++] = eval(interp, node->children[i], env);
+            }
+        }
+
+        // Execute body (NULL body means it's a variant constructor)
+        if (fn->body == NULL) {
+            // Variant constructor: create VAL_ENUM_VARIANT
+            Value *result = value_variant(fn->name, args, positional_count);
+            free(named_args);
+            // Don't free args - they're owned by the variant now
+            return result;
+        }
 
         // Create new scope from closure
         Environment *fn_env = env_create(fn->closure);
-        for (size_t i = 0; i < fn->param_count && i < argc; i++)
-            env_set(fn_env, fn->params[i].name, args[i]);
-        // Extra params get null
-        for (size_t i = argc; i < fn->param_count; i++)
-            env_set(fn_env, fn->params[i].name, value_null());
+        
+        // Bind positional arguments to parameters
+        size_t param_idx = 0;
+        for (size_t i = 0; i < positional_count && param_idx < fn->param_count; i++) {
+            env_set(fn_env, fn->params[param_idx].name, args[i]);
+            param_idx++;
+        }
+        
+        // Bind named arguments to parameters
+        for (size_t i = 0; i < named_count; i++) {
+            ASTNode *named = named_args[i];
+            const char *param_name = named->str_value;
+            Value *arg_value = eval(interp, named->children[0], env);
+            
+            // Find parameter by name
+            int found = 0;
+            for (size_t j = 0; j < fn->param_count; j++) {
+                if (strcmp(fn->params[j].name, param_name) == 0) {
+                    env_set(fn_env, param_name, arg_value);
+                    found = 1;
+                    break;
+                }
+            }
+            
+            if (!found) {
+                fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: Unknown parameter '%s' in function '%s'.\033[0m\n",
+                        node->line, param_name, fn->name);
+                interp->had_error = 1;
+                value_destroy(arg_value);
+            }
+        }
+        
+        // Fill in defaults for unbound parameters
+        for (size_t i = 0; i < fn->param_count; i++) {
+            if (env_get(fn_env, fn->params[i].name) == NULL) {
+                if (fn->params[i].default_value != NULL) {
+                    Value *default_val = eval(interp, fn->params[i].default_value, fn_env);
+                    env_set(fn_env, fn->params[i].name, default_val);
+                } else if (fn->params[i].is_optional) {
+                    env_set(fn_env, fn->params[i].name, value_null());
+                } else {
+                    fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: Missing required parameter '%s' in function '%s'.\033[0m\n",
+                            node->line, fn->params[i].name, fn->name);
+                    interp->had_error = 1;
+                    env_set(fn_env, fn->params[i].name, value_null());
+                }
+            }
+        }
 
-        // Execute body
         Value *result = eval(interp, fn->body, fn_env);
 
         // Unwrap return sentinel
@@ -764,26 +992,37 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
             result = inner;
         }
 
-        // Cleanup: identify transient VAL_FUNCTION args before freeing args array.
-        // Closures passed inline (e.g. map(make_adder(5), ...)) are not referenced
-        // anywhere after fn_env is destroyed. They must be freed explicitly.
-        // Shared function refs (from IDENTIFIER lookups) are NOT freed here.
+        // Cleanup
         Value **transient_fns = NULL;
         size_t  transient_count = 0;
-        for (size_t i = 0; i < argc; i++) {
-            if (args[i] && args[i]->type == VAL_FUNCTION &&
-                node->children[i]->type != NODE_IDENTIFIER &&
-                node->children[i]->type != NODE_THIS) {
-                transient_count++;
-                transient_fns = (Value **)realloc(transient_fns,
-                    sizeof(Value *) * transient_count);
-                transient_fns[transient_count - 1] = args[i];
+        for (size_t i = 0; i < positional_count; i++) {
+            if (args[i] && args[i]->type == VAL_FUNCTION) {
+                int is_transient = 1;
+                size_t pos_idx = 0;
+                for (size_t j = 0; j < node->child_count && pos_idx <= i; j++) {
+                    if (node->children[j]->type != NODE_NAMED_ARG) {
+                        if (pos_idx == i) {
+                            if (node->children[j]->type == NODE_IDENTIFIER || 
+                                node->children[j]->type == NODE_THIS) {
+                                is_transient = 0;
+                            }
+                            break;
+                        }
+                        pos_idx++;
+                    }
+                }
+                if (is_transient) {
+                    transient_count++;
+                    transient_fns = (Value **)realloc(transient_fns,
+                        sizeof(Value *) * transient_count);
+                    transient_fns[transient_count - 1] = args[i];
+                }
             }
         }
         free(args);
+        free(named_args);
         env_destroy(fn_env);
 
-        // Free transient function values and their closure chains
         for (size_t i = 0; i < transient_count; i++) {
             Value *tfn = transient_fns[i];
             if (tfn->fn && tfn->fn->closure)
@@ -905,6 +1144,152 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
             if (!truthy) break;
         } while (1);
         return result;
+    }
+
+    // ── SWITCH ────────────────────────────────────────────────────────────────
+    case NODE_SWITCH: {
+        // children[0] = discriminant expression
+        // children[1..n] = case blocks (NODE_BLOCK):
+        //   Regular case:  children[0] = case-value expr, children[1..] = statements
+        //   Default case:  str_value == "__default__", children[0..] = statements
+        Value *disc = eval(interp, node->children[0], env);
+
+        ASTNode *default_block = NULL;
+        Value *result = value_null();
+        int matched = 0;
+
+        for (size_t i = 1; i < node->child_count; i++) {
+            ASTNode *case_block = node->children[i];
+
+            // Is this the default clause?
+            if (case_block->str_value && strcmp(case_block->str_value, "__default__") == 0) {
+                default_block = case_block;
+                continue;
+            }
+
+            // Evaluate the case value (first child of block) and compare
+            ASTNode *case_val_node = case_block->children[0];
+            Value *case_val = eval(interp, case_val_node, env);
+
+            int eq = 0;
+            if (disc->type == VAL_NUMBER && case_val->type == VAL_NUMBER)
+                eq = disc->num == case_val->num;
+            else if (disc->type == VAL_STRING && case_val->type == VAL_STRING)
+                eq = strcmp(disc->str, case_val->str) == 0;
+            else if (disc->type == VAL_BOOL && case_val->type == VAL_BOOL)
+                eq = disc->boolean == case_val->boolean;
+            else if (disc->type == VAL_NULL && case_val->type == VAL_NULL)
+                eq = 1;
+            value_destroy(case_val);
+
+            if (eq) {
+                matched = 1;
+                // Execute statements (children[1..] of this block)
+                for (size_t j = 1; j < case_block->child_count; j++) {
+                    value_destroy(result);
+                    result = eval(interp, case_block->children[j], env);
+                    if (result && (result->type == VAL_RETURN ||
+                                   result->type == VAL_BREAK  ||
+                                   result->type == VAL_CONTINUE)) {
+                        // Break exits the switch, return/continue bubble up
+                        if (result->type == VAL_BREAK) {
+                            value_destroy(result); result = value_null();
+                        }
+                        value_destroy(disc);
+                        return result;
+                    }
+                    if (interp->had_error) break;
+                }
+                break;  // no fall-through
+            }
+        }
+
+        // No case matched — run default if present
+        if (!matched && default_block) {
+            for (size_t j = 0; j < default_block->child_count; j++) {
+                value_destroy(result);
+                result = eval(interp, default_block->children[j], env);
+                if (result && (result->type == VAL_RETURN  ||
+                               result->type == VAL_BREAK   ||
+                               result->type == VAL_CONTINUE)) {
+                    if (result->type == VAL_BREAK) {
+                        value_destroy(result); result = value_null();
+                    }
+                    value_destroy(disc);
+                    return result;
+                }
+                if (interp->had_error) break;
+            }
+        }
+
+        value_destroy(disc);
+        return result;
+    }
+
+    // ── ARROW FUNCTION (NODE_ARROW_FN) ─────────────────────────────────────
+    case NODE_ARROW_FN: {
+        // Create a VAL_FUNCTION with the arrow fn's params and body,
+        // capturing the current env as a closure (same as a regular fn decl).
+        Value *fnval = (Value *)calloc(1, sizeof(Value));
+        fnval->type      = VAL_FUNCTION;
+        fnval->fn_shared = 0;  // this Value owns the FnDef
+        fnval->fn   = (FnDef *)malloc(sizeof(FnDef));
+        fnval->fn->name        = strdup("<arrow>");
+        fnval->fn->params      = node->params;
+        fnval->fn->param_count = node->param_count;
+        fnval->fn->body        = node->children[0];  // the implicit-return block
+        fnval->fn->closure     = env;
+        env_retain(env);                             // increment refcount
+        fnval->fn->is_async    = 0;
+        return fnval;
+    }
+
+    // ── CALL_EXPR: call any expression that evaluates to a function ─────────
+    case NODE_CALL_EXPR: {
+        // children[0] = callee expression, children[1..n] = arguments
+        Value *callee = eval(interp, node->children[0], env);
+        if (!callee || callee->type != VAL_FUNCTION) {
+            fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: Expression is not callable.\033[0m\n",
+                    node->line);
+            interp->had_error = 1;
+            if (callee) value_destroy(callee);
+            return value_null();
+        }
+        FnDef *fn = callee->fn;
+
+        // Evaluate arguments (children[1..n])
+        size_t argc = node->child_count - 1;
+        Value **args = (Value **)malloc(sizeof(Value *) * (argc ? argc : 1));
+        for (size_t i = 0; i < argc; i++)
+            args[i] = eval(interp, node->children[i + 1], env);
+
+        // Variant constructor case
+        if (fn->body == NULL) {
+            Value *r = value_variant(fn->name, args, argc);
+            return r;
+        }
+
+        // Normal function call in closure scope
+        Environment *fn_env = env_create(fn->closure);
+        for (size_t i = 0; i < fn->param_count && i < argc; i++)
+            env_set(fn_env, fn->params[i].name, args[i]);
+        for (size_t i = argc; i < fn->param_count; i++) {
+            if (fn->params[i].default_value)
+                env_set(fn_env, fn->params[i].name, eval(interp, fn->params[i].default_value, fn_env));
+            else
+                env_set(fn_env, fn->params[i].name, value_null());
+        }
+        free(args);
+
+        Value *result = eval(interp, fn->body, fn_env);
+        if (result && result->type == VAL_RETURN) {
+            Value *inner = result->inner;
+            result->inner = NULL;
+            value_destroy(result);
+            result = inner;
+        }
+        env_destroy(fn_env);
+        return result ? result : value_null();
     }
 
     // ── BREAK ──────────────────────────────────────────────────────────────
@@ -1467,13 +1852,26 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
             interp->had_error = 1;
             return value_null();
         }
-        // Return a copy for primitives; shared ref for complex types
+        // Return a copy for primitives; for complex types return a new wrapper
+        // Value* that shares the underlying data. This prevents double-free when
+        // the same function is stored in multiple variables (e.g. var d = f).
         switch (val->type) {
             case VAL_NUMBER:   return value_number(val->num);
             case VAL_STRING:   return value_string(val->str);
             case VAL_BOOL:     return value_bool(val->boolean);
             case VAL_NULL:     return value_null();
-            default:           return val;  // fn/class/instance/array – shared ref
+            case VAL_FUNCTION: {
+                // Create a new Value wrapper pointing to the same FnDef.
+                // The FnDef itself is owned by the original env entry and will be
+                // freed when that entry is destroyed. Set fn_shared=1 to indicate
+                // this wrapper doesn't own the FnDef and shouldn't free it.
+                Value *fnval = (Value *)calloc(1, sizeof(Value));
+                fnval->type      = VAL_FUNCTION;
+                fnval->fn        = val->fn;  // shared reference to the FnDef
+                fnval->fn_shared = 1;        // don't free FnDef on destroy
+                return fnval;
+            }
+            default:           return val;  // class/instance/array – shared ref
         }
     }
 
@@ -1543,9 +1941,19 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         else if (strcmp(op, ">") == 0)  { value_destroy(result); result = value_bool(left->num > right->num); }
         else if (strcmp(op, "<=") == 0) { value_destroy(result); result = value_bool(left->num <= right->num); }
         else if (strcmp(op, ">=") == 0) { value_destroy(result); result = value_bool(left->num >= right->num); }
-        // Logical
-        else if (strcmp(op, "and") == 0) { value_destroy(result); result = value_bool(is_truthy(left) && is_truthy(right)); }
-        else if (strcmp(op, "or") == 0)  { value_destroy(result); result = value_bool(is_truthy(left) || is_truthy(right)); }
+        // Logical — short-circuit: return the actual operand value, not a bool.
+        // 'and' returns left if it's falsy, otherwise right  (like JS &&)
+        // 'or'  returns left if it's truthy, otherwise right (like JS ||)
+        else if (strcmp(op, "and") == 0) {
+            value_destroy(result);
+            if (!is_truthy(left)) { value_destroy(right); return left; }
+            value_destroy(left); return right;
+        }
+        else if (strcmp(op, "or") == 0) {
+            value_destroy(result);
+            if (is_truthy(left)) { value_destroy(right); return left; }
+            value_destroy(left); return right;
+        }
 
         value_destroy(left);
         value_destroy(right);
@@ -1567,6 +1975,204 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         }
         value_destroy(operand);
         return value_null();
+    }
+
+    // ── MATCH EXPRESSION ───────────────────────────────────────────────────
+    case NODE_MATCH: {
+        // children[0] = expression to match
+        // children[1..n] = match arms
+        Value *match_val = eval(interp, node->children[0], env);
+        
+        for (size_t i = 1; i < node->child_count; i++) {
+            ASTNode *arm = node->children[i];  // NODE_MATCH_ARM
+            ASTNode *pattern = arm->children[0];  // NODE_PATTERN
+            ASTNode *result_expr = arm->children[1];
+            
+            // Try to match pattern
+            int matched = 0;
+            Environment *match_env = env_create(env);  // scope for bindings
+            
+            // Check pattern type
+            if (strcmp(pattern->str_value, "_") == 0) {
+                // Wildcard always matches
+                matched = 1;
+            } else if (pattern->bool_value == 1) {
+                // Literal number pattern
+                if (match_val->type == VAL_NUMBER && match_val->num == pattern->num_value) {
+                    matched = 1;
+                }
+            } else if (pattern->bool_value == 2) {
+                // Literal string pattern
+                if (match_val->type == VAL_STRING && strcmp(match_val->str, pattern->str_value) == 0) {
+                    matched = 1;
+                }
+            } else if (pattern->bool_value == 3) {
+                // true literal
+                if (match_val->type == VAL_BOOL && match_val->boolean == 1) {
+                    matched = 1;
+                }
+            } else if (pattern->bool_value == 4) {
+                // false literal
+                if (match_val->type == VAL_BOOL && match_val->boolean == 0) {
+                    matched = 1;
+                }
+            } else if (match_val->type == VAL_ENUM_VARIANT) {
+                // Variant pattern: check if tags match
+                if (strcmp(match_val->variant.tag, pattern->str_value) == 0) {
+                    matched = 1;
+                    // Bind variant fields to pattern parameters
+                    for (size_t j = 0; j < pattern->param_count && j < match_val->variant.field_count; j++) {
+                        env_set(match_env, pattern->params[j].name, match_val->variant.fields[j]);
+                    }
+                }
+            } else if (pattern->param_count == 0) {
+                // Simple binding pattern (just an identifier)
+                matched = 1;
+                env_set(match_env, pattern->str_value, match_val);
+            }
+            
+            if (matched) {
+                // Evaluate result expression with bindings
+                Value *result = eval(interp, result_expr, match_env);
+                env_destroy(match_env);
+                value_destroy(match_val);
+                return result;
+            }
+            
+            env_destroy(match_env);
+        }
+        
+        // No pattern matched - error
+        fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: No pattern matched in match expression.\033[0m\n", node->line);
+        interp->had_error = 1;
+        value_destroy(match_val);
+        return value_null();
+    }
+
+    // ── ARRAY LITERAL [e0, e1, …] ─────────────────────────────────────────
+    case NODE_ARRAY_LITERAL: {
+        size_t n = node->child_count;
+        // Allocate at least 4 slots so push() after creation never immediately OOBs
+        size_t cap = n > 0 ? n : 4;
+        Value **items = (Value **)malloc(sizeof(Value *) * cap);
+        for (size_t i = 0; i < n; i++)
+            items[i] = eval(interp, node->children[i], env);
+        // value_array takes ownership of items[]
+        // Temporarily back-patch capacity so value_array records the right cap
+        // (value_array sets cap = len ? len : 4, so we pass n directly)
+        Value *arr = value_array(items, n);
+        // If n==0, value_array already sets cap=4 internally; but items[] was cap=4 too.
+        // For n>0, cap == n is fine.  Safe either way.
+        return arr;
+    }
+
+    // ── INDEX  arr[index]  or  str[index] ────────────────────────────────
+    case NODE_INDEX: {
+        Value *collection = eval(interp, node->children[0], env);
+        Value *index_val  = eval(interp, node->children[1], env);
+
+        if (!collection || !index_val || index_val->type != VAL_NUMBER) {
+            value_destroy(collection);
+            value_destroy(index_val);
+            return value_null();
+        }
+
+        int idx = (int)index_val->num;
+        value_destroy(index_val);
+
+        if (collection->type == VAL_ARRAY) {
+            if (idx < 0 || (size_t)idx >= collection->array_len) {
+                value_destroy(collection);
+                return value_null();
+            }
+            Value *elem = collection->array[idx];
+            // Return a copy for primitives; shared for objects
+            Value *result;
+            if (!elem)                          result = value_null();
+            else if (elem->type == VAL_NUMBER)  result = value_number(elem->num);
+            else if (elem->type == VAL_STRING)  result = value_string(elem->str);
+            else if (elem->type == VAL_BOOL)    result = value_bool(elem->boolean);
+            else if (elem->type == VAL_NULL)    result = value_null();
+            else                                result = elem;  // shared
+            // collection is shared (VAL_ARRAY is never freed by value_destroy)
+            return result;
+        }
+
+        if (collection->type == VAL_STRING) {
+            int len = (int)strlen(collection->str);
+            if (idx < 0 || idx >= len) {
+                value_destroy(collection);
+                return value_null();
+            }
+            char buf[2] = { collection->str[idx], '\0' };
+            value_destroy(collection);
+            return value_string(buf);
+        }
+
+        value_destroy(collection);
+        return value_null();
+    }
+
+    // ── NULLISH  expr ?? default ──────────────────────────────────────────
+    case NODE_NULLISH: {
+        Value *left = eval(interp, node->children[0], env);
+        if (left && left->type != VAL_NULL)
+            return left;
+        value_destroy(left);
+        return eval(interp, node->children[1], env);
+    }
+
+    // ── TYPEOF  typeof(expr) ──────────────────────────────────────────────
+    case NODE_TYPEOF: {
+        Value *operand = eval(interp, node->children[0], env);
+        const char *type_name;
+        switch (operand ? operand->type : (ValueType)-1) {
+            case VAL_NUMBER:   type_name = "number";   break;
+            case VAL_STRING:   type_name = "string";   break;
+            case VAL_BOOL:     type_name = "bool";     break;
+            case VAL_NULL:     type_name = "null";     break;
+            case VAL_ARRAY:    type_name = "array";    break;
+            case VAL_FUNCTION: type_name = "function"; break;
+            case VAL_CLASS:    type_name = "class";    break;
+            case VAL_INSTANCE: type_name = "object";   break;
+            default:           type_name = "unknown";  break;
+        }
+        value_destroy(operand);
+        return value_string(type_name);
+    }
+
+    // ── INSTANCEOF  expr instanceof ClassName ────────────────────────────
+    case NODE_INSTANCEOF: {
+        // children[0] = expr to test, children[1] = NODE_IDENTIFIER (class name)
+        Value *obj = eval(interp, node->children[0], env);
+        if (!obj || obj->type != VAL_INSTANCE) {
+            value_destroy(obj);
+            return value_bool(0);
+        }
+        // Class name is stored in children[1]->str_value
+        const char *class_name = node->children[1]->str_value;
+        Value *class_val = env_get(env, class_name);
+        if (!class_val || class_val->type != VAL_CLASS) {
+            value_destroy(obj);
+            return value_bool(0);
+        }
+        // Walk class hierarchy: result is true if obj's class IS class_val or derives from it
+        ClassDef *cls = obj->instance->class_def;
+        int result = 0;
+        while (cls) {
+            if (cls == class_val->class_def) { result = 1; break; }
+            cls = cls->parent;
+        }
+        value_destroy(obj);
+        return value_bool(result);
+    }
+
+    // ── TERNARY  cond ? then : else ──────────────────────────────────────
+    case NODE_TERNARY: {
+        Value *cond = eval(interp, node->children[0], env);
+        int truthy = is_truthy(cond);
+        value_destroy(cond);
+        return eval(interp, node->children[truthy ? 1 : 2], env);
     }
 
     default:

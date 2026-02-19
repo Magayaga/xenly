@@ -1,0 +1,131 @@
+// Standard Library Enhancement Test
+import "os"
+import "crypto"
+import "path"
+import "array"
+
+print("=== Xenly Standard Library Test ===")
+print()
+
+// ═══ OS Module ═══
+print("1. OS Module:")
+print("  Platform:", os.platform())
+print("  PID:", os.getpid())
+print("  Current dir:", os.cwd())
+print("  Time:", os.time())
+
+// Test file operations
+print()
+print("2. Filesystem Operations:")
+const testDir = "/tmp/xenly_test"
+const testFile = path.join(testDir, "test.txt")
+
+print("  Creating directory:", testDir)
+const created = os.mkdir(testDir)
+print("  Created:", created)
+
+print("  Directory exists?", os.exists(testDir))
+print("  Is directory?", os.isDir(testDir))
+print("  Is file?", os.isFile(testDir))
+
+// List directory
+print("  Listing /tmp:")
+const files = os.listdir("/tmp")
+print("  Found", array.len(files), "entries")
+
+// ═══ Crypto Module ═══
+print()
+print("3. Crypto Module:")
+const text = "Hello, World!"
+
+print("  Text:", text)
+print("  DJB2 hash:", crypto.hash(text))
+print("  FNV-1a hash:", crypto.fnv1a(text))
+print("  MurmurHash3:", crypto.murmur3(text, 0))
+print("  Checksum:", crypto.checksum(text))
+
+print()
+print("  Random bytes:", crypto.randomBytes(8))
+print("  UUID:", crypto.uuid())
+
+print()
+print("  Crypto constants:")
+print("  MD5_SIZE:", crypto.MD5_SIZE())
+print("  SHA1_SIZE:", crypto.SHA1_SIZE())
+print("  SHA256_SIZE:", crypto.SHA256_SIZE())
+
+// ═══ Path Module ═══
+print()
+print("4. Path Module:")
+const p1 = "/home/user/documents"
+const p2 = "file.txt"
+
+print("  Path 1:", p1)
+print("  Path 2:", p2)
+print()
+print("  Joined:", path.join(p1, p2))
+print("  Basename:", path.basename(p1))
+print("  Dirname:", path.dirname(p1))
+print("  Extension:", path.ext(p2))
+print("  Is absolute?", path.isAbs(p1))
+
+const messy = "/home//user///documents//"
+print()
+print("  Messy path:", messy)
+print("  Cleaned:", path.clean(messy))
+
+const parts = path.split(path.join(p1, p2))
+print()
+print("  Split path:")
+print("    Dir:", parts[0])
+print("    Base:", parts[1])
+
+// More path examples
+print()
+print("5. More Path Examples:")
+const p_abs = "/home/user/file.txt"
+const p_rel = "relative/path/to/file.md"
+const p_etc = "/etc/config.json"
+const p_data = "data.csv"
+
+print("  Path:", p_abs)
+print("    Dir:", path.dirname(p_abs), "| Base:", path.basename(p_abs), "| Ext:", path.ext(p_abs))
+
+print("  Path:", p_rel)
+print("    Dir:", path.dirname(p_rel), "| Base:", path.basename(p_rel), "| Ext:", path.ext(p_rel))
+
+print("  Path:", p_etc)
+print("    Dir:", path.dirname(p_etc), "| Base:", path.basename(p_etc), "| Ext:", path.ext(p_etc))
+
+// Hash comparison
+print()
+print("6. Hash Comparison:")
+const data1 = "password123"
+const data2 = "password124"
+
+print("  Data 1:", data1, "-> Hash:", crypto.hash(data1))
+print("  Data 2:", data2, "-> Hash:", crypto.hash(data2))
+print("  Hashes equal?", crypto.hash(data1) == crypto.hash(data2))
+
+// OS platform detection
+print()
+print("7. Platform Detection:")
+const platform = os.platform()
+print("  Running on:", platform)
+
+if (platform == "linux") {
+    print("  ✓ Linux detected")
+} else {
+    print("  Running on:", platform)
+}
+
+// Cleanup
+print()
+print("8. Cleanup:")
+if (os.exists(testDir)) {
+    print("  Removing test directory...")
+    os.rmdir(testDir)
+}
+
+print()
+print("✅ Standard library test complete!")

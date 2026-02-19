@@ -1,0 +1,92 @@
+// ═══════════════════════════════════════════════════════════════════
+// Functional Programming: Immutability
+// ═══════════════════════════════════════════════════════════════════
+
+print("=== Immutability with const ===")
+
+// const creates immutable bindings - cannot be reassigned
+const PI = 3.14159
+const GRAVITY = 9.81
+const MAX_SIZE = 100
+
+print("PI =", PI)
+print("GRAVITY =", GRAVITY)
+
+// This works: using const values in calculations
+const circumference = 2 * PI * 5
+print("Circumference of circle with radius 5:", circumference)
+
+// const can hold functions (first-class, immutable)
+const square = fn(x) { return x * x }
+const double = fn(x) { return x * 2 }
+
+print("square(5) =", square(5))
+print("double(7) =", double(7))
+
+// Attempting to reassign const will cause an error at runtime
+// Uncomment to test:
+// PI = 3.14  # Error: Cannot reassign const variable 'PI'
+
+// ─── Immutable Data Structures ───────────────────────────────────────
+
+print("\n=== Immutable Arrays ===")
+
+// While const prevents reassignment of the binding,
+// we still need immutable operations on collections
+const numbers = [1, 2, 3, 4, 5]
+print("Original:", numbers)
+
+// Functional array operations (from stdlib) create new arrays
+const doubled = array.map(numbers, fn(x) { return x * 2 })
+print("Doubled:", doubled)
+
+const evens = array.filter(numbers, fn(x) { return x % 2 == 0 })
+print("Evens only:", evens)
+
+// Original array unchanged (immutable operations)
+print("Original unchanged:", numbers)
+
+// ─── Higher-Order Functions with Immutability ────────────────────────
+
+print("\n=== Higher-Order Functions ===")
+
+// compose: (b -> c) -> (a -> b) -> (a -> c)
+const compose = fn(f, g) {
+    return fn(x) {
+        return f(g(x))
+    }
+}
+
+const add1 = fn(x) { return x + 1 }
+const times2 = fn(x) { return x * 2 }
+
+// Compose functions to build new immutable operations
+const add1ThenTimes2 = compose(times2, add1)
+print("add1ThenTimes2(5) =", add1ThenTimes2(5))  # (5 + 1) * 2 = 12
+
+// ─── Pure Functions ──────────────────────────────────────────────────
+
+print("\n=== Pure Functions ===")
+
+// Pure function: same input always produces same output
+// No side effects, no mutation
+const pureAdd = fn(a, b) {
+    return a + b
+}
+
+const result1 = pureAdd(2, 3)
+const result2 = pureAdd(2, 3)
+print("pureAdd(2, 3) =", result1)
+print("pureAdd(2, 3) again =", result2)
+print("Always the same:", result1 == result2)
+
+// Impure function for comparison (uses print - side effect)
+fn impureAdd(a, b) {
+    print("Adding", a, "and", b)  # Side effect!
+    return a + b
+}
+
+print("\nCalling impure function:")
+impureAdd(2, 3)
+
+print("\n✓ Immutability examples complete")

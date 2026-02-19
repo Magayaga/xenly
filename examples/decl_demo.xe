@@ -1,0 +1,108 @@
+// Declarative Programming
+print("Declarative Programming")
+print()
+
+import "array"
+
+// Declarative approach focuses on WHAT, not HOW
+print("1. Declarative vs Imperative")
+print()
+
+// Imperative (HOW to do it)
+print("Imperative style:")
+const nums1 = array.of(1, 2, 3, 4, 5)
+var sum1 = 0
+var i = 0
+while (i < array.len(nums1)) {
+    const val = array.get(nums1, i)
+    sum1 = sum1 + val
+    i = i + 1
+}
+print("Sum:", sum1)
+print()
+
+// Declarative (WHAT you want)
+print("Declarative style:")
+fn sum(arr) {
+    var total = 0
+    var j = 0
+    while (j < array.len(arr)) {
+        total = total + array.get(arr, j)
+        j = j + 1
+    }
+    return total
+}
+
+const nums2 = array.of(1, 2, 3, 4, 5)
+const sum2 = sum(nums2)
+print("Sum:", sum2)
+print()
+
+// Declarative Data Transformation
+print("2. Declarative Transformations")
+
+fn double(x) {
+    return x * 2
+}
+
+fn isEven(x) {
+    return x % 2 == 0
+}
+
+const original = array.of(1, 2, 3, 4, 5)
+print("Original:", array.join(original, ", "))
+print()
+
+// Declarative Object Building
+print("3. Declarative Objects")
+
+const person = {
+    name: "Alice",
+    age: 30,
+    city: "NYC"
+}
+
+print("Person:", person.name, person.age)
+print()
+
+// Declarative Configuration
+print("4. Declarative Config")
+
+const config = {
+    app: "MyApp",
+    version: "1.0.0",
+    enabled: true
+}
+
+print("App:", config.app)
+print("Version:", config.version)
+print("Enabled:", config.enabled)
+print()
+
+// Declarative Validation
+print("5. Declarative Rules")
+
+fn validateAge(age) {
+    if (age < 0) {
+        return false
+    }
+    if (age > 150) {
+        return false
+    }
+    return true
+}
+
+print("Valid age 30:", validateAge(30))
+print("Valid age -5:", validateAge(-5))
+print("Valid age 200:", validateAge(200))
+print()
+
+print("Summary:")
+print("Declarative = What, not How")
+print("Benefits:")
+print("  • Clearer intent")
+print("  • Less code")
+print("  • Easier to read")
+print("  • Fewer bugs")
+print()
+print("Complete!")

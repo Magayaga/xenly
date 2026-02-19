@@ -1,0 +1,73 @@
+// Reflective Programming Concepts
+print("Reflective Programming")
+print()
+
+// Manual Type Checking
+print("1. Type Checking")
+
+fn isZero(x) {
+    return x == 0
+}
+
+fn isPositive(x) {
+    return x > 0
+}
+
+print(isZero(0))
+print(isZero(5))
+print(isPositive(10))
+print(isPositive(-5))
+print()
+
+// Type-based Dispatch
+print("2. Conditional Behavior")
+
+fn processValue(value) {
+    if (value > 0) {
+        return value * 2
+    }
+    return 0
+}
+
+print(processValue(5))
+print(processValue(-3))
+print()
+
+// Validation
+print("3. Input Validation")
+
+fn validateAge(age) {
+    if (age < 0) {
+        return false
+    }
+    if (age > 150) {
+        return false
+    }
+    return true
+}
+
+print(validateAge(30))
+print(validateAge(-5))
+print(validateAge(200))
+print()
+
+// Range Checking
+print("4. Range Validation")
+
+fn inRange(value, min, max) {
+    if (value < min) {
+        return false
+    }
+    if (value > max) {
+        return false
+    }
+    return true
+}
+
+print(inRange(50, 0, 100))
+print(inRange(150, 0, 100))
+print()
+
+print("Note: Full reflection API")
+print("documented in guide")
+print("Complete!")

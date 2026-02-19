@@ -1,12 +1,3 @@
-/*
- * XENLY - high-level and general-purpose programming language
- * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
- *
- * It is initially written in C programming language.
- *
- * It is available for Linux and macOS operating systems.
- *
- */
 #ifndef LEXER_H
 #define LEXER_H
 
@@ -54,6 +45,16 @@ typedef enum {
     TOKEN_SLEEP,        // sleep
     TOKEN_TYPEOF,       // typeof
     TOKEN_INSTANCEOF,   // instanceof
+    TOKEN_CONST,        // const (immutable bindings)
+    TOKEN_ENUM,         // enum (algebraic data types)
+    TOKEN_MATCH,        // match (pattern matching)
+    TOKEN_PIPE,         // | (for enum variants and match patterns)
+    TOKEN_NAMESPACE,    // namespace (for organizing code)
+    TOKEN_TYPE,         // type (for type aliases)
+    TOKEN_REQUIRES,     // requires (precondition)
+    TOKEN_ENSURES,      // ensures (postcondition)
+    TOKEN_INVARIANT,    // invariant (class invariant)
+    TOKEN_ASSERT,       // assert (runtime assertion)
 
     // Operators
     TOKEN_PLUS,         // +

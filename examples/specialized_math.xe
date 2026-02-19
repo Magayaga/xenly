@@ -1,0 +1,273 @@
+// Specialized Math Functions Demo
+print("=== Specialized Math Functions ===")
+print()
+
+import "math"
+
+// ============================================================================
+// VERSED TRIGONOMETRIC FUNCTIONS
+// ============================================================================
+
+print("1. Versed Trigonometric Functions")
+print()
+
+// Versine: 1 - cos(x)
+fn versine(x) {
+    return 1 - math.cos(x)
+}
+
+// Vercosine: 1 - sin(x)
+fn vercosine(x) {
+    return 1 - math.sin(x)
+}
+
+// Coversine: 1 - sin(x)
+fn coversine(x) {
+    return 1 - math.sin(x)
+}
+
+// Covercosine: 1 + cos(x)
+fn covercosine(x) {
+    return 1 + math.cos(x)
+}
+
+const pi = math.PI()
+const pi_half = pi / 2
+
+const vers0 = versine(0)
+const vers_half = versine(pi_half)
+const vers_pi = versine(pi)
+
+print("versine(0):", vers0)
+print("versine(PI/2):", vers_half)
+print("versine(PI):", vers_pi)
+print()
+
+print("vercosine(0):", vercosine(0))
+print("vercosine(PI/2):", vercosine(pi_half))
+print()
+
+print("covercosine(0):", covercosine(0))
+print("covercosine(PI):", covercosine(pi))
+print()
+
+// ============================================================================
+// HALF-VERSED FUNCTIONS
+// ============================================================================
+
+print("2. Half-Versed Functions")
+print()
+
+// Haversine: (1 - cos(x)) / 2
+fn haversine(x) {
+    return (1 - math.cos(x)) / 2
+}
+
+// Havercosine: (1 - sin(x)) / 2
+fn havercosine(x) {
+    return (1 - math.sin(x)) / 2
+}
+
+// Hacovercosine: (1 + cos(x)) / 2
+fn hacovercosine(x) {
+    return (1 + math.cos(x)) / 2
+}
+
+print("haversine(0):", haversine(0))
+print("haversine(PI/2):", haversine(pi_half))
+print("haversine(PI):", haversine(pi))
+print()
+
+print("havercosine(0):", havercosine(0))
+print("havercosine(PI/2):", havercosine(pi_half))
+print()
+
+print("hacovercosine(0):", hacovercosine(0))
+print("hacovercosine(PI):", hacovercosine(pi))
+print()
+
+// ============================================================================
+// EXSECANT FUNCTIONS
+// ============================================================================
+
+print("3. Exsecant Functions")
+print()
+
+// Exsecant: sec(x) - 1 = 1/cos(x) - 1
+fn exsecant(x) {
+    return 1 / math.cos(x) - 1
+}
+
+// Excosecant: csc(x) - 1 = 1/sin(x) - 1
+fn excosecant(x) {
+    return 1 / math.sin(x) - 1
+}
+
+print("exsecant(0):", exsecant(0))
+print("exsecant(PI/3):", exsecant(pi / 3))
+print()
+
+print("excosecant(PI/2):", excosecant(pi_half))
+print("excosecant(PI/6):", excosecant(pi / 6))
+print()
+
+// ============================================================================
+// HAVERSINE FORMULA - GREAT CIRCLE DISTANCE
+// ============================================================================
+
+print("4. Great Circle Distance (Haversine Formula)")
+print()
+
+fn haversineDistance(lat1, lon1, lat2, lon2, radius) {
+    // Convert to radians
+    const to_rad = pi / 180
+    const lat1_rad = lat1 * to_rad
+    const lat2_rad = lat2 * to_rad
+    const dlon_rad = (lon2 - lon1) * to_rad
+    const dlat_rad = (lat2 - lat1) * to_rad
+    
+    // Haversine formula
+    const a = haversine(dlat_rad) + 
+              math.cos(lat1_rad) * math.cos(lat2_rad) * haversine(dlon_rad)
+    
+    const sqrt_a = math.sqrt(a)
+    const c = 2 * math.asin(sqrt_a)
+    
+    return radius * c
+}
+
+const earth_radius = 6371.0
+
+// NYC to London
+const nyc_lat = 40.7128
+const nyc_lon = -74.0060
+const lon_lat = 51.5074
+const lon_lon = -0.1278
+
+const dist1 = haversineDistance(nyc_lat, nyc_lon, lon_lat, lon_lon, earth_radius)
+print("NYC to London:", dist1, "km")
+print()
+
+// ============================================================================
+// NUMBER THEORY - INDICATOR FUNCTION
+// ============================================================================
+
+print("5. Indicator Function")
+print()
+
+fn indicator(x, min, max) {
+    if (x >= min and x <= max) {
+        return 1
+    }
+    return 0
+}
+
+print("indicator(5, 0, 10):", indicator(5, 0, 10))
+print("indicator(15, 0, 10):", indicator(15, 0, 10))
+print("indicator(-5, 0, 10):", indicator(-5, 0, 10))
+print()
+
+// ============================================================================
+// NUMBER THEORY - SIGMA FUNCTION (DIVISOR SUM)
+// ============================================================================
+
+print("6. Sigma Function (Sum of Divisors)")
+print()
+
+fn sigma(n) {
+    var sum = 0
+    var i = 1
+    
+    while (i <= n) {
+        if (n % i == 0) {
+            sum = sum + i
+        }
+        i = i + 1
+    }
+    
+    return sum
+}
+
+print("sigma(6):", sigma(6))
+print("sigma(12):", sigma(12))
+print("sigma(28):", sigma(28))
+print()
+
+// Perfect numbers: sigma(n) = 2n
+fn isPerfect(n) {
+    return sigma(n) == 2 * n
+}
+
+print("Perfect numbers:")
+print("6 is perfect:", isPerfect(6))
+print("28 is perfect:", isPerfect(28))
+print("12 is perfect:", isPerfect(12))
+print()
+
+// ============================================================================
+// NUMBER THEORY - LIOUVILLE FUNCTION
+// ============================================================================
+
+print("7. Liouville Lambda Function")
+print()
+
+fn liouville(n) {
+    if (n == 1) {
+        return 1
+    }
+    
+    var omega = 0
+    var temp = n
+    var d = 2
+    
+    while (d * d <= temp) {
+        while (temp % d == 0) {
+            omega = omega + 1
+            const new_temp = temp / d
+            temp = new_temp
+        }
+        d = d + 1
+    }
+    
+    if (temp > 1) {
+        omega = omega + 1
+    }
+    
+    if (omega % 2 == 0) {
+        return 1
+    }
+    return -1
+}
+
+print("liouville(1):", liouville(1))
+print("liouville(2):", liouville(2))
+print("liouville(4):", liouville(4))
+print("liouville(6):", liouville(6))
+print("liouville(8):", liouville(8))
+print()
+
+// ============================================================================
+// SUMMARY
+// ============================================================================
+
+print("=== Summary ===")
+print()
+print("Specialized Functions Demonstrated:")
+print("  • Versed: versine, vercosine, coversine, covercosine")
+print("  • Half-versed: haversine, havercosine, hacovercosine")
+print("  • Exsecant: exsecant, excosecant")
+print("  • Number Theory: indicator, sigma, liouville")
+print()
+print("Applications:")
+print("  • Navigation (great circle distance)")
+print("  • Perfect number detection")
+print("  • Prime factor analysis")
+print("  • Set membership testing")
+print()
+print("Total Math Functions: 125+")
+print()
+print("Compile for speed:")
+print("  ./xenlyc -O3 specialized.xe -o specialized")
+print("  ./specialized  # 18x faster!")
+print()
+print("=== Complete ===")

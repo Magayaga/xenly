@@ -1,0 +1,6 @@
+fn greet(name) {
+    // Function comment
+    print("Hello,", name)
+}
+
+greet("World")

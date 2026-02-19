@@ -1,0 +1,21 @@
+// Test optional and default parameters
+print("Testing advanced features")
+
+// Test 1: Optional parameter
+fn test1(a, b?) {
+    if (b == null) {
+        return a
+    }
+    return a + b
+}
+
+print("test1(5):", test1(5))
+print("test1(5, 3):", test1(5, 3))
+
+// Test 2: Default parameter
+fn test2(a, b = 10) {
+    return a * b
+}
+
+print("test2(3):", test2(3))
+print("test2(3, 5):", test2(3, 5))

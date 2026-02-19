@@ -1,0 +1,62 @@
+// Declarative Programming
+print("Declarative Programming")
+print()
+
+// Declarative Objects
+print("1. Declarative Objects")
+
+const config = {
+    name: "MyApp",
+    version: "1.0",
+    enabled: true
+}
+
+print(config.name)
+print(config.version)
+print(config.enabled)
+print()
+
+// Declarative Rules
+print("2. Validation Rules")
+
+fn validateAge(age) {
+    if (age < 0) {
+        return false
+    }
+    if (age > 150) {
+        return false
+    }
+    return true
+}
+
+print(validateAge(30))
+print(validateAge(-5))
+print(validateAge(200))
+print()
+
+// Declarative State
+print("3. State Management")
+
+const state = {
+    count: 0,
+    enabled: true
+}
+
+fn increment(s) {
+    s.count = s.count + 1
+}
+
+print(state.count)
+increment(state)
+print(state.count)
+increment(state)
+print(state.count)
+print()
+
+print("Declarative Style:")
+print("  Focus on WHAT")
+print("  Not HOW")
+print("  Clearer intent")
+print("  Fewer bugs")
+print()
+print("Complete!")

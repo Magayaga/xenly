@@ -1,0 +1,60 @@
+// Declarative Programming
+print("Declarative Programming")
+print()
+
+import "array"
+
+// Declarative approach
+print("1. Declarative Style")
+print()
+
+fn sum(arr) {
+    var total = 0
+    var j = 0
+    while (j < array.len(arr)) {
+        const val = array.get(arr, j)
+        total = total + val
+        j = j + 1
+    }
+    return total
+}
+
+const nums = array.of(1, 2, 3, 4, 5)
+const result = sum(nums)
+
+print("Sum:")
+print(result)
+print()
+
+// Declarative Objects
+print("2. Declarative Objects")
+
+const config = {
+    name: "MyApp",
+    version: "1.0.0",
+    enabled: true
+}
+
+print(config.name)
+print(config.version)
+print()
+
+// Declarative Rules
+print("3. Validation Rules")
+
+fn isValid(age) {
+    if (age < 0) {
+        return false
+    }
+    if (age > 150) {
+        return false
+    }
+    return true
+}
+
+print(isValid(30))
+print(isValid(-5))
+print()
+
+print("Declarative = What, not How")
+print("Complete!")

@@ -1,0 +1,44 @@
+// Enhanced Math Library Demo
+print("Enhanced Math Library")
+print()
+
+import "math"
+
+print("Constants:")
+print(math.PI())
+print(math.E())
+print()
+
+print("GCD and LCM:")
+print(math.gcd(48, 18))
+print(math.lcm(12, 18))
+print()
+
+print("Lerp:")
+fn lerp(a, b, t) {
+    return a + t * (b - a)
+}
+print(lerp(0, 100, 0.5))
+print()
+
+print("Midpoint:")
+fn midpoint(a, b) {
+    return a + (b - a) / 2
+}
+print(midpoint(10, 20))
+print()
+
+print("Clamp:")
+fn clamp(val, min, max) {
+    if (val > max) {
+        return max
+    }
+    if (val < min) {
+        return min
+    }
+    return val
+}
+print(clamp(150, 0, 100))
+print()
+
+print("Complete!")

@@ -1,0 +1,25 @@
+// Single-line comment test
+print("=== Comment Syntax Test ===")
+
+// Variable with comment
+const x = 42
+print("x =", x)
+
+/* 
+ * Multi-line comment
+ * with multiple lines
+ */
+const y = 100
+print("y =", y)
+
+// Function definition
+fn add(a, b) {
+    return a + b
+}
+
+print("add(5, 3) =", add(5, 3))
+
+/* Inline comment before code */ print("Inline comment works")
+
+// Final comment
+print("✓ All comment types work!")

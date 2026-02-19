@@ -1,0 +1,8 @@
+// Test None
+enum Option {
+    None
+}
+
+print("Calling None...")
+const n = None
+print("n =", n)

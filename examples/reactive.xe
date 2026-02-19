@@ -1,0 +1,364 @@
+// ════════════════════════════════════════════════════════════════
+//  reactive.xe  —  Declarative Reactive State Demo
+//
+//  Simulates a reactive UI update cycle:
+//    1. Declare initial state
+//    2. Render the initial view
+//    3. Apply state changes (simulated user input + time)
+//    4. Re-render only changed components
+//    5. Show the state transition log
+//
+//  This is what happens in SwiftUI when @State changes,
+//  in Android when LiveData posts a value,
+//  in React when setState() is called,
+//  in Vue when reactive() properties are mutated.
+// ════════════════════════════════════════════════════════════════
+
+import "io"
+import "array"
+import "string"
+import "math"
+
+// ── ANSI ──────────────────────────────────────────────────────
+fn pos(row, col) {
+    var r = "" + row
+    var c = "" + col
+    io.write("\033[" + r + ";" + c + "H")
+}
+fn seqPos(row, col) {
+    var r = "" + row
+    var c = "" + col
+    return "\033[" + r + ";" + c + "H"
+}
+fn reset()          { io.write("\033[0m")   }
+fn bold()           { io.write("\033[1m")   }
+fn dim()            { io.write("\033[2m")   }
+fn fgBlack()        { io.write("\033[30m")  }
+fn fgGreen()        { io.write("\033[32m")  }
+fn fgYellow()       { io.write("\033[33m")  }
+fn fgCyan()         { io.write("\033[36m")  }
+fn fgWhite()        { io.write("\033[37m")  }
+fn fgBrightBlack()  { io.write("\033[90m")  }
+fn fgBrightRed()    { io.write("\033[91m")  }
+fn fgBrightGreen()  { io.write("\033[92m")  }
+fn fgBrightYellow() { io.write("\033[93m")  }
+fn fgBrightCyan()   { io.write("\033[96m")  }
+fn fgBrightWhite()  { io.write("\033[97m")  }
+fn bgBrightBlack()  { io.write("\033[100m") }
+fn bgBrightBlue()   { io.write("\033[104m") }
+fn bgGreen()        { io.write("\033[42m")  }
+fn bgRed()          { io.write("\033[41m")  }
+fn bgYellow()       { io.write("\033[43m")  }
+fn bgBlue()         { io.write("\033[44m")  }
+
+fn pad(s, w) {
+    var r = s
+    var c = string.len(r)
+    while (c < w) { r = r + " " c = c + 1 }
+    return r
+}
+
+// ── State log ─────────────────────────────────────────────────
+var logMessages = array.create(0)
+var logKinds    = array.create(0)
+
+fn logEvent(msg, kind) {
+    array.push(logMessages, msg)
+    array.push(logKinds, kind)
+}
+
+fn renderLog(startRow, col, maxLines) {
+    var total = array.len(logMessages)
+    var start = 0
+    if (total > maxLines) { start = total - maxLines }
+    var row = startRow
+    var i = start
+    while (i < total) {
+        var msg  = array.get(logMessages, i)
+        var kind = array.get(logKinds, i)
+        pos(row, col)
+        if (kind == "state")   { fgBrightYellow() io.write("◆ ") }
+        if (kind == "event")   { fgBrightCyan()   io.write("● ") }
+        if (kind == "compute") { fgBrightGreen()  io.write("▸ ") }
+        if (kind == "render")  { fgBrightBlack()  io.write("  ") }
+        reset()
+        fgBrightWhite()
+        io.write(pad(msg, 36))
+        reset()
+        row = row + 1
+        i = i + 1
+    }
+}
+
+// ── Panel ─────────────────────────────────────────────────────
+fn panel(row, col, rows, cols, title) {
+    var inner = cols - 2
+    var tlen = string.len(title)
+    var sf = (inner - tlen - 2) / 2
+    pos(row, col)
+    fgCyan() io.write("╔")
+    var i = 0
+    while (i < sf) { io.write("═") i = i + 1 }
+    io.write(" ") bold() fgBrightWhite() io.write(title)
+    reset() fgCyan() io.write(" ")
+    i = 0
+    while (i < sf) { io.write("═") i = i + 1 }
+    io.write("╗") reset()
+    i = 1
+    while (i < rows - 1) {
+        var r = row + i
+        pos(r, col) fgCyan() io.write("║") reset()
+        var rc = col + cols - 1
+        pos(r, rc)  fgCyan() io.write("║") reset()
+        i = i + 1
+    }
+    var br = row + rows - 1
+    pos(br, col) fgCyan() io.write("╚")
+    i = 0
+    while (i < inner) { io.write("═") i = i + 1 }
+    io.write("╝") reset()
+}
+
+fn progressBar(seq, val, max, w) {
+    var filled = val * w / max
+    var empty  = w - filled
+    var pct = val * 100 / max
+    io.write(seq) fgBrightWhite() io.write("[")
+    if (pct > 80) { fgBrightRed() }
+    if (pct > 50) {
+        if (pct <= 80) { fgBrightYellow() }
+    }
+    if (pct <= 50) { fgBrightGreen() }
+    var i = 0
+    while (i < filled) { io.write("█") i = i + 1 }
+    fgBrightBlack()
+    i = 0
+    while (i < empty) { io.write("░") i = i + 1 }
+    fgBrightWhite() io.write("] ")
+    bold()
+    if (pct > 80) { fgBrightRed() }
+    if (pct > 50) {
+        if (pct <= 80) { fgBrightYellow() }
+    }
+    if (pct <= 50) { fgBrightGreen() }
+    io.write("" + pct + "%")
+    reset()
+}
+
+fn badge(seq, text, kind) {
+    io.write(seq)
+    if (kind == "success") { bgGreen()  fgBlack()       bold() }
+    if (kind == "warn")    { bgYellow() fgBlack()       bold() }
+    if (kind == "error")   { bgRed()    fgBrightWhite() bold() }
+    if (kind == "info")    { bgBlue()   fgBrightWhite() bold() }
+    if (kind == "neutral") { bgBrightBlack() fgWhite() }
+    io.write(" " + text + " ")
+    reset()
+}
+
+// ── Component: State Display ───────────────────────────────────
+// This renders the current state.
+// Call it again after a state change to update the display.
+
+fn renderState(counter, score, level, lives, phase) {
+    // Counter
+    pos(4, 3)
+    bold() fgBrightWhite() io.write("Count:  ") reset()
+    bold()
+    if (counter > 80) { fgBrightRed() }
+    if (counter > 50) {
+        if (counter <= 80) { fgBrightYellow() }
+    }
+    if (counter <= 50) { fgBrightCyan() }
+    io.write(pad("" + counter, 6))
+    reset()
+
+    pos(5, 3)
+    progressBar(seqPos(5, 3), counter, 100, 28)
+
+    // Score
+    pos(7, 3)
+    bold() fgBrightWhite() io.write("Score:  ") reset()
+    bold() fgBrightYellow() io.write(pad("" + score, 8)) reset()
+
+    pos(8, 3)
+    bold() fgBrightWhite() io.write("Level:  ") reset()
+    bold() fgBrightGreen() io.write("" + level) reset()
+
+    // Lives
+    pos(9, 3)
+    bold() fgBrightWhite() io.write("Lives:  ") reset()
+    var li = 0
+    while (li < 5) {
+        if (li < lives) { fgBrightRed() bold() io.write("♥ ") }
+        if (li >= lives) { fgBrightBlack() io.write("♡ ") }
+        li = li + 1
+    }
+    reset()
+
+    // Phase badge (rule-based: phase name → badge kind)
+    pos(11, 3)
+    bold() fgBrightWhite() io.write("Phase:  ") reset()
+    var bseq = seqPos(11, 11)
+    if (phase == "init")    { badge(bseq, "  INIT  ", "neutral") }
+    if (phase == "playing") { badge(bseq, " ACTIVE ", "success") }
+    if (phase == "warning") { badge(bseq, " WARNING", "warn")    }
+    if (phase == "danger")  { badge(bseq, " DANGER!", "error")   }
+    if (phase == "victory") { badge(bseq, " VICTORY", "success") }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  INITIAL STATE — the source of truth
+// ════════════════════════════════════════════════════════════════
+
+var counter = 0
+var score   = 0
+var level   = 1
+var lives   = 5
+var phase   = "init"
+
+// ════════════════════════════════════════════════════════════════
+//  RENDER #0 — initial state
+// ════════════════════════════════════════════════════════════════
+
+io.write("\033[2J\033[H\033[?25l")
+
+// Header
+pos(1, 1)
+bgBrightBlue() fgBrightWhite() bold()
+io.write("  ⬡ Xenly Reactive State Demo  —  Declarative UI Cycle                          ")
+reset()
+
+// Left panel: state display
+panel(3, 1, 13, 38, "Current State")
+
+// Right panel: event log
+panel(3, 40, 13, 40, "State Transition Log")
+
+// Bottom: explanation
+panel(17, 1, 9, 79, "Declarative Reactive Model")
+
+// Render initial state
+renderState(counter, score, level, lives, phase)
+
+// Log initial render
+logEvent("Initial state declared", "state")
+logEvent("counter=0 score=0 level=1", "state")
+logEvent("Rendering initial view...", "render")
+renderLog(4, 42, 10)
+
+pos(18, 3)
+bold() fgBrightCyan()
+io.write("Declarative model: describe WHAT, not HOW")
+reset()
+
+pos(19, 3)
+fgBrightWhite()
+io.write("1. Declare state variables")
+reset()
+
+pos(20, 3)
+fgBrightWhite()
+io.write("2. Components are pure functions of state")
+reset()
+
+pos(21, 3)
+fgBrightWhite()
+io.write("3. Change state → call component again")
+reset()
+
+pos(22, 3)
+fgBrightWhite()
+io.write("4. Only changed parts repaint (efficient)")
+reset()
+
+pos(23, 3)
+fgBrightBlack()
+io.write("Like: SwiftUI @State, React useState,")
+reset()
+
+pos(24, 3)
+fgBrightBlack()
+io.write("      Android LiveData, Vue reactive()")
+reset()
+
+// ════════════════════════════════════════════════════════════════
+//  STATE CHANGE #1 — game starts
+// ════════════════════════════════════════════════════════════════
+
+// State mutation
+phase = "playing"
+counter = 12
+score = 120
+
+// Log it
+logEvent("EVENT: game_start", "event")
+logEvent("phase: init → playing", "state")
+logEvent("counter: 0 → 12", "state")
+logEvent("score: 0 → 120", "state")
+
+// Repaint only affected components
+renderState(counter, score, level, lives, phase)
+renderLog(4, 42, 10)
+
+// ════════════════════════════════════════════════════════════════
+//  STATE CHANGE #2 — counter increases, level up
+// ════════════════════════════════════════════════════════════════
+
+counter = 55
+score = 1840
+level = 3
+
+logEvent("EVENT: level_up", "event")
+logEvent("counter: 12 → 55", "state")
+logEvent("level: 1 → 3", "state")
+logEvent("score: 120 → 1840", "state")
+logEvent("COMPUTE: pct=55% → yellow", "compute")
+
+renderState(counter, score, level, lives, phase)
+renderLog(4, 42, 10)
+
+// ════════════════════════════════════════════════════════════════
+//  STATE CHANGE #3 — danger zone (counter > 80)
+// ════════════════════════════════════════════════════════════════
+
+counter = 84
+score = 3620
+lives = 3
+phase = "danger"
+
+logEvent("EVENT: damage_taken", "event")
+logEvent("counter: 55 → 84", "state")
+logEvent("lives: 5 → 3", "state")
+logEvent("phase: playing → danger", "state")
+logEvent("COMPUTE: pct=84% → RED", "compute")
+
+renderState(counter, score, level, lives, phase)
+renderLog(4, 42, 10)
+
+// ════════════════════════════════════════════════════════════════
+//  STATE CHANGE #4 — victory
+// ════════════════════════════════════════════════════════════════
+
+counter = 100
+score = 9999
+level = 10
+phase = "victory"
+
+logEvent("EVENT: game_complete!", "event")
+logEvent("counter: 84 → 100", "state")
+logEvent("score: 3620 → 9999", "state")
+logEvent("level: 3 → 10", "state")
+logEvent("phase: danger → victory", "state")
+
+renderState(counter, score, level, lives, phase)
+renderLog(4, 42, 10)
+
+// ── Footer ─────────────────────────────────────────────────────
+pos(27, 1)
+bgBrightBlue() fgBrightWhite() bold()
+io.write("  4 state transitions simulated  │  Each change triggers targeted component repaint  ")
+reset()
+
+pos(29, 1)
+io.write("\033[?25h") reset() io.write("\n")

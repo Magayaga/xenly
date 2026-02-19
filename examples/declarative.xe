@@ -1,0 +1,193 @@
+// Declarative Programming Demo
+print("=== Declarative Programming ===")
+print()
+
+// Declarative Data Transformations
+print("1. Declarative Data Operations")
+
+const numbers = [1, 2, 3, 4, 5]
+
+// Map - transform data declaratively
+fn map(arr, transform) {
+    const result = []
+    var i = 0
+    while (i < array.len(arr)) {
+        const elem = array.get(arr, i)
+        const transformed = transform(elem)
+        array.push(result, transformed)
+        i = i + 1
+    }
+    return result
+}
+
+// Filter - select data declaratively
+fn filter(arr, predicate) {
+    const result = []
+    var i = 0
+    while (i < array.len(arr)) {
+        const elem = array.get(arr, i)
+        if (predicate(elem)) {
+            array.push(result, elem)
+        }
+        i = i + 1
+    }
+    return result
+}
+
+// Reduce - aggregate declaratively
+fn reduce(arr, fn_reduce, initial) {
+    var acc = initial
+    var i = 0
+    while (i < array.len(arr)) {
+        const elem = array.get(arr, i)
+        acc = fn_reduce(acc, elem)
+        i = i + 1
+    }
+    return acc
+}
+
+print("Original:", array.join(numbers, ", "))
+
+const doubled = map(numbers, fn(x) { return x * 2 })
+print("Doubled:", array.join(doubled, ", "))
+
+const evens = filter(numbers, fn(x) { return x % 2 == 0 })
+print("Evens:", array.join(evens, ", "))
+
+const sum = reduce(numbers, fn(acc, x) { return acc + x }, 0)
+print("Sum:", sum)
+print()
+
+// Declarative Object Construction
+print("2. Declarative Object Building")
+
+fn buildPerson(name, age) {
+    return {
+        name: name,
+        age: age,
+        greet: fn() {
+            return "Hello, I'm " + this.name
+        }
+    }
+}
+
+const person = buildPerson("Alice", 30)
+print("Person:", person.name, person.age)
+print()
+
+// Declarative State Pattern
+print("3. Declarative State Management")
+
+const state = {
+    count: 0,
+    items: []
+}
+
+fn increment(s) {
+    s.count = s.count + 1
+    return s.count
+}
+
+fn addItem(s, item) {
+    array.push(s.items, item)
+    return array.len(s.items)
+}
+
+print("Initial count:", state.count)
+increment(state)
+increment(state)
+print("After increments:", state.count)
+
+addItem(state, "item1")
+addItem(state, "item2")
+print("Items:", array.len(state.items))
+print()
+
+// Declarative Validation Rules
+print("4. Rule-Based Validation")
+
+fn validateAge(age) {
+    if (age < 0) {
+        return "Age cannot be negative"
+    }
+    if (age > 150) {
+        return "Age too high"
+    }
+    return "valid"
+}
+
+fn validateUsername(name) {
+    if (string.len(name) < 3) {
+        return "Username too short"
+    }
+    if (string.len(name) > 20) {
+        return "Username too long"
+    }
+    return "valid"
+}
+
+print(validateAge(30))
+print(validateAge(-5))
+print(validateUsername("alice"))
+print(validateUsername("ab"))
+print()
+
+// Declarative Pipeline
+print("5. Declarative Data Pipeline")
+
+fn pipeline(data, operations) {
+    var result = data
+    var i = 0
+    while (i < array.len(operations)) {
+        const operation = array.get(operations, i)
+        result = operation(result)
+        i = i + 1
+    }
+    return result
+}
+
+const data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+const ops = [
+    fn(arr) { return filter(arr, fn(x) { return x > 3 }) },
+    fn(arr) { return map(arr, fn(x) { return x * x }) },
+    fn(arr) { return reduce(arr, fn(acc, x) { return acc + x }, 0) }
+]
+
+const result = pipeline(data, ops)
+print("Pipeline result:", result)
+print()
+
+// Declarative Configuration
+print("6. Declarative Configuration")
+
+const config = {
+    app: {
+        name: "MyApp",
+        version: "1.0.0"
+    },
+    features: {
+        darkMode: true,
+        notifications: false
+    },
+    limits: {
+        maxUsers: 1000,
+        maxItems: 500
+    }
+}
+
+print("App:", config.app.name, config.app.version)
+print("Dark mode:", config.features.darkMode)
+print("Max users:", config.limits.maxUsers)
+print()
+
+print("=== Summary ===")
+print("Declarative features:")
+print("  • Map/filter/reduce")
+print("  • Object construction")
+print("  • State management")
+print("  • Rule-based validation")
+print("  • Data pipelines")
+print("  • Configuration objects")
+print()
+print("Complete!")

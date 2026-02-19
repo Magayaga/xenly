@@ -1,0 +1,7 @@
+// Test without printing
+enum Option {
+    Some(value)
+}
+
+var someVal = Some(42)
+print("Assignment done")

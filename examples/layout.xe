@@ -1,0 +1,302 @@
+// ════════════════════════════════════════════════════════
+//  layout.xe  —  Xenly Declarative Layout Engine
+//
+//  Provides layout primitives that mirror SwiftUI VStack/
+//  HStack, Android LinearLayout, and WinUI StackPanel.
+//
+//  Components are positioned declaratively; the engine
+//  tracks a layout cursor and advances it automatically.
+// ════════════════════════════════════════════════════════
+
+import "io"
+import "array"
+import "string"
+
+// ── Layout cursor ─────────────────────────────────────
+var _layoutRow = 1
+var _layoutCol = 1
+var _layoutGap = 1   // lines between components
+
+fn layoutReset(row, col) {
+    _layoutRow = row
+    _layoutCol = col
+}
+
+fn layoutSetGap(gap) {
+    _layoutGap = gap
+}
+
+fn layoutSkip(lines) {
+    _layoutRow = _layoutRow + lines
+}
+
+fn layoutCurRow() { return _layoutRow }
+fn layoutCurCol() { return _layoutCol }
+
+// ── ANSI helpers ──────────────────────────────────────
+fn _pos(row, col) {
+    var r = "" + row
+    var c = "" + col
+    return "\033[" + r + ";" + c + "H"
+}
+fn _reset()  { io.write("\033[0m")  }
+fn _bold()   { io.write("\033[1m")  }
+fn _dim()    { io.write("\033[2m")  }
+
+fn _fg(name) {
+    if (name == "black")         { io.write("\033[30m")  }
+    if (name == "red")           { io.write("\033[31m")  }
+    if (name == "green")         { io.write("\033[32m")  }
+    if (name == "yellow")        { io.write("\033[33m")  }
+    if (name == "blue")          { io.write("\033[34m")  }
+    if (name == "cyan")          { io.write("\033[36m")  }
+    if (name == "white")         { io.write("\033[37m")  }
+    if (name == "bright_black")  { io.write("\033[90m")  }
+    if (name == "bright_red")    { io.write("\033[91m")  }
+    if (name == "bright_green")  { io.write("\033[92m")  }
+    if (name == "bright_yellow") { io.write("\033[93m")  }
+    if (name == "bright_blue")   { io.write("\033[94m")  }
+    if (name == "bright_cyan")   { io.write("\033[96m")  }
+    if (name == "bright_white")  { io.write("\033[97m")  }
+}
+
+fn _bg(name) {
+    if (name == "black")       { io.write("\033[40m")  }
+    if (name == "red")         { io.write("\033[41m")  }
+    if (name == "green")       { io.write("\033[42m")  }
+    if (name == "yellow")      { io.write("\033[43m")  }
+    if (name == "blue")        { io.write("\033[44m")  }
+    if (name == "cyan")        { io.write("\033[46m")  }
+    if (name == "white")       { io.write("\033[47m")  }
+    if (name == "bright_black"){ io.write("\033[100m") }
+    if (name == "bright_blue") { io.write("\033[104m") }
+}
+
+// ── VStack — vertical stack of components ────────────
+// Each lv* function places a component at the current
+// cursor row, then advances by 1 (+ gap).
+
+fn lvText(content) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    io.write(content)
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvColorText(content, colour) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    _fg(colour)
+    io.write(content)
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvBold(content) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    _bold()
+    io.write(content)
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvHeading(title, colour) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    _bold() _fg(colour)
+    io.write(title)
+    _reset()
+    _layoutRow = _layoutRow + 2 + _layoutGap
+}
+
+fn lvDivider(width, char) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    _fg("bright_black")
+    var line = ""
+    var i = 0
+    while (i < width) { line = line + char i = i + 1 }
+    io.write(line)
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvLabel(key, value) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    _bold() _fg("bright_white") io.write(key + ": ")
+    _reset() _fg("bright_yellow") io.write(value)
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvProgressBar(value, maxValue, width) {
+    var filled = value * width / maxValue
+    var empty = width - filled
+    var pct = value * 100 / maxValue
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    _fg("bright_white") io.write("[")
+    _fg("bright_green")
+    var i = 0
+    while (i < filled) { io.write("█") i = i + 1 }
+    _fg("bright_black")
+    i = 0
+    while (i < empty) { io.write("░") i = i + 1 }
+    _fg("bright_white") io.write("] ")
+    _fg("bright_yellow") _bold() io.write("" + pct + "%")
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvCheckbox(label, checked) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    if (checked == 1) { _fg("bright_green") _bold() io.write("[✓] ") }
+    if (checked == 0) { _fg("bright_black")          io.write("[ ] ") }
+    _reset() _fg("white") io.write(label)
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvButton(label, active) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    if (active == 1) { _bg("green")       _fg("black") _bold() }
+    if (active == 0) { _bg("bright_black") _fg("white") }
+    io.write("[ " + label + " ]")
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvBadge(text, kind) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    if (kind == "success") { _bg("green")  _fg("black")       _bold() }
+    if (kind == "error")   { _bg("red")    _fg("bright_white") _bold() }
+    if (kind == "warn")    { _bg("yellow") _fg("black")       _bold() }
+    if (kind == "info")    { _bg("blue")   _fg("bright_white") _bold() }
+    io.write(" " + text + " ")
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvNotify(message, kind) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    if (kind == "success") { _fg("bright_green")  _bold() io.write("✔  ") }
+    if (kind == "error")   { _fg("bright_red")    _bold() io.write("✖  ") }
+    if (kind == "info")    { _fg("bright_cyan")   _bold() io.write("ℹ  ") }
+    if (kind == "warn")    { _fg("bright_yellow") _bold() io.write("⚠  ") }
+    _reset() _fg("bright_white") io.write(message)
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvInput(label, value, width, focused) {
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq)
+    _bold() _fg("bright_white") io.write(label + " ")
+    _reset()
+    if (focused == 1) { _bg("white")       _fg("black") }
+    if (focused == 0) { _bg("bright_black") _fg("white") }
+    var display = " " + value
+    var cur = string.len(display)
+    while (cur < width) { display = display + " " cur = cur + 1 }
+    io.write(display)
+    if (focused == 1) { _bold() _fg("blue") io.write("█") }
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+fn lvSparkline(values, maxVal) {
+    var bars = array.create(8)
+    array.set(bars, 0, "▁") array.set(bars, 1, "▂")
+    array.set(bars, 2, "▃") array.set(bars, 3, "▄")
+    array.set(bars, 4, "▅") array.set(bars, 5, "▆")
+    array.set(bars, 6, "▇") array.set(bars, 7, "█")
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq) _fg("bright_green")
+    var i = 0
+    while (i < array.len(values)) {
+        var v = array.get(values, i)
+        var idx = v * 7 / maxVal
+        io.write(array.get(bars, idx))
+        i = i + 1
+    }
+    _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+// ── HStack — horizontal stack ─────────────────────────
+// lh* functions place content side-by-side at current row.
+// Call lvHEnd() to commit the row and advance.
+
+var _hRow = 1
+var _hCol = 1
+
+fn lvHBegin(col) {
+    _hRow = _layoutRow
+    _hCol = col
+}
+
+fn lvHText(content, colour) {
+    var seq = _pos(_hRow, _hCol)
+    io.write(seq) _fg(colour) io.write(content) _reset()
+    _hCol = _hCol + string.len(content) + 1
+}
+
+fn lvHBadge(text, kind) {
+    var seq = _pos(_hRow, _hCol)
+    io.write(seq)
+    if (kind == "success") { _bg("green")  _fg("black")       _bold() }
+    if (kind == "error")   { _bg("red")    _fg("bright_white") _bold() }
+    if (kind == "warn")    { _bg("yellow") _fg("black")       _bold() }
+    if (kind == "info")    { _bg("blue")   _fg("bright_white") _bold() }
+    io.write(" " + text + " ") _reset()
+    _hCol = _hCol + string.len(text) + 3
+}
+
+fn lvHButton(label, active) {
+    var seq = _pos(_hRow, _hCol)
+    io.write(seq)
+    if (active == 1) { _bg("green")       _fg("black") _bold() }
+    if (active == 0) { _bg("bright_black") _fg("white") }
+    io.write("[ " + label + " ]") _reset()
+    _hCol = _hCol + string.len(label) + 5
+}
+
+fn lvHEnd() {
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}
+
+// ── Panel with layout cursor ──────────────────────────
+fn lvPanelBegin(cols, title) {
+    var inner = cols - 2
+    var titleLen = string.len(title)
+    var sideFill = (inner - titleLen - 2) / 2
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq) _fg("cyan") io.write("╔")
+    var i = 0
+    while (i < sideFill) { io.write("═") i = i + 1 }
+    io.write(" ") _bold() _fg("bright_white") io.write(title)
+    _reset() _fg("cyan") io.write(" ")
+    i = 0
+    while (i < sideFill) { io.write("═") i = i + 1 }
+    io.write("╗") _reset()
+    _layoutRow = _layoutRow + 1
+    _layoutCol = _layoutCol + 2   // indent content
+}
+
+fn lvPanelEnd(startCol, cols) {
+    _layoutCol = startCol
+    var inner = cols - 2
+    var seq = _pos(_layoutRow, _layoutCol)
+    io.write(seq) _fg("cyan") io.write("╚")
+    var i = 0
+    while (i < inner) { io.write("═") i = i + 1 }
+    io.write("╝") _reset()
+    _layoutRow = _layoutRow + 1 + _layoutGap
+}

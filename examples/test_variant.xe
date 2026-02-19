@@ -1,0 +1,12 @@
+// Test variant construction
+print("Testing variant construction...")
+
+enum Option {
+    Some(value)
+}
+
+print("Creating Some(42)...")
+const someVal = Some(42)
+
+print("someVal:", someVal)
+print("✓ variant construction works")

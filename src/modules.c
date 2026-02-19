@@ -1,14 +1,6 @@
-/*
- * XENLY - high-level and general-purpose programming language
- * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
- *
- * It is initially written in C programming language.
- *
- * It is available for Linux and macOS operating systems.
- *
- */
 #define _GNU_SOURCE
 #include "modules.h"
+#include "unicode.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +18,8 @@ int modules_get(const char *name, Module *out) {
     if (strcmp(name, "array")  == 0) { *out = module_array();  return 1; }
     if (strcmp(name, "os")     == 0) { *out = module_os();     return 1; }
     if (strcmp(name, "type")   == 0) { *out = module_type();   return 1; }
+    if (strcmp(name, "crypto") == 0) { *out = module_crypto(); return 1; }
+    if (strcmp(name, "path")   == 0) { *out = module_path();   return 1; }
     return 0;
 }
 
@@ -182,6 +176,374 @@ static Value *math_trunc(Value **args, size_t argc) {
     return value_number(trunc(args[0]->num));
 }
 
+// ─── Complex Numbers ──────────────────────────────────────────────────────────
+// Complex numbers are represented as arrays [real, imag]
+
+static Value *math_complex(Value **args, size_t argc) {
+    // Create complex number from real and imaginary parts
+    double real = (argc >= 1) ? args[0]->num : 0.0;
+    double imag = (argc >= 2) ? args[1]->num : 0.0;
+    
+    // Return as array [real, imag]
+    Value **elems = (Value **)malloc(sizeof(Value *) * 2);
+    elems[0] = value_number(real);
+    elems[1] = value_number(imag);
+    
+    Value *result = (Value *)calloc(1, sizeof(Value));
+    result->type = VAL_ARRAY;
+    result->array_len = 2;
+    result->array_cap = 2;
+    result->array = elems;
+    return result;
+}
+
+static Value *math_complexAdd(Value **args, size_t argc) {
+    if (argc < 2) return value_null();
+    if (args[0]->type != VAL_ARRAY || args[1]->type != VAL_ARRAY) return value_null();
+    if (args[0]->array_len < 2 || args[1]->array_len < 2) return value_null();
+    
+    double r1 = args[0]->array[0]->num;
+    double i1 = args[0]->array[1]->num;
+    double r2 = args[1]->array[0]->num;
+    double i2 = args[1]->array[1]->num;
+    
+    Value **elems = (Value **)malloc(sizeof(Value *) * 2);
+    elems[0] = value_number(r1 + r2);
+    elems[1] = value_number(i1 + i2);
+    
+    Value *result = (Value *)calloc(1, sizeof(Value));
+    result->type = VAL_ARRAY;
+    result->array_len = 2;
+    result->array_cap = 2;
+    result->array = elems;
+    return result;
+}
+
+static Value *math_complexMul(Value **args, size_t argc) {
+    if (argc < 2) return value_null();
+    if (args[0]->type != VAL_ARRAY || args[1]->type != VAL_ARRAY) return value_null();
+    if (args[0]->array_len < 2 || args[1]->array_len < 2) return value_null();
+    
+    double r1 = args[0]->array[0]->num;
+    double i1 = args[0]->array[1]->num;
+    double r2 = args[1]->array[0]->num;
+    double i2 = args[1]->array[1]->num;
+    
+    // (r1 + i1*i) * (r2 + i2*i) = (r1*r2 - i1*i2) + (r1*i2 + i1*r2)*i
+    Value **elems = (Value **)malloc(sizeof(Value *) * 2);
+    elems[0] = value_number(r1 * r2 - i1 * i2);
+    elems[1] = value_number(r1 * i2 + i1 * r2);
+    
+    Value *result = (Value *)calloc(1, sizeof(Value));
+    result->type = VAL_ARRAY;
+    result->array_len = 2;
+    result->array_cap = 2;
+    result->array = elems;
+    return result;
+}
+
+static Value *math_complexAbs(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    if (args[0]->type != VAL_ARRAY || args[0]->array_len < 2) return value_number(0);
+    
+    double real = args[0]->array[0]->num;
+    double imag = args[0]->array[1]->num;
+    return value_number(sqrt(real * real + imag * imag));
+}
+
+static Value *math_complexConj(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    if (args[0]->type != VAL_ARRAY || args[0]->array_len < 2) return value_null();
+    
+    double real = args[0]->array[0]->num;
+    double imag = args[0]->array[1]->num;
+    
+    Value **elems = (Value **)malloc(sizeof(Value *) * 2);
+    elems[0] = value_number(real);
+    elems[1] = value_number(-imag);
+    
+    Value *result = (Value *)calloc(1, sizeof(Value));
+    result->type = VAL_ARRAY;
+    result->array_len = 2;
+    result->array_cap = 2;
+    result->array = elems;
+    return result;
+}
+
+static Value *math_complexPhase(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    if (args[0]->type != VAL_ARRAY || args[0]->array_len < 2) return value_number(0);
+    
+    double real = args[0]->array[0]->num;
+    double imag = args[0]->array[1]->num;
+    return value_number(atan2(imag, real));
+}
+
+// ─── Type-Generic Math Functions ──────────────────────────────────────────────
+
+static Value *math_sum(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    
+    // If array, sum all elements
+    if (args[0]->type == VAL_ARRAY) {
+        double total = 0;
+        for (size_t i = 0; i < args[0]->array_len; i++) {
+            if (args[0]->array[i]->type == VAL_NUMBER) {
+                total += args[0]->array[i]->num;
+            }
+        }
+        return value_number(total);
+    }
+    
+    // If multiple arguments, sum them
+    double total = 0;
+    for (size_t i = 0; i < argc; i++) {
+        if (args[i]->type == VAL_NUMBER) {
+            total += args[i]->num;
+        }
+    }
+    return value_number(total);
+}
+
+static Value *math_product(Value **args, size_t argc) {
+    if (argc < 1) return value_number(1);
+    
+    // If array, multiply all elements
+    if (args[0]->type == VAL_ARRAY) {
+        double result = 1;
+        for (size_t i = 0; i < args[0]->array_len; i++) {
+            if (args[0]->array[i]->type == VAL_NUMBER) {
+                result *= args[0]->array[i]->num;
+            }
+        }
+        return value_number(result);
+    }
+    
+    // If multiple arguments, multiply them
+    double result = 1;
+    for (size_t i = 0; i < argc; i++) {
+        if (args[i]->type == VAL_NUMBER) {
+            result *= args[i]->num;
+        }
+    }
+    return value_number(result);
+}
+
+static Value *math_mean(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    
+    // If array, calculate mean
+    if (args[0]->type == VAL_ARRAY) {
+        if (args[0]->array_len == 0) return value_number(0);
+        double total = 0;
+        size_t count = 0;
+        for (size_t i = 0; i < args[0]->array_len; i++) {
+            if (args[0]->array[i]->type == VAL_NUMBER) {
+                total += args[0]->array[i]->num;
+                count++;
+            }
+        }
+        return value_number(count > 0 ? total / count : 0);
+    }
+    
+    // If multiple arguments, calculate mean
+    if (argc == 0) return value_number(0);
+    double total = 0;
+    for (size_t i = 0; i < argc; i++) {
+        if (args[i]->type == VAL_NUMBER) {
+            total += args[i]->num;
+        }
+    }
+    return value_number(total / argc);
+}
+
+static Value *math_median(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    
+    Value *arr = args[0];
+    if (arr->type != VAL_ARRAY || arr->array_len == 0) return value_number(0);
+    
+    // Copy numbers to temp array
+    double *nums = (double *)malloc(sizeof(double) * arr->array_len);
+    size_t count = 0;
+    for (size_t i = 0; i < arr->array_len; i++) {
+        if (arr->array[i]->type == VAL_NUMBER) {
+            nums[count++] = arr->array[i]->num;
+        }
+    }
+    
+    if (count == 0) {
+        free(nums);
+        return value_number(0);
+    }
+    
+    // Simple bubble sort
+    for (size_t i = 0; i < count - 1; i++) {
+        for (size_t j = 0; j < count - i - 1; j++) {
+            if (nums[j] > nums[j + 1]) {
+                double temp = nums[j];
+                nums[j] = nums[j + 1];
+                nums[j + 1] = temp;
+            }
+        }
+    }
+    
+    double result;
+    if (count % 2 == 0) {
+        result = (nums[count / 2 - 1] + nums[count / 2]) / 2.0;
+    } else {
+        result = nums[count / 2];
+    }
+    
+    free(nums);
+    return value_number(result);
+}
+
+static Value *math_variance(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    
+    Value *arr = args[0];
+    if (arr->type != VAL_ARRAY || arr->array_len == 0) return value_number(0);
+    
+    // Calculate mean
+    double total = 0;
+    size_t count = 0;
+    for (size_t i = 0; i < arr->array_len; i++) {
+        if (arr->array[i]->type == VAL_NUMBER) {
+            total += arr->array[i]->num;
+            count++;
+        }
+    }
+    
+    if (count == 0) return value_number(0);
+    double mean = total / count;
+    
+    // Calculate variance
+    double variance = 0;
+    for (size_t i = 0; i < arr->array_len; i++) {
+        if (arr->array[i]->type == VAL_NUMBER) {
+            double diff = arr->array[i]->num - mean;
+            variance += diff * diff;
+        }
+    }
+    
+    return value_number(variance / count);
+}
+
+static Value *math_stddev(Value **args, size_t argc) {
+    Value *var = math_variance(args, argc);
+    double result = sqrt(var->num);
+    value_destroy(var);
+    return value_number(result);
+}
+
+// ─── Advanced Math Functions ───────────────────────────────────────────────────
+
+static Value *math_gcd(Value **args, size_t argc) {
+    if (argc < 2) return value_number(0);
+    
+    long long a = (long long)args[0]->num;
+    long long b = (long long)args[1]->num;
+    
+    a = llabs(a);
+    b = llabs(b);
+    
+    while (b != 0) {
+        long long temp = b;
+        b = a % b;
+        a = temp;
+    }
+    
+    return value_number((double)a);
+}
+
+static Value *math_lcm(Value **args, size_t argc) {
+    if (argc < 2) return value_number(0);
+    
+    long long a = (long long)args[0]->num;
+    long long b = (long long)args[1]->num;
+    
+    if (a == 0 || b == 0) return value_number(0);
+    
+    Value *gcd_val = math_gcd(args, argc);
+    long long gcd = (long long)gcd_val->num;
+    value_destroy(gcd_val);
+    
+    return value_number((double)((llabs(a) / gcd) * llabs(b)));
+}
+
+static Value *math_factorial(Value **args, size_t argc) {
+    if (argc < 1) return value_number(1);
+    
+    int n = (int)args[0]->num;
+    if (n < 0) return value_number(NAN);
+    if (n > 170) return value_number(INFINITY);  // Overflow
+    
+    double result = 1;
+    for (int i = 2; i <= n; i++) {
+        result *= i;
+    }
+    
+    return value_number(result);
+}
+
+static Value *math_combinations(Value **args, size_t argc) {
+    if (argc < 2) return value_number(0);
+    
+    int n = (int)args[0]->num;
+    int k = (int)args[1]->num;
+    
+    if (k > n || k < 0 || n < 0) return value_number(0);
+    if (k == 0 || k == n) return value_number(1);
+    
+    // Use iterative method to avoid overflow
+    k = (k > n - k) ? n - k : k;  // Take advantage of symmetry
+    
+    double result = 1;
+    for (int i = 0; i < k; i++) {
+        result *= (n - i);
+        result /= (i + 1);
+    }
+    
+    return value_number(result);
+}
+
+static Value *math_permutations(Value **args, size_t argc) {
+    if (argc < 2) return value_number(0);
+    
+    int n = (int)args[0]->num;
+    int k = (int)args[1]->num;
+    
+    if (k > n || k < 0 || n < 0) return value_number(0);
+    
+    double result = 1;
+    for (int i = 0; i < k; i++) {
+        result *= (n - i);
+    }
+    
+    return value_number(result);
+}
+
+static Value *math_lerp(Value **args, size_t argc) {
+    if (argc < 3) return value_number(0);
+    
+    double a = args[0]->num;
+    double b = args[1]->num;
+    double t = args[2]->num;
+    
+    return value_number(a + (b - a) * t);
+}
+
+static Value *math_degrees(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    return value_number(args[0]->num * 180.0 / M_PI);
+}
+
+static Value *math_radians(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    return value_number(args[0]->num * M_PI / 180.0);
+}
+
 static NativeFunc math_fns[] = {
     /* arithmetic  */ { "abs",       math_abs },
                       { "sqrt",      math_sqrt },
@@ -217,6 +579,26 @@ static NativeFunc math_fns[] = {
     /* predicates  */ { "isNaN",     math_isnan },
                       { "isInf",     math_isinf },
                       { "isFinite",  math_isfinite },
+    /* complex     */ { "complex",       math_complex },
+                      { "complexAdd",    math_complexAdd },
+                      { "complexMul",    math_complexMul },
+                      { "complexAbs",    math_complexAbs },
+                      { "complexConj",   math_complexConj },
+                      { "complexPhase",  math_complexPhase },
+    /* generic     */ { "sum",        math_sum },
+                      { "product",    math_product },
+                      { "mean",       math_mean },
+                      { "median",     math_median },
+                      { "variance",   math_variance },
+                      { "stddev",     math_stddev },
+    /* advanced    */ { "gcd",        math_gcd },
+                      { "lcm",        math_lcm },
+                      { "factorial",  math_factorial },
+                      { "combinations", math_combinations },
+                      { "permutations", math_permutations },
+                      { "lerp",       math_lerp },
+                      { "degrees",    math_degrees },
+                      { "radians",    math_radians },
     { NULL, NULL }
 };
 
@@ -501,6 +883,65 @@ static Value *str_join(Value **args, size_t argc) {
     Value *r = value_string(buf); free(buf); return r;
 }
 
+// Unicode-aware string functions
+static Value *str_unicodeLength(Value **args, size_t argc) {
+    // Get length in Unicode characters (not bytes)
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_number(0);
+    size_t len = utf8_strlen(args[0]->str);
+    return value_number((double)len);
+}
+
+static Value *str_unicodeCharAt(Value **args, size_t argc) {
+    // Get Unicode character at index
+    if (argc < 2 || args[0]->type != VAL_STRING) return value_string("");
+    const char *str = args[0]->str;
+    size_t index = (size_t)args[1]->num;
+    
+    const char *pos = utf8_char_at(str, index);
+    if (!pos || *pos == '\0') return value_string("");
+    
+    size_t bytes;
+    utf8_decode(pos, &bytes);
+    
+    char buf[5] = {0};
+    for (size_t i = 0; i < bytes && i < 4; i++) {
+        buf[i] = pos[i];
+    }
+    return value_string(buf);
+}
+
+static Value *str_codePointAt(Value **args, size_t argc) {
+    // Get Unicode codepoint at index
+    if (argc < 2 || args[0]->type != VAL_STRING) return value_number(0);
+    const char *str = args[0]->str;
+    size_t index = (size_t)args[1]->num;
+    
+    const char *pos = utf8_char_at(str, index);
+    if (!pos || *pos == '\0') return value_number(0);
+    
+    size_t bytes;
+    uint32_t cp = utf8_decode(pos, &bytes);
+    return value_number((double)cp);
+}
+
+static Value *str_fromCodePoint(Value **args, size_t argc) {
+    // Create string from Unicode codepoint
+    if (argc < 1) return value_string("");
+    uint32_t cp = (uint32_t)args[0]->num;
+    
+    char buf[5] = {0};
+    size_t bytes = utf8_encode(cp, buf);
+    if (bytes == 0) return value_string("");
+    
+    return value_string(buf);
+}
+
+static Value *str_normalize(Value **args, size_t argc) {
+    // Simple normalization: just return the string (full NFD/NFC would require ICU)
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_string("");
+    return value_string(args[0]->str);
+}
+
 static NativeFunc string_fns[] = {
     { "len",           str_len },
     { "upper",         str_upper },
@@ -525,6 +966,12 @@ static NativeFunc string_fns[] = {
     { "padEnd",        str_padEnd },
     { "split",         str_split },
     { "join",          str_join },
+    // Unicode-aware functions
+    { "unicodeLength",  str_unicodeLength },
+    { "unicodeCharAt",  str_unicodeCharAt },
+    { "codePointAt",    str_codePointAt },
+    { "fromCodePoint",  str_fromCodePoint },
+    { "normalize",      str_normalize },
     { NULL, NULL }
 };
 
@@ -601,7 +1048,11 @@ static Value *value_clone(Value *v) {
         case VAL_BOOL:     return value_bool(v->boolean);
         case VAL_NULL:     return value_null();
         case VAL_ARRAY: {
-            Value **items = (Value **)malloc(sizeof(Value *) * v->array_len);
+            // FIX: value_array() sets array_cap = len ? len : 4.
+            // Must allocate at least that many slots so future push() calls
+            // don't write past the end of the backing store.
+            size_t alloc = (v->array_len > 0) ? v->array_len : 4;
+            Value **items = (Value **)malloc(sizeof(Value *) * alloc);
             for (size_t i = 0; i < v->array_len; i++) items[i] = value_clone(v->array[i]);
             return value_array(items, v->array_len);
         }
@@ -613,7 +1064,11 @@ static Value *value_clone(Value *v) {
 static Value *arr_create(Value **args, size_t argc) {
     int n = (argc >= 1) ? (int)args[0]->num : 0;
     if (n < 0) n = 0;
-    Value **items = (Value **)malloc(sizeof(Value *) * (size_t)(n ? n : 1));
+    // FIX: value_array() sets array_cap = len ? len : 4.
+    // We must allocate AT LEAST that many slots so arr_push()
+    // doesn't write past the end of the backing store.
+    int alloc = (n > 0) ? n : 4;
+    Value **items = (Value **)malloc(sizeof(Value *) * (size_t)alloc);
     Value *fill   = (argc >= 2) ? args[1] : NULL;
     for (int i = 0; i < n; i++)
         items[i] = fill ? value_clone(fill) : value_number(0);
@@ -997,8 +1452,13 @@ Module module_array(void) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// OS MODULE  — process, environment, time
+// OS MODULE  — process, environment, time, filesystem
 // ═════════════════════════════════════════════════════════════════════════════
+
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <errno.h>
 
 static Value *os_exit(Value **args, size_t argc) {
     int code = (argc >= 1) ? (int)args[0]->num : 0;
@@ -1025,12 +1485,137 @@ static Value *os_cwd(Value **args, size_t argc) {
     return value_string("");
 }
 
+// New filesystem functions
+static Value *os_exists(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    struct stat st;
+    return value_bool(stat(args[0]->str, &st) == 0);
+}
+
+static Value *os_isFile(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    struct stat st;
+    if (stat(args[0]->str, &st) != 0) return value_bool(0);
+    return value_bool(S_ISREG(st.st_mode));
+}
+
+static Value *os_isDir(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    struct stat st;
+    if (stat(args[0]->str, &st) != 0) return value_bool(0);
+    return value_bool(S_ISDIR(st.st_mode));
+}
+
+static Value *os_mkdir(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    int mode = (argc >= 2) ? (int)args[1]->num : 0755;
+    return value_bool(mkdir(args[0]->str, (mode_t)mode) == 0);
+}
+
+static Value *os_rmdir(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    return value_bool(rmdir(args[0]->str) == 0);
+}
+
+static Value *os_remove(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    return value_bool(remove(args[0]->str) == 0);
+}
+
+static Value *os_rename(Value **args, size_t argc) {
+    if (argc < 2 || args[0]->type != VAL_STRING || args[1]->type != VAL_STRING) 
+        return value_bool(0);
+    return value_bool(rename(args[0]->str, args[1]->str) == 0);
+}
+
+static Value *os_listdir(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_array(NULL, 0);
+    
+    DIR *dir = opendir(args[0]->str);
+    if (!dir) return value_array(NULL, 0);
+    
+    Value **items = NULL;
+    size_t count = 0, cap = 0;
+    struct dirent *entry;
+    
+    while ((entry = readdir(dir)) != NULL) {
+        // Skip . and ..
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+            
+        if (count >= cap) {
+            cap = cap ? cap * 2 : 8;
+            items = realloc(items, sizeof(Value*) * cap);
+        }
+        items[count++] = value_string(entry->d_name);
+    }
+    
+    closedir(dir);
+    // FIX: value_array() takes ownership of `items` — do NOT free it here.
+    // The old code called free(items) after passing it to value_array(), which
+    // freed memory still referenced by the returned Value's ->array field.
+    return value_array(items, count);
+}
+
+static Value *os_filesize(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_number(-1);
+    struct stat st;
+    if (stat(args[0]->str, &st) != 0) return value_number(-1);
+    return value_number((double)st.st_size);
+}
+
+static Value *os_getpid(Value **args, size_t argc) {
+    (void)args; (void)argc;
+    return value_number((double)getpid());
+}
+
+static Value *os_sleep(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    double seconds = args[0]->num;
+    if (seconds > 0) {
+        usleep((useconds_t)(seconds * 1000000));
+    }
+    return value_null();
+}
+
+static Value *os_platform(Value **args, size_t argc) {
+    (void)args; (void)argc;
+#ifdef __linux__
+    return value_string("linux");
+#elif defined(__APPLE__)
+    return value_string("darwin");
+#elif defined(_WIN32)
+    return value_string("windows");
+#elif defined(__unix__)
+    return value_string("unix");
+#else
+    return value_string("unknown");
+#endif
+}
+
 static NativeFunc os_fns[] = {
-    { "exit",  os_exit },
-    { "time",  os_time },
-    { "clock", os_clock },
-    { "env",   os_env },
-    { "cwd",   os_cwd },
+    // Process
+    { "exit",     os_exit },
+    { "getpid",   os_getpid },
+    { "sleep",    os_sleep },
+    { "platform", os_platform },
+    // Time
+    { "time",     os_time },
+    { "clock",    os_clock },
+    // Environment
+    { "env",      os_env },
+    { "cwd",      os_cwd },
+    // Filesystem - query
+    { "exists",   os_exists },
+    { "isFile",   os_isFile },
+    { "isDir",    os_isDir },
+    { "filesize", os_filesize },
+    { "listdir",  os_listdir },
+    // Filesystem - modify
+    { "mkdir",    os_mkdir },
+    { "rmdir",    os_rmdir },
+    { "remove",   os_remove },
+    { "rename",   os_rename },
     { NULL, NULL }
 };
 
@@ -1039,6 +1624,361 @@ Module module_os(void) {
     m.name      = NULL;
     m.functions = os_fns;
     m.fn_count  = sizeof(os_fns)/sizeof(os_fns[0]) - 1;  // auto-count
+    return m;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CRYPTO MODULE  — cryptographic constants and hashing
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Simple hash functions for basic cryptographic needs
+static Value *crypto_hash(Value **args, size_t argc) {
+    // Simple DJB2 hash algorithm
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_number(0);
+    const char *str = args[0]->str;
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + (unsigned long)c; // hash * 33 + c
+    return value_number((double)hash);
+}
+
+static Value *crypto_fnv1a(Value **args, size_t argc) {
+    // FNV-1a hash algorithm
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_number(0);
+    const char *str = args[0]->str;
+    uint32_t hash = 2166136261u;
+    while (*str) {
+        hash ^= (uint32_t)(unsigned char)(*str++);
+        hash *= 16777619u;
+    }
+    return value_number((double)hash);
+}
+
+static Value *crypto_murmur3(Value **args, size_t argc) {
+    // Simplified MurmurHash3 for 32-bit
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_number(0);
+    const char *key = args[0]->str;
+    uint32_t seed = (argc >= 2) ? (uint32_t)args[1]->num : 0;
+    
+    size_t len = strlen(key);
+    const uint32_t c1 = 0xcc9e2d51;
+    const uint32_t c2 = 0x1b873593;
+    
+    uint32_t h1 = seed;
+    const uint32_t *blocks = (const uint32_t *)(key);
+    size_t nblocks = len / 4;
+    
+    for (size_t i = 0; i < nblocks; i++) {
+        uint32_t k1 = blocks[i];
+        k1 *= c1;
+        k1 = (k1 << 15) | (k1 >> 17);
+        k1 *= c2;
+        h1 ^= k1;
+        h1 = (h1 << 13) | (h1 >> 19);
+        h1 = h1 * 5 + 0xe6546b64;
+    }
+    
+    // Handle tail
+    const uint8_t *tail = (const uint8_t *)(key + nblocks * 4);
+    uint32_t k1 = 0;
+    switch (len & 3) {
+        case 3: k1 ^= tail[2] << 16; // fallthrough
+        case 2: k1 ^= tail[1] << 8;  // fallthrough
+        case 1: k1 ^= tail[0];
+                k1 *= c1;
+                k1 = (k1 << 15) | (k1 >> 17);
+                k1 *= c2;
+                h1 ^= k1;
+    }
+    
+    // Finalization
+    h1 ^= len;
+    h1 ^= h1 >> 16;
+    h1 *= 0x85ebca6b;
+    h1 ^= h1 >> 13;
+    h1 *= 0xc2b2ae35;
+    h1 ^= h1 >> 16;
+    
+    return value_number((double)h1);
+}
+
+static Value *crypto_checksum(Value **args, size_t argc) {
+    // Simple checksum (sum of bytes mod 256)
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_number(0);
+    const char *str = args[0]->str;
+    unsigned int sum = 0;
+    while (*str) sum += (unsigned char)(*str++);
+    return value_number((double)(sum & 0xFF));
+}
+
+static Value *crypto_randomBytes(Value **args, size_t argc) {
+    // Generate random bytes as hex string
+    size_t count = (argc >= 1) ? (size_t)args[0]->num : 16;
+    if (count > 1024) count = 1024; // Safety limit
+    
+    char *hex = malloc(count * 2 + 1);
+    for (size_t i = 0; i < count; i++) {
+        unsigned char byte = (unsigned char)(rand() % 256);
+        snprintf(hex + i * 2, 3, "%02x", byte);
+    }
+    hex[count * 2] = '\0';
+    
+    Value *result = value_string(hex);
+    free(hex);
+    return result;
+}
+
+static Value *crypto_uuid(Value **args, size_t argc) {
+    (void)args; (void)argc;
+    // Generate UUID v4 (random)
+    char uuid[37];
+    snprintf(uuid, sizeof(uuid),
+        "%08x-%04x-4%03x-%04x-%012lx",
+        (unsigned int)rand(),
+        (unsigned int)(rand() & 0xFFFF),
+        (unsigned int)(rand() & 0xFFF),
+        (unsigned int)((rand() & 0x3FFF) | 0x8000),
+        (unsigned long)(((unsigned long)rand() << 32) | (unsigned long)rand()) & 0xFFFFFFFFFFFFUL
+    );
+    return value_string(uuid);
+}
+
+// Cryptographic constants
+static Value *crypto_MD5_SIZE(Value **args, size_t argc) {
+    (void)args; (void)argc;
+    return value_number(16);
+}
+
+static Value *crypto_SHA1_SIZE(Value **args, size_t argc) {
+    (void)args; (void)argc;
+    return value_number(20);
+}
+
+static Value *crypto_SHA256_SIZE(Value **args, size_t argc) {
+    (void)args; (void)argc;
+    return value_number(32);
+}
+
+static NativeFunc crypto_fns[] = {
+    // Hash functions
+    { "hash",      crypto_hash },
+    { "fnv1a",     crypto_fnv1a },
+    { "murmur3",   crypto_murmur3 },
+    { "checksum",  crypto_checksum },
+    // Random
+    { "randomBytes", crypto_randomBytes },
+    { "uuid",      crypto_uuid },
+    // Constants
+    { "MD5_SIZE",    crypto_MD5_SIZE },
+    { "SHA1_SIZE",   crypto_SHA1_SIZE },
+    { "SHA256_SIZE", crypto_SHA256_SIZE },
+    { NULL, NULL }
+};
+
+Module module_crypto(void) {
+    Module m;
+    m.name      = NULL;
+    m.functions = crypto_fns;
+    m.fn_count  = sizeof(crypto_fns)/sizeof(crypto_fns[0]) - 1;
+    return m;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PATH MODULE  — path manipulation utilities
+// ═════════════════════════════════════════════════════════════════════════════
+
+static Value *path_join(Value **args, size_t argc) {
+    // Join path components with /
+    if (argc == 0) return value_string("");
+    
+    size_t total_len = 0;
+    for (size_t i = 0; i < argc; i++) {
+        if (args[i]->type == VAL_STRING)
+            total_len += strlen(args[i]->str) + 1; // +1 for separator
+    }
+    
+    char *result = malloc(total_len + 1);
+    result[0] = '\0';
+    
+    for (size_t i = 0; i < argc; i++) {
+        if (args[i]->type != VAL_STRING) continue;
+        const char *part = args[i]->str;
+        if (!part || !*part) continue;
+        
+        // Add separator if needed
+        size_t len = strlen(result);
+        if (len > 0 && result[len-1] != '/') {
+            strcat(result, "/");
+        }
+        
+        // Skip leading / from part if result already has content
+        if (len > 0 && *part == '/') part++;
+        
+        strcat(result, part);
+    }
+    
+    Value *v = value_string(result);
+    free(result);
+    return v;
+}
+
+static Value *path_basename(Value **args, size_t argc) {
+    // Get the final component of a path
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_string("");
+    const char *path = args[0]->str;
+    
+    // Remove trailing slashes
+    size_t len = strlen(path);
+    while (len > 0 && path[len-1] == '/') len--;
+    if (len == 0) return value_string("/");
+    
+    // Find last /
+    const char *last_slash = NULL;
+    for (size_t i = 0; i < len; i++) {
+        if (path[i] == '/') last_slash = path + i;
+    }
+    
+    if (!last_slash) {
+        char *result = malloc(len + 1);
+        memcpy(result, path, len);
+        result[len] = '\0';
+        Value *v = value_string(result);
+        free(result);
+        return v;
+    }
+    
+    const char *base = last_slash + 1;
+    size_t base_len = len - (size_t)(base - path);
+    char *result = malloc(base_len + 1);
+    memcpy(result, base, base_len);
+    result[base_len] = '\0';
+    Value *v = value_string(result);
+    free(result);
+    return v;
+}
+
+static Value *path_dirname(Value **args, size_t argc) {
+    // Get directory part of a path
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_string(".");
+    const char *path = args[0]->str;
+    
+    // Remove trailing slashes
+    size_t len = strlen(path);
+    while (len > 0 && path[len-1] == '/') len--;
+    if (len == 0) return value_string("/");
+    
+    // Find last /
+    const char *last_slash = NULL;
+    for (size_t i = 0; i < len; i++) {
+        if (path[i] == '/') last_slash = path + i;
+    }
+    
+    if (!last_slash) return value_string(".");
+    if (last_slash == path) return value_string("/");
+    
+    size_t dir_len = (size_t)(last_slash - path);
+    char *result = malloc(dir_len + 1);
+    memcpy(result, path, dir_len);
+    result[dir_len] = '\0';
+    Value *v = value_string(result);
+    free(result);
+    return v;
+}
+
+static Value *path_ext(Value **args, size_t argc) {
+    // Get file extension
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_string("");
+    const char *path = args[0]->str;
+    
+    // Find last . after last /
+    const char *last_slash = strrchr(path, '/');
+    const char *last_dot = strrchr(path, '.');
+    
+    if (!last_dot || (last_slash && last_dot < last_slash))
+        return value_string("");
+    
+    return value_string(last_dot);
+}
+
+static Value *path_isAbs(Value **args, size_t argc) {
+    // Check if path is absolute
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    const char *path = args[0]->str;
+    return value_bool(path[0] == '/');
+}
+
+static Value *path_clean(Value **args, size_t argc) {
+    // Clean up path (remove .., ., etc.)
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_string(".");
+    const char *path = args[0]->str;
+    
+    if (!*path) return value_string(".");
+    
+    // Simple cleaning: remove redundant slashes and trailing slashes
+    size_t len = strlen(path);
+    char *result = malloc(len + 2);
+    size_t j = 0;
+    
+    for (size_t i = 0; i < len; i++) {
+        if (path[i] == '/') {
+            // Skip multiple slashes
+            if (j == 0 || result[j-1] != '/') {
+                result[j++] = '/';
+            }
+        } else {
+            result[j++] = path[i];
+        }
+    }
+    
+    // Remove trailing slash (unless it's root)
+    if (j > 1 && result[j-1] == '/') j--;
+    
+    result[j] = '\0';
+    if (j == 0) strcpy(result, ".");
+    
+    Value *v = value_string(result);
+    free(result);
+    return v;
+}
+
+static Value *path_split(Value **args, size_t argc) {
+    // Split path into [dir, base]
+    // NOTE: value_array() takes OWNERSHIP of both the parts[] array pointer and
+    // the Value* pointers inside it — it does NOT clone them.  Do not free parts[]
+    // or the Values after calling value_array().
+    if (argc < 1 || args[0]->type != VAL_STRING) {
+        Value **parts = malloc(sizeof(Value*) * 2);
+        parts[0] = value_string(".");
+        parts[1] = value_string("");
+        return value_array(parts, 2);   // takes full ownership of parts and its elements
+    }
+
+    Value *dir  = path_dirname(args, argc);    // freshly allocated
+    Value *base = path_basename(args, argc);   // freshly allocated
+
+    Value **parts = malloc(sizeof(Value*) * 2);
+    parts[0] = dir;    // ownership transferred to parts[]
+    parts[1] = base;   // ownership transferred to parts[]
+    return value_array(parts, 2);   // takes full ownership of parts[] and dir/base
+}
+
+static NativeFunc path_fns[] = {
+    { "join",     path_join },
+    { "basename", path_basename },
+    { "dirname",  path_dirname },
+    { "ext",      path_ext },
+    { "isAbs",    path_isAbs },
+    { "clean",    path_clean },
+    { "split",    path_split },
+    { NULL, NULL }
+};
+
+Module module_path(void) {
+    Module m;
+    m.name      = NULL;
+    m.functions = path_fns;
+    m.fn_count  = sizeof(path_fns)/sizeof(path_fns[0]) - 1;
     return m;
 }
 
@@ -1115,6 +2055,7 @@ static Value *type_typeOf(Value **args, size_t argc) {
                              ? args[0]->instance->class_def->name : "instance";
             return value_string(name);
         }
+        case VAL_ENUM_VARIANT: return value_string(args[0]->variant.tag);
         default: return value_string("unknown");
     }
 }

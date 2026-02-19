@@ -1,0 +1,10 @@
+// This is a single-line comment
+print("Testing new comment syntax")
+
+// Another single-line comment
+const x = 42
+
+/* This is a 
+   multi-line comment
+   that spans several lines */
+print("x =", x)

@@ -1,0 +1,14 @@
+// Debug variant
+print("Step 1: Define enum")
+
+enum Option {
+    Some(value)
+}
+
+print("Step 2: Enum defined, trying to call Some...")
+print("Step 3: Before call")
+
+// This is where it crashes
+Some(42)
+
+print("Step 4: After call")

@@ -1,0 +1,412 @@
+// ════════════════════════════════════════════════════════════════════════════
+//  dashboard.xe  –  Xenly Declarative Linux UI Demo
+//  A complete terminal dashboard showing all XUI components.
+//
+//  Declarative style: the entire screen is described as a set of
+//  component declarations.  Change a variable → repaint that component.
+//  The framework handles all ANSI rendering automatically.
+// ════════════════════════════════════════════════════════════════════════════
+
+import "os"
+import "array"
+import "string"
+
+// ── Load the declarative UI framework ──────────────────────────────────────
+// (In a real project: import "xui" — here we inline because xenly v0.1
+//  doesn't yet have a multi-file import path resolver.)
+import "io"
+
+fn xuiPos(row, col) {
+    var r = "" + row
+    var c = "" + col
+    return "\033[" + r + ";" + c + "H"
+}
+fn xuiReset()          { io.write("\033[0m")   }
+fn xuiBold()           { io.write("\033[1m")   }
+fn xuiDim()            { io.write("\033[2m")   }
+fn xuiFgBlack()        { io.write("\033[30m")  }
+fn xuiFgGreen()        { io.write("\033[32m")  }
+fn xuiFgYellow()       { io.write("\033[33m")  }
+fn xuiFgBlue()         { io.write("\033[34m")  }
+fn xuiFgCyan()         { io.write("\033[36m")  }
+fn xuiFgWhite()        { io.write("\033[37m")  }
+fn xuiFgBrightBlack()  { io.write("\033[90m")  }
+fn xuiFgBrightRed()    { io.write("\033[91m")  }
+fn xuiFgBrightGreen()  { io.write("\033[92m")  }
+fn xuiFgBrightYellow() { io.write("\033[93m")  }
+fn xuiFgBrightBlue()   { io.write("\033[94m")  }
+fn xuiFgBrightCyan()   { io.write("\033[96m")  }
+fn xuiFgBrightWhite()  { io.write("\033[97m")  }
+fn xuiBgBlack()        { io.write("\033[40m")  }
+fn xuiBgRed()          { io.write("\033[41m")  }
+fn xuiBgGreen()        { io.write("\033[42m")  }
+fn xuiBgBlue()         { io.write("\033[44m")  }
+fn xuiBgYellow()       { io.write("\033[43m")  }
+fn xuiBgCyan()         { io.write("\033[46m")  }
+fn xuiBgBrightBlack()  { io.write("\033[100m") }
+fn xuiBgBrightBlue()   { io.write("\033[104m") }
+
+// ── Compound components ─────────────────────────────────────────────────────
+
+fn drawPanel(topRow, leftCol, rows, cols, title) {
+    var inner = cols - 2
+    var titleLen = string.len(title)
+    var sideFill = (inner - titleLen - 2) / 2
+    var seq = xuiPos(topRow, leftCol)
+    io.write(seq) xuiFgCyan() io.write("╔")
+    var i = 0
+    while (i < sideFill) { io.write("═") i = i + 1 }
+    io.write(" ") xuiBold() xuiFgBrightWhite() io.write(title)
+    xuiReset() xuiFgCyan() io.write(" ")
+    i = 0
+    while (i < sideFill) { io.write("═") i = i + 1 }
+    io.write("╗") xuiReset()
+    i = 1
+    while (i < rows - 1) {
+        var r = topRow + i
+        seq = xuiPos(r, leftCol)
+        io.write(seq) xuiFgCyan() io.write("║") xuiReset()
+        var rc = leftCol + cols - 1
+        seq = xuiPos(r, rc)
+        io.write(seq) xuiFgCyan() io.write("║") xuiReset()
+        i = i + 1
+    }
+    var botRow = topRow + rows - 1
+    seq = xuiPos(botRow, leftCol)
+    io.write(seq) xuiFgCyan() io.write("╚")
+    i = 0
+    while (i < inner) { io.write("═") i = i + 1 }
+    io.write("╝") xuiReset()
+}
+
+fn drawProgressBar(posSeq, value, maxValue, width) {
+    var filled = value * width / maxValue
+    var empty = width - filled
+    var pct = value * 100 / maxValue
+    io.write(posSeq) xuiFgBrightWhite() io.write("[")
+    xuiFgBrightGreen()
+    var i = 0
+    while (i < filled) { io.write("█") i = i + 1 }
+    xuiFgBrightBlack()
+    i = 0
+    while (i < empty) { io.write("░") i = i + 1 }
+    xuiFgBrightWhite() io.write("] ")
+    xuiFgBrightYellow() xuiBold() io.write("" + pct + "%")
+    xuiReset()
+}
+
+fn drawBadge(posSeq, text, kind) {
+    io.write(posSeq)
+    if (kind == "success") { xuiBgGreen()      xuiFgBlack()       xuiBold() }
+    if (kind == "error")   { xuiBgRed()        xuiFgBrightWhite() xuiBold() }
+    if (kind == "warn")    { xuiBgYellow()     xuiFgBlack()       xuiBold() }
+    if (kind == "info")    { xuiBgBlue()       xuiFgBrightWhite() xuiBold() }
+    if (kind == "neutral") { xuiBgBrightBlack() xuiFgWhite()               }
+    io.write(" " + text + " ")
+    xuiReset()
+}
+
+fn drawSparkline(posSeq, values, maxVal) {
+    var bars = array.create(8)
+    array.set(bars, 0, "▁")
+    array.set(bars, 1, "▂")
+    array.set(bars, 2, "▃")
+    array.set(bars, 3, "▄")
+    array.set(bars, 4, "▅")
+    array.set(bars, 5, "▆")
+    array.set(bars, 6, "▇")
+    array.set(bars, 7, "█")
+    io.write(posSeq) xuiFgBrightGreen()
+    var i = 0
+    while (i < array.len(values)) {
+        var v = array.get(values, i)
+        var idx = v * 7 / maxVal
+        var bar = array.get(bars, idx)
+        io.write(bar)
+        i = i + 1
+    }
+    xuiReset()
+}
+
+fn drawStatusBar(posSeq, message) {
+    io.write(posSeq) xuiBgBrightBlue() xuiFgBrightWhite() xuiBold()
+    var padded = "  " + message
+    var cur = string.len(padded)
+    while (cur < 80) { padded = padded + " " cur = cur + 1 }
+    io.write(padded) xuiReset()
+}
+
+fn drawCheckbox(posSeq, label, checked) {
+    io.write(posSeq)
+    if (checked == 1) { xuiFgBrightGreen() xuiBold() io.write("[✓] ") }
+    if (checked == 0) { xuiFgBrightBlack()           io.write("[ ] ") }
+    xuiReset() xuiFgBrightWhite() io.write(label) xuiReset()
+}
+
+fn drawLabel(posSeq, key, value) {
+    io.write(posSeq)
+    xuiBold() xuiFgBrightWhite() io.write(key + ": ")
+    xuiReset() xuiFgBrightYellow() io.write(value) xuiReset()
+}
+
+fn drawNotify(posSeq, message, kind) {
+    io.write(posSeq)
+    if (kind == "success") { xuiFgBrightGreen()  xuiBold() io.write("✔  ") }
+    if (kind == "error")   { xuiFgBrightRed()    xuiBold() io.write("✖  ") }
+    if (kind == "info")    { xuiFgBrightCyan()   xuiBold() io.write("ℹ  ") }
+    if (kind == "warn")    { xuiFgBrightYellow() xuiBold() io.write("⚠  ") }
+    xuiReset() xuiFgBrightWhite() io.write(message) xuiReset()
+}
+
+fn drawTableHeader(posSeq, h1, h2, h3, h4, colW) {
+    io.write(posSeq)
+    xuiBold() xuiBgBrightBlack() xuiFgBrightCyan()
+    var pad1 = h1
+    var c1 = string.len(pad1)
+    while (c1 < colW) { pad1 = pad1 + " " c1 = c1 + 1 }
+    var pad2 = h2
+    var c2 = string.len(pad2)
+    while (c2 < colW) { pad2 = pad2 + " " c2 = c2 + 1 }
+    var pad3 = h3
+    var c3 = string.len(pad3)
+    while (c3 < colW) { pad3 = pad3 + " " c3 = c3 + 1 }
+    var pad4 = h4
+    var c4 = string.len(pad4)
+    while (c4 < colW) { pad4 = pad4 + " " c4 = c4 + 1 }
+    io.write("  " + pad1 + "  " + pad2 + "  " + pad3 + "  " + pad4)
+    xuiReset()
+}
+
+fn drawTableRow(posSeq, c1, c2, c3, c4, colW, hi) {
+    io.write(posSeq)
+    if (hi == 1) { xuiBgBrightBlue() xuiFgBrightWhite() xuiBold() }
+    if (hi == 0) { xuiFgWhite() }
+    var p1 = c1
+    var l1 = string.len(p1)
+    while (l1 < colW) { p1 = p1 + " " l1 = l1 + 1 }
+    var p2 = c2
+    var l2 = string.len(p2)
+    while (l2 < colW) { p2 = p2 + " " l2 = l2 + 1 }
+    var p3 = c3
+    var l3 = string.len(p3)
+    while (l3 < colW) { p3 = p3 + " " l3 = l3 + 1 }
+    var p4 = c4
+    var l4 = string.len(p4)
+    while (l4 < colW) { p4 = p4 + " " l4 = l4 + 1 }
+    io.write("  " + p1 + "  " + p2 + "  " + p3 + "  " + p4)
+    xuiReset()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  DECLARATIVE STATE
+//  This is the single source of truth.  The UI below is a pure function
+//  of this state — change a value, repaint the component.
+// ═══════════════════════════════════════════════════════════════════════════
+
+var appName     = "Xenly Linux Dashboard"
+var appVersion  = "v2.0.0"
+var platform    = os.platform()
+
+// System metrics
+var cpuUsage    = 67
+var memUsed     = 5400
+var memTotal    = 16384
+var diskUsed    = 320
+var diskTotal   = 512
+var netDown     = 124
+var netUp       = 38
+
+// Services
+var svcWebOn    = 1
+var svcDbOn     = 1
+var svcCacheOn  = 0
+var svcMonOn    = 1
+
+// Feature flags (declarative configuration)
+var flagDarkMode    = 1
+var flagNotifications = 1
+var flagAutoUpdate  = 0
+
+// Sparkline data (last 16 CPU samples)
+var cpuHistory = array.create(16)
+array.set(cpuHistory, 0,  23)
+array.set(cpuHistory, 1,  31)
+array.set(cpuHistory, 2,  45)
+array.set(cpuHistory, 3,  38)
+array.set(cpuHistory, 4,  52)
+array.set(cpuHistory, 5,  61)
+array.set(cpuHistory, 6,  55)
+array.set(cpuHistory, 7,  48)
+array.set(cpuHistory, 8,  70)
+array.set(cpuHistory, 9,  82)
+array.set(cpuHistory, 10, 75)
+array.set(cpuHistory, 11, 69)
+array.set(cpuHistory, 12, 73)
+array.set(cpuHistory, 13, 67)
+array.set(cpuHistory, 14, 71)
+array.set(cpuHistory, 15, 67)
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RENDER  —  declarative layout description
+//  Every component call is: "at position P, show component with state S"
+//  No imperative DOM manipulation. No manual diff. Pure declarations.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Clear screen
+io.write("\033[2J\033[H")
+io.write("\033[?25l")
+
+// ── Title bar ──────────────────────────────────────────────────────────────
+var pos = xuiPos(1, 1)
+drawStatusBar(pos, appName + "  " + appVersion + "  │  Platform: " + platform)
+
+// ── Section: System Resources ──────────────────────────────────────────────
+drawPanel(3, 1, 10, 40, "System Resources")
+
+pos = xuiPos(4, 3)
+drawLabel(pos, "CPU Usage  ", "" + cpuUsage + "%")
+
+pos = xuiPos(5, 3)
+drawProgressBar(pos, cpuUsage, 100, 28)
+
+pos = xuiPos(6, 3)
+drawLabel(pos, "Memory     ", "" + memUsed + " / " + memTotal + " MB")
+
+var memPct = memUsed * 100 / memTotal
+pos = xuiPos(7, 3)
+drawProgressBar(pos, memPct, 100, 28)
+
+pos = xuiPos(8, 3)
+drawLabel(pos, "Disk       ", "" + diskUsed + " / " + diskTotal + " GB")
+
+var diskPct = diskUsed * 100 / diskTotal
+pos = xuiPos(9, 3)
+drawProgressBar(pos, diskPct, 100, 28)
+
+pos = xuiPos(10, 3)
+drawLabel(pos, "Net Down   ", "" + netDown + " Mbps")
+
+pos = xuiPos(11, 3)
+drawLabel(pos, "Net Up     ", "" + netUp + " Mbps")
+
+// ── Sparkline ──────────────────────────────────────────────────────────────
+drawPanel(3, 42, 10, 38, "CPU History (16 samples)")
+
+pos = xuiPos(4, 44)
+xuiFgBrightBlack()
+io.write("0%")
+xuiReset()
+
+pos = xuiPos(10, 44)
+drawSparkline(pos, cpuHistory, 100)
+
+pos = xuiPos(11, 44)
+xuiFgBrightBlack()
+io.write("───────── last 16 ticks ─────────")
+xuiReset()
+
+pos = xuiPos(5, 44)
+xuiBold() xuiFgBrightYellow()
+io.write("Peak: 82%")
+xuiReset()
+
+pos = xuiPos(6, 44)
+xuiBold() xuiFgBrightGreen()
+io.write("Current: " + cpuUsage + "%")
+xuiReset()
+
+// ── Section: Services ──────────────────────────────────────────────────────
+drawPanel(14, 1, 7, 40, "Services")
+
+pos = xuiPos(15, 3)
+drawCheckbox(pos, "Web Server (nginx)", svcWebOn)
+
+pos = xuiPos(16, 3)
+drawCheckbox(pos, "Database  (postgres)", svcDbOn)
+
+pos = xuiPos(17, 3)
+drawCheckbox(pos, "Cache     (redis)", svcCacheOn)
+
+pos = xuiPos(18, 3)
+drawCheckbox(pos, "Monitoring (prometheus)", svcMonOn)
+
+// Running count badge
+var running = svcWebOn + svcDbOn + svcCacheOn + svcMonOn
+pos = xuiPos(19, 3)
+xuiFgBrightWhite()
+io.write("Running: ")
+xuiReset()
+pos = xuiPos(19, 12)
+if (running == 4) { drawBadge(pos, "" + running + "/4", "success") }
+if (running == 3) { drawBadge(pos, "" + running + "/4", "warn")    }
+if (running < 3)  { drawBadge(pos, "" + running + "/4", "error")   }
+
+// ── Section: Feature Flags ─────────────────────────────────────────────────
+drawPanel(14, 42, 7, 38, "Configuration Flags")
+
+pos = xuiPos(15, 44)
+drawCheckbox(pos, "Dark Mode", flagDarkMode)
+
+pos = xuiPos(16, 44)
+drawCheckbox(pos, "Notifications", flagNotifications)
+
+pos = xuiPos(17, 44)
+drawCheckbox(pos, "Auto Update", flagAutoUpdate)
+
+pos = xuiPos(18, 44)
+xuiFgBrightBlack() io.write("Platform: ") xuiReset()
+xuiFgBrightCyan() io.write(platform) xuiReset()
+
+// ── Section: Process Table ─────────────────────────────────────────────────
+drawPanel(22, 1, 10, 79, "Top Processes")
+
+var colW = 16
+
+pos = xuiPos(23, 3)
+drawTableHeader(pos, "Process", "PID", "CPU%", "Memory", colW)
+
+pos = xuiPos(24, 3)
+xuiFgBrightBlack()
+io.write("  ──────────────  ──────────────  ──────────────  ──────────────")
+xuiReset()
+
+pos = xuiPos(25, 3)
+drawTableRow(pos, "nginx",      "1024", "2.1%",  "128 MB", colW, 0)
+
+pos = xuiPos(26, 3)
+drawTableRow(pos, "postgres",   "1281", "18.4%", "2.1 GB", colW, 0)
+
+pos = xuiPos(27, 3)
+drawTableRow(pos, "xenly",      "4096", "34.2%", "512 MB", colW, 1)
+
+pos = xuiPos(28, 3)
+drawTableRow(pos, "redis",      "1890", "0.8%",  "256 MB", colW, 0)
+
+pos = xuiPos(29, 3)
+drawTableRow(pos, "prometheus", "2001", "4.1%",  "180 MB", colW, 0)
+
+// ── Section: Notifications ────────────────────────────────────────────────
+drawPanel(33, 1, 6, 79, "Notifications")
+
+pos = xuiPos(34, 3)
+drawNotify(pos, "Backup completed successfully — 3.2 GB archived", "success")
+
+pos = xuiPos(35, 3)
+drawNotify(pos, "Redis cache miss rate above threshold (12.3%)", "warn")
+
+pos = xuiPos(36, 3)
+drawNotify(pos, "Xenly 2.0.0 release build finished in 0.3s", "info")
+
+pos = xuiPos(37, 3)
+drawNotify(pos, "Disk partition /dev/sda1 at 62% capacity", "info")
+
+// ── Status bar footer ──────────────────────────────────────────────────────
+pos = xuiPos(40, 1)
+drawStatusBar(pos, "  q: quit   r: refresh   s: services   h: help   │  Declarative Linux UI")
+
+// ── Restore cursor ─────────────────────────────────────────────────────────
+pos = xuiPos(42, 1)
+io.write(pos)
+io.write("\033[?25h")
+xuiReset()
+io.write("\n")

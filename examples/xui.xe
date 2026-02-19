@@ -1,0 +1,715 @@
+// ════════════════════════════════════════════════════════════════════════════
+//  xui.xe  –  Xenly Declarative Linux Terminal UI Framework  v1.0
+// ════════════════════════════════════════════════════════════════════════════
+//
+//  Declarative model: describe WHAT the screen should look like.
+//  The framework maps component descriptions → ANSI escape sequences.
+//
+//  Usage pattern:
+//    1. Call xuiInit() to clear screen and hide cursor
+//    2. Describe state as plain variables
+//    3. Call component functions to paint the declared layout
+//    4. Call xuiFlush() when done
+//    5. On state change, repaint only the affected component
+//
+//  Requires: xenly interpreter with parser fix (v0.1.1+)
+// ════════════════════════════════════════════════════════════════════════════
+
+import "io"
+import "string"
+import "array"
+
+// ─────────────────────────────────────────
+//  LIFECYCLE
+// ─────────────────────────────────────────
+
+fn xuiInit() {
+    io.write("\033[2J\033[H")   // clear screen + home
+    io.write("\033[?25l")       // hide cursor
+}
+
+fn xuiDone() {
+    io.write("\033[?25h")       // show cursor
+    io.write("\033[0m")         // reset colours
+    io.write("\033[H")          // cursor to top-left
+}
+
+fn xuiClear() {
+    io.write("\033[2J\033[H")
+}
+
+// ─────────────────────────────────────────
+//  CURSOR POSITIONING
+// ─────────────────────────────────────────
+
+// Returns "\033[row;colH" — pass the returned string to xuiAt()
+fn xuiPos(row, col) {
+    var r = "" + row
+    var c = "" + col
+    return "\033[" + r + ";" + c + "H"
+}
+
+// Move cursor to pre-built position string
+fn xuiAt(seq) {
+    io.write(seq)
+}
+
+// ─────────────────────────────────────────
+//  COLOUR & STYLE PRIMITIVES
+// ─────────────────────────────────────────
+
+fn xuiReset()      { io.write("\033[0m")   }
+fn xuiBold()       { io.write("\033[1m")   }
+fn xuiDim()        { io.write("\033[2m")   }
+fn xuiItalic()     { io.write("\033[3m")   }
+fn xuiUnderline()  { io.write("\033[4m")   }
+fn xuiBlink()      { io.write("\033[5m")   }
+fn xuiReverse()    { io.write("\033[7m")   }
+
+// Foreground
+fn xuiFgBlack()         { io.write("\033[30m")  }
+fn xuiFgRed()           { io.write("\033[31m")  }
+fn xuiFgGreen()         { io.write("\033[32m")  }
+fn xuiFgYellow()        { io.write("\033[33m")  }
+fn xuiFgBlue()          { io.write("\033[34m")  }
+fn xuiFgMagenta()       { io.write("\033[35m")  }
+fn xuiFgCyan()          { io.write("\033[36m")  }
+fn xuiFgWhite()         { io.write("\033[37m")  }
+fn xuiFgBrightBlack()   { io.write("\033[90m")  }
+fn xuiFgBrightRed()     { io.write("\033[91m")  }
+fn xuiFgBrightGreen()   { io.write("\033[92m")  }
+fn xuiFgBrightYellow()  { io.write("\033[93m")  }
+fn xuiFgBrightBlue()    { io.write("\033[94m")  }
+fn xuiFgBrightMagenta() { io.write("\033[95m")  }
+fn xuiFgBrightCyan()    { io.write("\033[96m")  }
+fn xuiFgBrightWhite()   { io.write("\033[97m")  }
+
+// Background
+fn xuiBgBlack()         { io.write("\033[40m")  }
+fn xuiBgRed()           { io.write("\033[41m")  }
+fn xuiBgGreen()         { io.write("\033[42m")  }
+fn xuiBgYellow()        { io.write("\033[43m")  }
+fn xuiBgBlue()          { io.write("\033[44m")  }
+fn xuiBgMagenta()       { io.write("\033[45m")  }
+fn xuiBgCyan()          { io.write("\033[46m")  }
+fn xuiBgWhite()         { io.write("\033[47m")  }
+fn xuiBgBrightBlack()   { io.write("\033[100m") }
+fn xuiBgBrightRed()     { io.write("\033[101m") }
+fn xuiBgBrightGreen()   { io.write("\033[102m") }
+fn xuiBgBrightBlue()    { io.write("\033[104m") }
+
+// Named colour helper — apply fg by name string
+fn xuiColor(name) {
+    if (name == "black")          { xuiFgBlack()         }
+    if (name == "red")            { xuiFgRed()           }
+    if (name == "green")          { xuiFgGreen()         }
+    if (name == "yellow")         { xuiFgYellow()        }
+    if (name == "blue")           { xuiFgBlue()          }
+    if (name == "magenta")        { xuiFgMagenta()       }
+    if (name == "cyan")           { xuiFgCyan()          }
+    if (name == "white")          { xuiFgWhite()         }
+    if (name == "bright_black")   { xuiFgBrightBlack()   }
+    if (name == "bright_red")     { xuiFgBrightRed()     }
+    if (name == "bright_green")   { xuiFgBrightGreen()   }
+    if (name == "bright_yellow")  { xuiFgBrightYellow()  }
+    if (name == "bright_blue")    { xuiFgBrightBlue()    }
+    if (name == "bright_magenta") { xuiFgBrightMagenta() }
+    if (name == "bright_cyan")    { xuiFgBrightCyan()    }
+    if (name == "bright_white")   { xuiFgBrightWhite()   }
+}
+
+// ─────────────────────────────────────────
+//  TEXT COMPONENTS
+// ─────────────────────────────────────────
+
+fn xuiText(content) {
+    io.write(content)
+}
+
+fn xuiLine(content) {
+    io.write(content)
+    io.write("\n")
+}
+
+fn xuiBoldText(content) {
+    xuiBold()
+    io.write(content)
+    xuiReset()
+}
+
+fn xuiColorText(content, colour) {
+    xuiColor(colour)
+    io.write(content)
+    xuiReset()
+}
+
+// Heading — large section title with colour
+fn xuiHeading(posSeq, title, colour) {
+    io.write(posSeq)
+    xuiBold()
+    xuiColor(colour)
+    io.write(title)
+    xuiReset()
+}
+
+// Subheading
+fn xuiSubheading(posSeq, title) {
+    io.write(posSeq)
+    xuiBold()
+    xuiFgBrightWhite()
+    io.write(title)
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  LABEL  —  "Key: Value"
+// ─────────────────────────────────────────
+
+fn xuiLabel(posSeq, key, value) {
+    io.write(posSeq)
+    xuiBold()
+    xuiFgBrightWhite()
+    io.write(key + ": ")
+    xuiReset()
+    xuiFgBrightYellow()
+    io.write(value)
+    xuiReset()
+}
+
+fn xuiLabelColored(posSeq, key, value, valueColour) {
+    io.write(posSeq)
+    xuiBold()
+    xuiFgBrightWhite()
+    io.write(key + ": ")
+    xuiReset()
+    xuiColor(valueColour)
+    io.write(value)
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  STATUS BAR
+// ─────────────────────────────────────────
+
+fn xuiStatusBar(posSeq, message) {
+    io.write(posSeq)
+    xuiBgBrightBlue()
+    xuiFgBrightWhite()
+    xuiBold()
+    var padded = "  " + message
+    var cur = string.len(padded)
+    while (cur < 78) {
+        padded = padded + " "
+        cur = cur + 1
+    }
+    io.write(padded)
+    xuiReset()
+}
+
+fn xuiStatusBarColored(posSeq, message, fg, bg) {
+    io.write(posSeq)
+    xuiColor(bg)   // Note: bg maps to fg escape — user provides bg colour name
+    xuiColor(fg)
+    xuiBold()
+    var padded = "  " + message
+    var cur = string.len(padded)
+    while (cur < 78) {
+        padded = padded + " "
+        cur = cur + 1
+    }
+    io.write(padded)
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  DIVIDER
+// ─────────────────────────────────────────
+
+fn xuiDivider(posSeq, width, char) {
+    io.write(posSeq)
+    xuiFgCyan()
+    var line = ""
+    var i = 0
+    while (i < width) {
+        line = line + char
+        i = i + 1
+    }
+    io.write(line)
+    xuiReset()
+}
+
+fn xuiDoubleDivider(posSeq, width) {
+    xuiDivider(posSeq, width, "═")
+}
+
+fn xuiSingleDivider(posSeq, width) {
+    xuiDivider(posSeq, width, "─")
+}
+
+fn xuiDotDivider(posSeq, width) {
+    xuiDivider(posSeq, width, "·")
+}
+
+// ─────────────────────────────────────────
+//  BUTTON
+// ─────────────────────────────────────────
+
+// active: 1 = selected/pressed, 0 = normal, -1 = disabled
+fn xuiButton(posSeq, label, active) {
+    io.write(posSeq)
+    if (active == 1)  {
+        xuiBgGreen()
+        xuiFgBlack()
+        xuiBold()
+        io.write("[ " + label + " ]")
+    }
+    if (active == 0)  {
+        xuiBgBrightBlack()
+        xuiFgBrightWhite()
+        io.write("[ " + label + " ]")
+    }
+    if (active == -1) {
+        xuiFgBrightBlack()
+        xuiDim()
+        io.write("[ " + label + " ]")
+    }
+    xuiReset()
+}
+
+fn xuiButtonRow(posSeq, labels, activeIdx) {
+    io.write(posSeq)
+    var i = 0
+    while (i < array.len(labels)) {
+        var label = array.get(labels, i)
+        var isActive = 0
+        if (i == activeIdx) {
+            isActive = 1
+        }
+        if (isActive == 1) {
+            xuiBgGreen()
+            xuiFgBlack()
+            xuiBold()
+        }
+        if (isActive == 0) {
+            xuiBgBrightBlack()
+            xuiFgBrightWhite()
+        }
+        io.write("[ " + label + " ]")
+        xuiReset()
+        io.write("  ")
+        i = i + 1
+    }
+}
+
+// ─────────────────────────────────────────
+//  PROGRESS BAR
+// ─────────────────────────────────────────
+
+// value and maxValue are numbers; width is bar char width
+fn xuiProgressBar(posSeq, value, maxValue, width) {
+    var filled = value * width / maxValue
+    var empty = width - filled
+    var pct = value * 100 / maxValue
+
+    io.write(posSeq)
+    xuiFgBrightWhite()
+    io.write("[")
+
+    xuiFgBrightGreen()
+    var i = 0
+    while (i < filled) {
+        io.write("█")
+        i = i + 1
+    }
+
+    xuiFgBrightBlack()
+    i = 0
+    while (i < empty) {
+        io.write("░")
+        i = i + 1
+    }
+
+    xuiFgBrightWhite()
+    io.write("] ")
+    xuiFgBrightYellow()
+    xuiBold()
+    io.write("" + pct + "%")
+    xuiReset()
+}
+
+// Multi-bar (stacked segments — 3 values that sum to total)
+fn xuiMultiBar(posSeq, v1, v2, v3, total, width) {
+    var w1 = v1 * width / total
+    var w2 = v2 * width / total
+    var w3 = v3 * width / total
+    var empty = width - w1 - w2 - w3
+
+    io.write(posSeq)
+    xuiFgBrightWhite()
+    io.write("[")
+
+    xuiFgBrightGreen()
+    var i = 0
+    while (i < w1) { io.write("█") i = i + 1 }
+
+    xuiFgBrightBlue()
+    i = 0
+    while (i < w2) { io.write("▓") i = i + 1 }
+
+    xuiFgBrightYellow()
+    i = 0
+    while (i < w3) { io.write("▒") i = i + 1 }
+
+    xuiFgBrightBlack()
+    i = 0
+    while (i < empty) { io.write("░") i = i + 1 }
+
+    xuiFgBrightWhite()
+    io.write("]")
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  BADGE
+// ─────────────────────────────────────────
+
+// kind: "success" | "error" | "warn" | "info" | "neutral"
+fn xuiBadge(posSeq, text, kind) {
+    io.write(posSeq)
+    if (kind == "success") { xuiBgGreen()       xuiFgBlack()       xuiBold() }
+    if (kind == "error")   { xuiBgRed()         xuiFgBrightWhite() xuiBold() }
+    if (kind == "warn")    { xuiBgYellow()      xuiFgBlack()       xuiBold() }
+    if (kind == "info")    { xuiBgBlue()        xuiFgBrightWhite() xuiBold() }
+    if (kind == "neutral") { xuiBgBrightBlack() xuiFgWhite()               }
+    io.write(" " + text + " ")
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  NOTIFICATION
+// ─────────────────────────────────────────
+
+fn xuiNotify(posSeq, message, kind) {
+    io.write(posSeq)
+    if (kind == "success") { xuiFgBrightGreen()  xuiBold() io.write("✔  ") }
+    if (kind == "error")   { xuiFgBrightRed()    xuiBold() io.write("✖  ") }
+    if (kind == "info")    { xuiFgBrightCyan()   xuiBold() io.write("ℹ  ") }
+    if (kind == "warn")    { xuiFgBrightYellow() xuiBold() io.write("⚠  ") }
+    xuiReset()
+    xuiFgBrightWhite()
+    io.write(message)
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  TEXT INPUT FIELD
+// ─────────────────────────────────────────
+
+// focused: 1 = active cursor, 0 = inactive
+fn xuiInput(posSeq, label, value, width, focused) {
+    io.write(posSeq)
+    xuiBold()
+    xuiFgBrightWhite()
+    io.write(label + " ")
+    xuiReset()
+    if (focused == 1) {
+        xuiBgWhite()
+        xuiFgBlack()
+    }
+    if (focused == 0) {
+        xuiBgBrightBlack()
+        xuiFgBrightWhite()
+    }
+    var display = " " + value
+    var cur = string.len(display)
+    while (cur < width) {
+        display = display + " "
+        cur = cur + 1
+    }
+    io.write(display)
+    if (focused == 1) {
+        xuiBold()
+        xuiFgBlue()
+        io.write("█")
+    }
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  CHECKBOX & RADIO
+// ─────────────────────────────────────────
+
+fn xuiCheckbox(posSeq, label, checked) {
+    io.write(posSeq)
+    if (checked == 1) {
+        xuiFgBrightGreen()
+        xuiBold()
+        io.write("[✓] ")
+    }
+    if (checked == 0) {
+        xuiFgBrightBlack()
+        io.write("[ ] ")
+    }
+    xuiReset()
+    xuiFgBrightWhite()
+    io.write(label)
+    xuiReset()
+}
+
+fn xuiRadio(posSeq, label, selected) {
+    io.write(posSeq)
+    if (selected == 1) {
+        xuiFgBrightCyan()
+        xuiBold()
+        io.write("(●) ")
+    }
+    if (selected == 0) {
+        xuiFgBrightBlack()
+        io.write("(○) ")
+    }
+    xuiReset()
+    xuiFgBrightWhite()
+    io.write(label)
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  SPINNER
+// ─────────────────────────────────────────
+
+fn xuiSpinner(posSeq, frame, label) {
+    var frames = array.create(8)
+    array.set(frames, 0, "⠋")
+    array.set(frames, 1, "⠙")
+    array.set(frames, 2, "⠹")
+    array.set(frames, 3, "⠸")
+    array.set(frames, 4, "⠼")
+    array.set(frames, 5, "⠴")
+    array.set(frames, 6, "⠦")
+    array.set(frames, 7, "⠧")
+    var idx = frame % 8
+    var glyph = array.get(frames, idx)
+    io.write(posSeq)
+    xuiFgBrightCyan()
+    xuiBold()
+    io.write(glyph + "  " + label)
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  PANEL  (double-line bordered box)
+// ─────────────────────────────────────────
+
+fn xuiPanel(topRow, leftCol, rows, cols, title) {
+    var inner = cols - 2
+    var titleLen = string.len(title)
+    var sideFill = (inner - titleLen - 2) / 2
+
+    // Top border with centred title
+    var seq = xuiPos(topRow, leftCol)
+    io.write(seq)
+    xuiFgCyan()
+    io.write("╔")
+    var i = 0
+    while (i < sideFill)    { io.write("═") i = i + 1 }
+    io.write(" ") xuiBold() xuiFgBrightWhite()
+    io.write(title)
+    xuiReset() xuiFgCyan()
+    io.write(" ")
+    i = 0
+    while (i < sideFill)    { io.write("═") i = i + 1 }
+    io.write("╗")
+    xuiReset()
+
+    // Side borders
+    i = 1
+    while (i < rows - 1) {
+        var r = topRow + i
+        seq = xuiPos(r, leftCol)
+        io.write(seq) xuiFgCyan() io.write("║") xuiReset()
+        var rc = leftCol + cols - 1
+        seq = xuiPos(r, rc)
+        io.write(seq) xuiFgCyan() io.write("║") xuiReset()
+        i = i + 1
+    }
+
+    // Bottom border
+    var botRow = topRow + rows - 1
+    seq = xuiPos(botRow, leftCol)
+    io.write(seq) xuiFgCyan()
+    io.write("╚")
+    i = 0
+    while (i < inner) { io.write("═") i = i + 1 }
+    io.write("╝")
+    xuiReset()
+}
+
+// Rounded-corner panel variant
+fn xuiRoundedPanel(topRow, leftCol, rows, cols, title) {
+    var inner = cols - 2
+    var titleLen = string.len(title)
+    var sideFill = (inner - titleLen - 2) / 2
+
+    var seq = xuiPos(topRow, leftCol)
+    io.write(seq) xuiFgBrightBlue()
+    io.write("╭")
+    var i = 0
+    while (i < sideFill)  { io.write("─") i = i + 1 }
+    io.write(" ") xuiBold() xuiFgBrightCyan()
+    io.write(title)
+    xuiReset() xuiFgBrightBlue() io.write(" ")
+    i = 0
+    while (i < sideFill)  { io.write("─") i = i + 1 }
+    io.write("╮") xuiReset()
+
+    i = 1
+    while (i < rows - 1) {
+        var r = topRow + i
+        seq = xuiPos(r, leftCol)
+        io.write(seq) xuiFgBrightBlue() io.write("│") xuiReset()
+        var rc = leftCol + cols - 1
+        seq = xuiPos(r, rc)
+        io.write(seq) xuiFgBrightBlue() io.write("│") xuiReset()
+        i = i + 1
+    }
+
+    var botRow = topRow + rows - 1
+    seq = xuiPos(botRow, leftCol)
+    io.write(seq) xuiFgBrightBlue()
+    io.write("╰")
+    i = 0
+    while (i < inner) { io.write("─") i = i + 1 }
+    io.write("╯")
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  TABLE
+// ─────────────────────────────────────────
+
+fn xuiTableHeader(posSeq, headers, colWidth) {
+    io.write(posSeq)
+    xuiBold() xuiBgBrightBlack() xuiFgBrightCyan()
+    var i = 0
+    while (i < array.len(headers)) {
+        var h = array.get(headers, i)
+        var padded = h
+        var cur = string.len(padded)
+        while (cur < colWidth) { padded = padded + " " cur = cur + 1 }
+        io.write("  " + padded)
+        i = i + 1
+    }
+    xuiReset()
+}
+
+fn xuiTableRow(posSeq, cells, colWidth, highlight) {
+    io.write(posSeq)
+    if (highlight == 1) { xuiBgBrightBlue() xuiFgBrightWhite() xuiBold() }
+    if (highlight == 0) { xuiFgWhite() }
+    var i = 0
+    while (i < array.len(cells)) {
+        var cell = array.get(cells, i)
+        var padded = cell
+        var cur = string.len(padded)
+        while (cur < colWidth) { padded = padded + " " cur = cur + 1 }
+        io.write("  " + padded)
+        i = i + 1
+    }
+    xuiReset()
+}
+
+fn xuiTableDivider(posSeq, cols, colWidth) {
+    io.write(posSeq)
+    xuiFgBrightBlack()
+    var total = cols * (colWidth + 2)
+    var i = 0
+    while (i < total) { io.write("─") i = i + 1 }
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  LIST
+// ─────────────────────────────────────────
+
+fn xuiList(startRow, col, items, selectedIdx) {
+    var i = 0
+    while (i < array.len(items)) {
+        var item = array.get(items, i)
+        var seq = xuiPos(startRow + i, col)
+        io.write(seq)
+        if (i == selectedIdx) {
+            xuiBgBrightBlue() xuiFgBrightWhite() xuiBold()
+            io.write(" ▶ " + item + " ")
+        }
+        if (i != selectedIdx) {
+            xuiFgWhite()
+            io.write("   " + item + " ")
+        }
+        xuiReset()
+        i = i + 1
+    }
+}
+
+fn xuiBulletList(startRow, col, items, bullet) {
+    var i = 0
+    while (i < array.len(items)) {
+        var item = array.get(items, i)
+        var seq = xuiPos(startRow + i, col)
+        io.write(seq)
+        xuiFgBrightCyan() io.write(bullet + " ")
+        xuiFgWhite()      io.write(item)
+        xuiReset()
+        i = i + 1
+    }
+}
+
+// ─────────────────────────────────────────
+//  SPARKLINE  (tiny inline chart)
+// ─────────────────────────────────────────
+
+fn xuiSparkline(posSeq, values, maxVal) {
+    var bars = array.create(8)
+    array.set(bars, 0, "▁")
+    array.set(bars, 1, "▂")
+    array.set(bars, 2, "▃")
+    array.set(bars, 3, "▄")
+    array.set(bars, 4, "▅")
+    array.set(bars, 5, "▆")
+    array.set(bars, 6, "▇")
+    array.set(bars, 7, "█")
+
+    io.write(posSeq)
+    xuiFgBrightGreen()
+    var i = 0
+    while (i < array.len(values)) {
+        var v = array.get(values, i)
+        var idx = v * 7 / maxVal
+        var bar = array.get(bars, idx)
+        io.write(bar)
+        i = i + 1
+    }
+    xuiReset()
+}
+
+// ─────────────────────────────────────────
+//  KEY-VALUE GRID  (2-column info block)
+// ─────────────────────────────────────────
+
+fn xuiInfoGrid(startRow, col, keys, values) {
+    var i = 0
+    while (i < array.len(keys)) {
+        var k = array.get(keys, i)
+        var v = array.get(values, i)
+        var seq = xuiPos(startRow + i, col)
+        io.write(seq)
+        xuiFgBrightBlack()
+        io.write(k)
+        var pad = 18 - string.len(k)
+        var j = 0
+        while (j < pad) { io.write(" ") j = j + 1 }
+        xuiFgBrightWhite()
+        io.write(v)
+        xuiReset()
+        i = i + 1
+    }
+}

@@ -1,0 +1,10 @@
+// Test const (immutability)
+print("Testing const...")
+
+const PI = 3.14159
+print("PI =", PI)
+
+const x = 42
+print("x =", x)
+
+print("✓ const works")

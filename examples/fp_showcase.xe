@@ -1,0 +1,372 @@
+// ═══════════════════════════════════════════════════════════════════
+// Functional Programming in Xenly - Complete Showcase
+// ═══════════════════════════════════════════════════════════════════
+
+print("╔═══════════════════════════════════════════════════════════╗")
+print("║  Xenly Functional Programming Features                   ║")
+print("╚═══════════════════════════════════════════════════════════╝")
+
+// ═══════════════════════════════════════════════════════════════════
+// 1. IMMUTABILITY
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n[1] IMMUTABILITY")
+print("─────────────────────────────────────────────────────────────")
+
+const PI = 3.14159
+const E = 2.71828
+
+print("Constants defined:")
+print("  PI =", PI)
+print("  E  =", E)
+
+// Immutable functions
+const square = fn(x) { return x * x }
+const cube = fn(x) { return x * x * x }
+
+print("\nImmutable functions:")
+print("  square(5) =", square(5))
+print("  cube(3)   =", cube(3))
+
+// ═══════════════════════════════════════════════════════════════════
+// 2. HIGHER-ORDER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n[2] HIGHER-ORDER FUNCTIONS")
+print("─────────────────────────────────────────────────────────────")
+
+// map, filter, reduce are already in stdlib
+const numbers = [1, 2, 3, 4, 5]
+
+const doubled = array.map(numbers, fn(x) { return x * 2 })
+const evens = array.filter(numbers, fn(x) { return x % 2 == 0 })
+const sum = array.reduce(numbers, fn(acc, x) { return acc + x }, 0)
+
+print("Original:", numbers)
+print("Doubled: ", doubled)
+print("Evens:   ", evens)
+print("Sum:     ", sum)
+
+// Function composition
+const compose = fn(f, g) {
+    return fn(x) {
+        return f(g(x))
+    }
+}
+
+const add1 = fn(x) { return x + 1 }
+const times2 = fn(x) { return x * 2 }
+const add1Times2 = compose(times2, add1)
+
+print("\nComposition:")
+print("  (5 + 1) * 2 =", add1Times2(5))
+
+// Partial application
+const add = fn(a) {
+    return fn(b) {
+        return a + b
+    }
+}
+
+const add10 = add(10)
+print("\nPartial application:")
+print("  add10(5)  =", add10(5))
+print("  add10(20) =", add10(20))
+
+// ═══════════════════════════════════════════════════════════════════
+// 3. ALGEBRAIC DATA TYPES
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n[3] ALGEBRAIC DATA TYPES")
+print("─────────────────────────────────────────────────────────────")
+
+// Option type
+enum Option {
+    Some(value) |
+    None
+}
+
+// Result type
+enum Result {
+    Ok(value) |
+    Err(message)
+}
+
+// Tree type
+enum Tree {
+    Leaf(value) |
+    Branch(left, right)
+}
+
+print("✓ ADTs defined: Option, Result, Tree")
+
+// Create instances
+const someValue = Some(42)
+const noValue = None
+const success = Ok("Loaded")
+const failure = Err("Failed")
+
+print("\nOption values:")
+print("  ", someValue)
+print("  ", noValue)
+
+print("\nResult values:")
+print("  ", success)
+print("  ", failure)
+
+// Tree construction
+const tree = Branch(
+    Leaf(1),
+    Branch(Leaf(2), Leaf(3))
+)
+
+print("\nTree structure:")
+print("  ", tree)
+
+// ═══════════════════════════════════════════════════════════════════
+// 4. PATTERN MATCHING
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n[4] PATTERN MATCHING")
+print("─────────────────────────────────────────────────────────────")
+
+// Match on literals
+const grade = 85
+const letter = match grade {
+    100 => "A+",
+    85  => "B",
+    70  => "C",
+    _   => "Other"
+}
+
+print("Grade matching:")
+print("  Grade", grade, "→", letter)
+
+// Match on Option
+fn unwrapOr(opt, defaultVal) {
+    return match opt {
+        Some(val) => val,
+        None      => defaultVal,
+        _         => defaultVal
+    }
+}
+
+print("\nOption matching:")
+print("  unwrapOr(Some(42), 0) =", unwrapOr(someValue, 0))
+print("  unwrapOr(None, 0)     =", unwrapOr(noValue, 0))
+
+// Match on Result
+fn resultToString(res) {
+    return match res {
+        Ok(val)  => "✓ " + val,
+        Err(msg) => "✗ " + msg,
+        _        => "?"
+    }
+}
+
+print("\nResult matching:")
+print("  ", resultToString(success))
+print("  ", resultToString(failure))
+
+// Match on Tree (recursive)
+fn treeSize(t) {
+    return match t {
+        Leaf(v)      => 1,
+        Branch(l, r) => treeSize(l) + treeSize(r),
+        _            => 0
+    }
+}
+
+print("\nTree pattern matching:")
+print("  tree size =", treeSize(tree))
+
+// ═══════════════════════════════════════════════════════════════════
+// 5. PRACTICAL EXAMPLE: OPTION MONAD
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n[5] PRACTICAL: OPTION MONAD")
+print("─────────────────────────────────────────────────────────────")
+
+// map for Option
+fn optionMap(opt, f) {
+    return match opt {
+        Some(val) => Some(f(val)),
+        None      => None,
+        _         => None
+    }
+}
+
+// flatMap for Option (bind)
+fn optionFlatMap(opt, f) {
+    return match opt {
+        Some(val) => f(val),
+        None      => None,
+        _         => None
+    }
+}
+
+// Safe string to number conversion
+fn parseInt(str) {
+    const num = string.toNumber(str)
+    if (num == null) {
+        return None
+    }
+    return Some(num)
+}
+
+// Chain operations with monadic binding
+const input = "42"
+const parsed = parseInt(input)
+const doubled = optionMap(parsed, fn(x) { return x * 2 })
+
+print("Monadic operations:")
+print("  Input:    '", input, "'")
+print("  Parsed:  ", parsed)
+print("  Doubled: ", doubled)
+
+// ═══════════════════════════════════════════════════════════════════
+// 6. PRACTICAL EXAMPLE: RESULT TYPE FOR ERROR HANDLING
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n[6] PRACTICAL: RESULT TYPE ERROR HANDLING")
+print("─────────────────────────────────────────────────────────────")
+
+fn safeDivide(a, b) {
+    if (b == 0) {
+        return Err("Division by zero")
+    }
+    return Ok(a / b)
+}
+
+fn resultMap(res, f) {
+    return match res {
+        Ok(val)  => Ok(f(val)),
+        Err(msg) => Err(msg),
+        _        => Err("Unknown error")
+    }
+}
+
+const div1 = safeDivide(10, 2)
+const div2 = safeDivide(10, 0)
+const div1Squared = resultMap(div1, square)
+
+print("Error handling with Result:")
+print("  10 / 2  =", div1)
+print("  10 / 0  =", div2)
+print("  squared =", div1Squared)
+
+// ═══════════════════════════════════════════════════════════════════
+// 7. PRACTICAL EXAMPLE: LINKED LIST
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n[7] PRACTICAL: FUNCTIONAL LINKED LIST")
+print("─────────────────────────────────────────────────────────────")
+
+enum List {
+    Cons(head, tail) |
+    Nil
+}
+
+fn listLength(list) {
+    return match list {
+        Nil         => 0,
+        Cons(h, t)  => 1 + listLength(t),
+        _           => 0
+    }
+}
+
+fn listSum(list) {
+    return match list {
+        Nil         => 0,
+        Cons(h, t)  => h + listSum(t),
+        _           => 0
+    }
+}
+
+fn listMap(list, f) {
+    return match list {
+        Nil         => Nil,
+        Cons(h, t)  => Cons(f(h), listMap(t, f)),
+        _           => Nil
+    }
+}
+
+// Create list [1, 2, 3, 4, 5]
+const myList = Cons(1, Cons(2, Cons(3, Cons(4, Cons(5, Nil)))))
+
+print("Linked list operations:")
+print("  Length:", listLength(myList))
+print("  Sum:   ", listSum(myList))
+
+const squaredList = listMap(myList, square)
+print("  Squared sum:", listSum(squaredList))
+
+// ═══════════════════════════════════════════════════════════════════
+// 8. PRACTICAL EXAMPLE: BINARY SEARCH TREE
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n[8] PRACTICAL: BINARY SEARCH TREE")
+print("─────────────────────────────────────────────────────────────")
+
+enum BST {
+    Empty |
+    Node(value, left, right)
+}
+
+fn bstInsert(tree, val) {
+    return match tree {
+        Empty => Node(val, Empty, Empty),
+        Node(v, l, r) => {
+            if (val < v) {
+                return Node(v, bstInsert(l, val), r)
+            } else if (val > v) {
+                return Node(v, l, bstInsert(r, val))
+            } else {
+                return tree  # Value already exists
+            }
+        },
+        _ => Empty
+    }
+}
+
+fn bstContains(tree, val) {
+    return match tree {
+        Empty => false,
+        Node(v, l, r) => {
+            if (val == v) {
+                return true
+            } else if (val < v) {
+                return bstContains(l, val)
+            } else {
+                return bstContains(r, val)
+            }
+        },
+        _ => false
+    }
+}
+
+// Build tree with values [5, 3, 7, 1, 9]
+var bst = Empty
+bst = bstInsert(bst, 5)
+bst = bstInsert(bst, 3)
+bst = bstInsert(bst, 7)
+bst = bstInsert(bst, 1)
+bst = bstInsert(bst, 9)
+
+print("Binary search tree operations:")
+print("  Contains 7:", bstContains(bst, 7))
+print("  Contains 4:", bstContains(bst, 4))
+
+// ═══════════════════════════════════════════════════════════════════
+// SUMMARY
+// ═══════════════════════════════════════════════════════════════════
+
+print("\n╔═══════════════════════════════════════════════════════════╗")
+print("║  Functional Programming Features Demonstrated:           ║")
+print("║  ✓ Immutability (const)                                  ║")
+print("║  ✓ Higher-order functions                                ║")
+print("║  ✓ Algebraic data types (enum)                           ║")
+print("║  ✓ Pattern matching (match/case)                         ║")
+print("║  ✓ Monadic operations (Option, Result)                   ║")
+print("║  ✓ Recursive data structures (List, Tree, BST)           ║")
+print("╚═══════════════════════════════════════════════════════════╝")

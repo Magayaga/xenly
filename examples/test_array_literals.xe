@@ -1,0 +1,63 @@
+// Array Literals Test for Native Compiler
+print("=== Array Literals in Native Compiler ===")
+print()
+
+// Test 1: Simple array literal
+print("1. Simple Array Literal:")
+const arr1 = [1, 2, 3, 4, 5]
+print("  Array:", arr1[0], arr1[1], arr1[2], arr1[3], arr1[4])
+print()
+
+// Test 2: Mixed types
+print("2. Mixed Types:")
+const arr2 = [42, "hello", true, 3.14]
+print("  Element 0:", arr2[0])
+print("  Element 1:", arr2[1])
+print("  Element 2:", arr2[2])
+print("  Element 3:", arr2[3])
+print()
+
+// Test 3: Nested arrays
+print("3. Nested Arrays:")
+const matrix = [[1, 2], [3, 4], [5, 6]]
+print("  Row 0:", matrix[0][0], matrix[0][1])
+print("  Row 1:", matrix[1][0], matrix[1][1])
+print("  Row 2:", matrix[2][0], matrix[2][1])
+print()
+
+// Test 4: Array from function
+print("4. Array from Function:")
+fn createArray(n) {
+    return [n, n * 2, n * 3]
+}
+
+const arr3 = createArray(5)
+print("  Array:", arr3[0], arr3[1], arr3[2])
+print()
+
+// Test 5: Empty array
+print("5. Empty Array:")
+const arr4 = []
+print("  Empty array created")
+print()
+
+// Test 6: Array with expressions
+print("6. Array with Expressions:")
+const x = 10
+const y = 20
+const arr5 = [x + y, x * y, x - y]
+print("  Sum:", arr5[0])
+print("  Product:", arr5[1])
+print("  Difference:", arr5[2])
+print()
+
+// Test 7: Using arrays with stdlib
+print("7. Arrays with Stdlib:")
+import "array"
+
+const arr6 = [1, 2, 3, 4, 5]
+print("  Array length:", array.len(arr6))
+print("  Sum:", array.sum(arr6))
+print()
+
+print("✅ Array literals working in native compiler!")

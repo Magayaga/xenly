@@ -1,0 +1,157 @@
+// ═══════════════════════════════════════════════════════════════════
+// Functional Programming: Algebraic Data Types (ADTs)
+// ═══════════════════════════════════════════════════════════════════
+
+print("=== Algebraic Data Types with enum ===")
+
+// ─── Simple Enums (Sum Types) ────────────────────────────────────────
+
+// Option type: represents a value that might not exist
+enum Option {
+    Some(value) |
+    None
+}
+
+// Result type: represents success or failure
+enum Result {
+    Ok(value) |
+    Err(message)
+}
+
+// Traffic light with no data
+enum TrafficLight {
+    Red |
+    Yellow |
+    Green
+}
+
+print("✓ Enums defined")
+
+// ─── Creating Enum Variants ──────────────────────────────────────────
+
+print("\n=== Creating Enum Values ===")
+
+// Creating Option values
+const someValue = Some(42)
+const noValue = None
+
+print("someValue:", someValue)
+print("noValue:", noValue)
+
+// Creating Result values
+const success = Ok("Data loaded successfully")
+const failure = Err("Connection timeout")
+
+print("success:", success)
+print("failure:", failure)
+
+// Creating TrafficLight values
+const currentLight = Red
+print("Current light:", currentLight)
+
+// ─── Using Enums in Functions ────────────────────────────────────────
+
+print("\n=== Functions with ADTs ===")
+
+// Safe division that returns Option
+fn safeDivide(a, b) {
+    if (b == 0) {
+        return None
+    }
+    return Some(a / b)
+}
+
+const result1 = safeDivide(10, 2)
+const result2 = safeDivide(10, 0)
+
+print("safeDivide(10, 2):", result1)
+print("safeDivide(10, 0):", result2)
+
+// Parse integer with error handling
+fn parseInt(str) {
+    # Simplified: in real implementation would actually parse
+    const num = string.toNumber(str)
+    if (num == null or string.contains(str, ".")) {
+        return Err("Invalid integer: " + str)
+    }
+    return Ok(num)
+}
+
+const validParse = parseInt("42")
+const invalidParse = parseInt("abc")
+
+print("parseInt('42'):", validParse)
+print("parseInt('abc'):", invalidParse)
+
+// ─── Nested ADTs ─────────────────────────────────────────────────────
+
+print("\n=== Nested ADTs ===")
+
+// Tree structure using ADTs
+enum Tree {
+    Leaf(value) |
+    Branch(left, right)
+}
+
+// Build a small tree:
+//      Branch
+//      /    \
+//   Leaf(1) Leaf(2)
+const myTree = Branch(Leaf(1), Leaf(2))
+print("Tree structure:", myTree)
+
+// List implemented as ADT (similar to functional programming languages)
+enum List {
+    Cons(head, tail) |
+    Nil
+}
+
+// Create list [1, 2, 3]
+const list = Cons(1, Cons(2, Cons(3, Nil)))
+print("Functional list:", list)
+
+// ─── Type Safety with ADTs ───────────────────────────────────────────
+
+print("\n=== Type Safety ===")
+
+// ADTs provide compile-time guarantees (in typed mode)
+// You can't accidentally use a None as if it were Some(value)
+
+fn processOption(opt) {
+    # Without pattern matching, we check manually
+    if (typeof(opt) == "Some") {
+        print("  Has value:", opt)
+    } else {
+        print("  No value")
+    }
+}
+
+processOption(someValue)
+processOption(noValue)
+
+// ─── Real-World Example: State Machine ───────────────────────────────
+
+print("\n=== State Machine with ADTs ===")
+
+enum ConnectionState {
+    Disconnected |
+    Connecting(server) |
+    Connected(server, sessionId) |
+    Error(errorMsg)
+}
+
+const states = [
+    Disconnected,
+    Connecting("api.example.com"),
+    Connected("api.example.com", "abc123"),
+    Error("Network unreachable")
+]
+
+print("Connection states:")
+var i = 0
+for (i = 0; i < array.length(states); i++) {
+    const state = states[i]
+    print("  State", i, ":", state)
+}
+
+print("\n✓ Algebraic Data Types examples complete")

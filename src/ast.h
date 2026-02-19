@@ -1,12 +1,3 @@
-/*
- * XENLY - high-level and general-purpose programming language
- * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
- *
- * It is initially written in C programming language.
- *
- * It is available for Linux and macOS operating systems.
- *
- */
 #ifndef AST_H
 #define AST_H
 
@@ -71,8 +62,26 @@ typedef enum {
     NODE_ARROW_FN,          // (params) => expr  — arrow function
     NODE_NULLISH,           // expr ?? default  — null coalescing
     NODE_INDEX,             // arr[index]  — array/object indexing
-
-    // Functional programming
+    NODE_CONST_DECL,        // const x = expr  — immutable binding
+    NODE_ENUM_DECL,         // enum Option { Some(value), None }  — algebraic data type
+    NODE_ENUM_VARIANT,      // Some(value)  — enum variant construction
+    NODE_MATCH,             // match expr { pattern => expr, ... }  — pattern matching
+    NODE_MATCH_ARM,         // pattern => expr  — single match arm
+    NODE_PATTERN,           // Pattern for matching (variant, literal, identifier)
+    NODE_NAMED_ARG,         // name: value — named argument in function call
+    NODE_OBJECT_LITERAL,    // {key: value, ...} — anonymous object/record type
+    NODE_OPERATOR_OVERLOAD, // Special operator method (__add__, __mul__, etc.)
+    NODE_NAMESPACE,         // namespace Name { declarations }
+    NODE_NAMESPACE_ACCESS,  // Namespace.member
+    NODE_TUPLE_LITERAL,     // (expr, expr, ...) — tuple literal
+    NODE_TYPE_SIGNATURE,    // : Type — explicit type signature
+    NODE_TYPE_ALIAS,        // type Alias = Type — type alias declaration
+    
+    // Design by Contract
+    NODE_REQUIRES,          // requires (condition) — precondition
+    NODE_ENSURES,           // ensures (condition) — postcondition
+    NODE_INVARIANT,         // invariant (condition) — class invariant
+    NODE_ASSERT,            // assert(condition, message) — runtime assertion
 
     // Concurrency
 
@@ -87,6 +96,8 @@ typedef struct Param   Param;
 struct Param {
     char *name;
     char *type_annotation;  // optional: "number", "string", "bool", "any", or NULL
+    struct ASTNode *default_value;  // optional: default value expression
+    int is_optional;        // flag: parameter can be omitted
 };
 
 // ─── AST Node ────────────────────────────────────────────────────────────────
@@ -111,6 +122,12 @@ struct ASTNode {
     // Type annotations (gradual typing)
     char    *type_annotation;      // for variables: var x: number
     char    *return_type;          // for functions: fn foo(): number
+    
+    // Design by Contract
+    ASTNode *requires_clause;      // precondition for functions
+    ASTNode *ensures_clause;       // postcondition for functions
+    ASTNode **invariants;          // class invariants
+    size_t   invariant_count;
 
     // Compound assign operator type (stored as string: "+=", "-=", etc.)
     // reuses str_value

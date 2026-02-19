@@ -1,0 +1,57 @@
+// Comprehensive benchmark for compiler optimization
+// Tests arithmetic, comparisons, and loops
+
+// Fibonacci (tests recursion + arithmetic + comparisons)
+fn fib(n) {
+    if (n <= 1) { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+// Factorial (tests loops + comparisons + arithmetic)
+fn factorial(n) {
+    var result = 1
+    var i = 2
+    while (i <= n) {
+        result = result * i
+        i = i + 1
+    }
+    return result
+}
+
+// Prime checking (tests comparisons + modulo)
+fn isPrime(n) {
+    if (n < 2) { return false }
+    if (n == 2) { return true }
+    if (n % 2 == 0) { return false }
+    
+    var i = 3
+    while (i * i <= n) {
+        if (n % i == 0) {
+            return false
+        }
+        i = i + 2
+    }
+    return true
+}
+
+// Collatz sequence length (tests all operations)
+fn collatz(n) {
+    var count = 0
+    while (n > 1) {
+        if (n % 2 == 0) {
+            n = n / 2
+        } else {
+            n = 3 * n + 1
+        }
+        count = count + 1
+    }
+    return count
+}
+
+// Run benchmarks
+print("=== Benchmark Results ===")
+print("fib(25) =", fib(25))
+print("factorial(15) =", factorial(15))
+print("isPrime(1000003) =", isPrime(1000003))
+print("collatz(27) =", collatz(27))
+print("✓ Benchmark complete")

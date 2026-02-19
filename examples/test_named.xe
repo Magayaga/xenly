@@ -1,0 +1,36 @@
+// Test named parameters
+print("=== Named Parameters Test ===")
+print()
+
+// Test 1: Named arguments
+fn connect(host, port, ssl) {
+    print("Connecting to", host, ":", port, "(SSL:", ssl, ")")
+}
+
+// Call with positional arguments
+print("Positional:")
+connect("localhost", 8080, false)
+
+// Call with named arguments
+print()
+print("Named:")
+connect(host: "example.com", port: 443, ssl: true)
+
+// Mix positional and named
+print()
+print("Mixed:")
+connect("api.com", port: 443, ssl: true)
+
+// Test 2: Named with defaults
+fn request(url, method = "GET", timeout = 30) {
+    print(method, url, "(timeout:", timeout, "s)")
+}
+
+print()
+print("With defaults:")
+request(url: "https://api.example.com")
+request(url: "https://api.example.com", method: "POST")
+request(url: "https://api.example.com", method: "GET", timeout: 60)
+
+print()
+print("✅ Named parameters working!")

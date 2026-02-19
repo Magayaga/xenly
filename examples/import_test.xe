@@ -1,12 +1,12 @@
-# Test enhanced import features
+// Test enhanced import features
 
 print("╔══════════════════════════════════════════╗")
 print("║   Enhanced Import Syntax                 ║")
 print("╚══════════════════════════════════════════╝")
 
-# ════════════════════════════════════════════════════════════════
-# 1. Regular import (baseline)
-# ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// 1. Regular import (baseline)
+// ════════════════════════════════════════════════════════════════
 print("")
 print("┌────────────────────────────────────────────┐")
 print("│  Regular import                            │")
@@ -15,9 +15,9 @@ import "math"
 print("  math.sqrt(16)    =", math.sqrt(16))
 print("  math.pow(2, 8)   =", math.pow(2, 8))
 
-# ════════════════════════════════════════════════════════════════
-# 2. Import with alias
-# ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// 2. Import with alias
+// ════════════════════════════════════════════════════════════════
 print("")
 print("┌────────────────────────────────────────────┐")
 print("│  Import with alias (import...as)           │")
@@ -31,16 +31,16 @@ import "string" as str
 print("  str.upper(\"hello\")  =", str.upper("hello"))
 print("  str.len(\"Xenly\")     =", str.len("Xenly"))
 
-# ════════════════════════════════════════════════════════════════
-# 3. Selective import (from...import)
-# ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// 3. Selective import (from...import)
+// ════════════════════════════════════════════════════════════════
 print("")
 print("┌────────────────────────────────────────────┐")
 print("│  Selective import (from...import)          │")
 print("└────────────────────────────────────────────┘")
 from "mylib/shapes" import Vec2, Rect
 
-# Use imported names directly without module prefix
+// Use imported names directly without module prefix
 var v = new Vec2(3, 4)
 print("  Vec2(3,4).length()         =", v.length())
 print("  Vec2(3,4) instanceof Vec2  =", v instanceof Vec2)
@@ -49,14 +49,14 @@ var r = new Rect(0, 0, 10, 20)
 print("  Rect(0,0,10,20).area()     =", r.area())
 print("  Rect instance type         =", typeof(r))
 
-# ════════════════════════════════════════════════════════════════
-# 4. Mixed usage - original name still works
-# ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// 4. Mixed usage - original name still works
+// ════════════════════════════════════════════════════════════════
 print("")
 print("┌────────────────────────────────────────────┐")
 print("│  Aliases don't replace original names     │")
 print("└────────────────────────────────────────────┘")
-# Both work after aliased import
+// Both work after aliased import
 print("  mathutils.distance(0,0,3,4) =", mathutils.distance(0, 0, 3, 4))
 print("  mu.distance(0,0,3,4)        =", mu.distance(0, 0, 3, 4))
 

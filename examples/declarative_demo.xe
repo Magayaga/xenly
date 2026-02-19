@@ -1,0 +1,56 @@
+// Declarative Programming
+print("Declarative Programming")
+print()
+
+// Declarative approach: describe WHAT, not HOW
+print("Focus on WHAT, not HOW")
+print()
+
+// Declarative validation
+fn validateAge(age) {
+    if (age < 0) {
+        return false
+    }
+    if (age > 150) {
+        return false
+    }
+    return true
+}
+
+print("Validation:")
+print(validateAge(30))
+print(validateAge(-5))
+print(validateAge(200))
+print()
+
+// Declarative transformation
+fn double(x) {
+    return x * 2
+}
+
+print("Transformation:")
+print(double(5))
+print(double(10))
+print()
+
+// Declarative composition
+fn compose(f, g, x) {
+    return f(g(x))
+}
+
+fn addOne(x) {
+    return x + 1
+}
+
+const result = compose(double, addOne, 5)
+print("Composed:")
+print(result)
+print()
+
+print("Benefits:")
+print("  Clearer intent")
+print("  Less code")
+print("  Easier to read")
+print("  More maintainable")
+print()
+print("Complete!")

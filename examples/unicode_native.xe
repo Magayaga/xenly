@@ -1,0 +1,53 @@
+// Unicode in Native Compiler - Working Examples
+// Demonstrates Unicode support in xenlyc
+
+print("=== Unicode in Native Compiler ===")
+print()
+
+// UTF-8 Strings
+print("1. UTF-8 Strings:")
+const msg1 = "Hello, 世界! 🌍"
+const msg2 = "😀 😎 🚀 🎉 ⭐"
+const msg3 = "English, Español, 中文, 日本語"
+
+print("  ", msg1)
+print("  ", msg2)
+print("  ", msg3)
+
+// Unicode Identifiers
+print()
+print("2. Unicode Identifiers:")
+const 你好 = "Hello"
+const π = 3.14159
+const Δ = 0.001
+
+print("  你好 =", 你好)
+print("  π =", π)
+print("  Δ =", Δ)
+
+// Unicode Escape Sequences
+print()
+print("3. Unicode Escapes:")
+const heart = "\u2764"
+const star = "\u2B50"
+const rocket = "\u{1F680}"
+
+print("  ", heart, star, rocket)
+
+// Unicode Functions
+print()
+print("4. Unicode Functions:")
+fn greet(name) {
+    return "你好, " + name + "! 👋"
+}
+
+print("  ", greet("World"))
+
+// Math Notation
+print()
+print("5. Math Notation:")
+const τ = 2 * π
+print("  τ = 2π =", τ)
+
+print()
+print("✅ Unicode native compilation works!")

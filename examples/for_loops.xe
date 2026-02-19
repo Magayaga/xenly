@@ -1,11 +1,11 @@
-# ═══════════════════════════════════════════════════════
-#  Xenly — For Loops, Break, Continue
-# ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  Xenly — For Loops, Break, Continue
+// ═══════════════════════════════════════════════════════
 import "array"
 import "math"
 import "io"
 
-# ─── 1. Basic C-style for loop ─────────────────────────
+// ─── 1. Basic C-style for loop ─────────────────────────
 print("── C-style for ──")
 var sum = 0
 for (var i = 0; i < 5; i++) {
@@ -13,21 +13,21 @@ for (var i = 0; i < 5; i++) {
 }
 print("sum 0..4 =", sum)
 
-# ─── 2. Counting down ──────────────────────────────────
+// ─── 2. Counting down ──────────────────────────────────
 print("── Countdown ──")
 for (var i = 5; i > 0; i--) {
     print(i)
 }
 print("Go!")
 
-# ─── 3. For-in over array ──────────────────────────────
+// ─── 3. For-in over array ──────────────────────────────
 print("── For-in ──")
 var fruits = array.of("apple", "banana", "cherry")
 for (var fruit in fruits) {
     print(fruit)
 }
 
-# ─── 4. For-in over range ──────────────────────────────
+// ─── 4. For-in over range ──────────────────────────────
 print("── For-in range ──")
 var total = 0
 for (var n in array.range(1, 6)) {
@@ -35,7 +35,7 @@ for (var n in array.range(1, 6)) {
 }
 print("sum 1..5 =", total)
 
-# ─── 5. Break ──────────────────────────────────────────
+// ─── 5. Break ──────────────────────────────────────────
 print("── Break ──")
 var found = -1
 for (var i = 0; i < 100; i++) {
@@ -46,7 +46,7 @@ for (var i = 0; i < 100; i++) {
 }
 print("first i where i*i > 50:", found)
 
-# ─── 6. Continue ───────────────────────────────────────
+// ─── 6. Continue ───────────────────────────────────────
 print("── Continue (evens only) ──")
 var evens = array.empty()
 for (var i = 0; i < 10; i++) {
@@ -57,7 +57,7 @@ for (var i = 0; i < 10; i++) {
 }
 print("evens:", evens)
 
-# ─── 7. Nested for loops ───────────────────────────────
+// ─── 7. Nested for loops ───────────────────────────────
 print("── Nested (multiplication table 3x3) ──")
 for (var i = 1; i < 4; i++) {
     for (var j = 1; j < 4; j++) {
@@ -69,7 +69,7 @@ for (var i = 1; i < 4; i++) {
     io.writeln()
 }
 
-# ─── 8. Break in nested loop (inner only) ─────────────
+// ─── 8. Break in nested loop (inner only) ─────────────
 print("── Nested break ──")
 for (var i = 0; i < 3; i++) {
     for (var j = 0; j < 5; j++) {
@@ -82,7 +82,7 @@ for (var i = 0; i < 3; i++) {
     }
 }
 
-# ─── 9. While with break and continue ──────────────────
+// ─── 9. While with break and continue ──────────────────
 print("── While break/continue ──")
 var x = 0
 var whileSum = 0
@@ -98,7 +98,7 @@ while (x < 20) {
 }
 print("whileSum =", whileSum)
 
-# ─── 10. For-in with break ─────────────────────────────
+// ─── 10. For-in with break ─────────────────────────────
 print("── For-in break ──")
 var nums = array.of(2, 4, 6, 7, 8, 10)
 var allEven = true

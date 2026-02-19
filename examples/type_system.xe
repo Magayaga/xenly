@@ -1,0 +1,234 @@
+// Advanced Type System Features
+print("=== Type System Features ===")
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1. TYPE SIGNATURES (Type Annotations)
+// ═══════════════════════════════════════════════════════════════════════════
+print("1. Type Signatures (Annotations):")
+
+// Variable type annotations
+var name: string = "Alice"
+var age: number = 30
+var active: bool = true
+
+print("  name:", name, "(string)")
+print("  age:", age, "(number)")
+print("  active:", active, "(bool)")
+
+// Function type signatures
+fn add(x: number, y: number): number {
+    return x + y
+}
+
+fn greet(name: string): string {
+    return "Hello, " + name
+}
+
+print("  add(5, 3):", add(5, 3))
+print("  greet('Bob'):", greet("Bob"))
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2. TYPE INFERENCE
+// ═══════════════════════════════════════════════════════════════════════════
+print("2. Type Inference:")
+
+// Xenly infers types from values
+const x = 42          // Inferred as number
+const y = "hello"     // Inferred as string
+const z = true        // Inferred as bool
+
+print("  x =", x, "(inferred: number)")
+print("  y =", y, "(inferred: string)")
+print("  z =", z, "(inferred: bool)")
+
+// Function return type inference
+fn multiply(a, b) {
+    return a * b      // Inferred return type: number
+}
+
+print("  multiply(4, 5):", multiply(4, 5))
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3. TUPLES (Pattern)
+// ═══════════════════════════════════════════════════════════════════════════
+print("3. Tuples (Array Pattern):")
+
+// Tuples as fixed-size arrays
+fn createPoint(x, y) {
+    return [x, y]  // Tuple: (number, number)
+}
+
+fn distance(p1, p2) {
+    import "math"
+    const dx = p1[0] - p2[0]
+    const dy = p1[1] - p2[1]
+    return math.sqrt(dx * dx + dy * dy)
+}
+
+const point1 = createPoint(0, 0)
+const point2 = createPoint(3, 4)
+
+print("  Point 1:", point1[0], point1[1])
+print("  Point 2:", point2[0], point2[1])
+print("  Distance:", distance(point1, point2))
+
+// Tuple unpacking pattern
+const coords = [10, 20, 30]
+const x_coord = coords[0]
+const y_coord = coords[1]
+const z_coord = coords[2]
+
+print("  Coordinates:", x_coord, y_coord, z_coord)
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. NAMESPACES (Pattern with Objects)
+// ═══════════════════════════════════════════════════════════════════════════
+print("4. Namespaces (Object Pattern):")
+
+// Namespace as object with functions
+fn Math_namespace() {
+    fn square(x) { return x * x }
+    fn cube(x) { return x * x * x }
+    fn abs(x) { return x < 0 ? -x : x }
+    
+    return {
+        square: square,
+        cube: cube,
+        abs: abs
+    }
+}
+
+const MathUtils = Math_namespace()
+
+print("  MathUtils.square(5):", MathUtils.square(5))
+print("  MathUtils.cube(3):", MathUtils.cube(3))
+print("  MathUtils.abs(-10):", MathUtils.abs(-10))
+
+// Nested namespaces
+fn Graphics_namespace() {
+    fn Colors() {
+        return {
+            RED: "#FF0000",
+            GREEN: "#00FF00",
+            BLUE: "#0000FF"
+        }
+    }
+    
+    fn Shapes() {
+        fn circle(radius) { return "Circle: " + radius }
+        fn square(side) { return "Square: " + side }
+        return {
+            circle: circle,
+            square: square
+        }
+    }
+    
+    return {
+        Colors: Colors(),
+        Shapes: Shapes()
+    }
+}
+
+const Graphics = Graphics_namespace()
+
+print("  Graphics.Colors.RED:", Graphics.Colors.RED)
+print("  Graphics.Shapes.circle(10):", Graphics.Shapes.circle(10))
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRACTICAL EXAMPLES
+// ═══════════════════════════════════════════════════════════════════════════
+print("=== Practical Examples ===")
+print()
+
+// Example 1: Type-safe API client
+fn ApiClient() {
+    fn request(method: string, url: string): string {
+        return method + " " + url
+    }
+    
+    fn get(url: string): string {
+        return request("GET", url)
+    }
+    
+    fn post(url: string, data): string {
+        return request("POST", url)
+    }
+    
+    return {
+        get: get,
+        post: post,
+        request: request
+    }
+}
+
+const client = ApiClient()
+print("API Client:")
+print("  ", client.get("https://api.example.com/users"))
+print("  ", client.post("https://api.example.com/data"))
+print()
+
+// Example 2: Tuple-based records
+fn createPerson(name: string, age: number, city: string) {
+    return [name, age, city]  // Tuple: (string, number, string)
+}
+
+fn displayPerson(person) {
+    const name = person[0]
+    const age = person[1]
+    const city = person[2]
+    print("  Person:", name, "-", age, "years old, from", city)
+}
+
+print("Person Records:")
+const alice = createPerson("Alice", 30, "NYC")
+const bob = createPerson("Bob", 25, "SF")
+
+displayPerson(alice)
+displayPerson(bob)
+print()
+
+// Example 3: Type-annotated math library
+fn MathLib() {
+    fn add(a: number, b: number): number {
+        return a + b
+    }
+    
+    fn subtract(a: number, b: number): number {
+        return a - b
+    }
+    
+    fn multiply(a: number, b: number): number {
+        return a * b
+    }
+    
+    fn divide(a: number, b: number): number {
+        if (b == 0) {
+            print("  Error: Division by zero")
+            return 0
+        }
+        return a / b
+    }
+    
+    return {
+        add: add,
+        subtract: subtract,
+        multiply: multiply,
+        divide: divide
+    }
+}
+
+const Math = MathLib()
+
+print("Math Library:")
+print("  Math.add(10, 5):", Math.add(10, 5))
+print("  Math.subtract(10, 5):", Math.subtract(10, 5))
+print("  Math.multiply(10, 5):", Math.multiply(10, 5))
+print("  Math.divide(10, 5):", Math.divide(10, 5))
+print()
+
+print("✅ Type system features working!")

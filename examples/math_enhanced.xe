@@ -1,0 +1,142 @@
+// Enhanced Math Module Test
+print("=== Enhanced Math Module ===")
+print()
+
+import "math"
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1. COMPLEX NUMBERS
+// ═══════════════════════════════════════════════════════════════════════════
+print("1. Complex Numbers:")
+
+// Create complex numbers
+const c1 = math.complex(3, 4)     // 3 + 4i
+const c2 = math.complex(1, 2)     // 1 + 2i
+
+print("  c1 = ", c1[0], "+", c1[1], "i")
+print("  c2 = ", c2[0], "+", c2[1], "i")
+
+// Addition
+const c3 = math.complexAdd(c1, c2)
+print("  c1 + c2 = ", c3[0], "+", c3[1], "i")
+
+// Multiplication
+const c4 = math.complexMul(c1, c2)
+print("  c1 * c2 = ", c4[0], "+", c4[1], "i")
+
+// Magnitude
+const mag = math.complexAbs(c1)
+print("  |c1| = ", mag)
+
+// Conjugate
+const conj = math.complexConj(c1)
+print("  conj(c1) = ", conj[0], "+", conj[1], "i")
+
+// Phase
+const phase = math.complexPhase(c1)
+print("  phase(c1) = ", phase, "radians")
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2. TYPE-GENERIC FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+print("2. Type-Generic Functions:")
+
+const data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+// Sum
+const total = math.sum(data)
+print("  sum([1..10]) = ", total)
+
+// Product
+const prod = math.product([1, 2, 3, 4, 5])
+print("  product([1..5]) = ", prod)
+
+// Mean
+const avg = math.mean(data)
+print("  mean([1..10]) = ", avg)
+
+// Median
+const med = math.median(data)
+print("  median([1..10]) = ", med)
+
+// Variance
+const vari = math.variance(data)
+print("  variance([1..10]) = ", vari)
+
+// Standard deviation
+const std = math.stddev(data)
+print("  stddev([1..10]) = ", std)
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3. ADVANCED MATH FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+print("3. Advanced Math Functions:")
+
+// GCD and LCM
+const gcd = math.gcd(48, 18)
+print("  gcd(48, 18) = ", gcd)
+
+const lcm = math.lcm(12, 18)
+print("  lcm(12, 18) = ", lcm)
+
+// Factorial
+const fact5 = math.factorial(5)
+print("  5! = ", fact5)
+
+// Combinations
+const comb = math.combinations(10, 3)
+print("  C(10, 3) = ", comb)
+
+// Permutations
+const perm = math.permutations(10, 3)
+print("  P(10, 3) = ", perm)
+
+// Linear interpolation
+const interp = math.lerp(0, 100, 0.5)
+print("  lerp(0, 100, 0.5) = ", interp)
+
+// Angle conversion
+const deg = math.degrees(math.PI())
+print("  π radians = ", deg, "degrees")
+
+const rad = math.radians(180)
+print("  180 degrees = ", rad, "radians")
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. PRACTICAL EXAMPLES
+// ═══════════════════════════════════════════════════════════════════════════
+print("4. Practical Examples:")
+
+// Example 1: Statistics
+print("  Example 1: Test Scores")
+const scores = [85, 92, 78, 95, 88, 76, 90, 84, 91, 87]
+print("    Mean score:", math.mean(scores))
+print("    Median score:", math.median(scores))
+print("    Std deviation:", math.stddev(scores))
+
+print()
+
+// Example 2: Complex impedance
+print("  Example 2: Electrical Impedance")
+const z1 = math.complex(5, 3)   // 5 + 3j ohms
+const z2 = math.complex(4, 2)   // 4 + 2j ohms
+const z_total = math.complexAdd(z1, z2)
+print("    Z1 + Z2 =", z_total[0], "+", z_total[1], "j ohms")
+print("    |Z_total| =", math.complexAbs(z_total), "ohms")
+
+print()
+
+// Example 3: Probability
+print("  Example 3: Probability")
+const ways_to_choose = math.combinations(52, 5)
+print("    Poker hands (5 from 52):", ways_to_choose)
+
+print()
+
+print("✅ Enhanced math module working!")

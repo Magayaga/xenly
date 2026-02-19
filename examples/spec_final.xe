@@ -1,0 +1,95 @@
+// Specialized Math Functions
+print("Specialized Math")
+print()
+
+import "math"
+
+// Versine
+fn versine(x) {
+    return 1 - math.cos(x)
+}
+
+print("1. Versine")
+print(versine(0))
+print()
+
+// Haversine
+fn haversine(x) {
+    const one = 1.0
+    const two = 2.0
+    const c = math.cos(x)
+    return (one - c) / two
+}
+
+print("2. Haversine")
+print(haversine(0))
+print()
+
+// Indicator
+fn indicator(x, min, max) {
+    if (x >= min and x <= max) {
+        return 1
+    }
+    return 0
+}
+
+print("3. Indicator")
+print(indicator(5, 0, 10))
+print(indicator(15, 0, 10))
+print()
+
+// Sigma
+fn sigma(n) {
+    var sum = 0
+    var i = 1
+    
+    while (i <= n) {
+        if (n % i == 0) {
+            sum = sum + i
+        }
+        i = i + 1
+    }
+    
+    return sum
+}
+
+print("4. Sigma")
+print(sigma(6))
+print(sigma(28))
+print()
+
+// Liouville
+fn liouville(n) {
+    if (n == 1) {
+        return 1
+    }
+    
+    var omega = 0
+    var temp = n
+    var d = 2
+    
+    while (d * d <= temp) {
+        while (temp % d == 0) {
+            omega = omega + 1
+            temp = temp / d
+        }
+        d = d + 1
+    }
+    
+    if (temp > 1) {
+        omega = omega + 1
+    }
+    
+    if (omega % 2 == 0) {
+        return 1
+    }
+    return -1
+}
+
+print("5. Liouville")
+print(liouville(1))
+print(liouville(2))
+print(liouville(4))
+print()
+
+print("Complete: 125+ functions")

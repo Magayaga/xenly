@@ -1,8 +1,8 @@
-# ─── Modules Demo ────────────────────────────────────────
-# 'import' loads a standard library module.
-# Call functions with: module.function(args)
+// ─── Modules Demo ────────────────────────────────────────
+// 'import' loads a standard library module.
+// Call functions with: module.function(args)
 
-# ── Math Module ────────────────────────────────────────────
+// ── Math Module ────────────────────────────────────────────
 import "math"
 
 print("=== Math Module ===")
@@ -19,7 +19,7 @@ print("cos(0)      =", math.cos(0))
 print("log(1)      =", math.log(1))
 print("random()    =", math.random())
 
-# ── String Module ──────────────────────────────────────────
+// ── String Module ──────────────────────────────────────────
 import "string"
 
 print("")
@@ -41,7 +41,7 @@ var sentence = "The quick brown fox"
 print("replace   :", string.replace(sentence, "quick", "slow"))
 print("substr    :", string.substr(sentence, 4, 5))
 
-# ── IO Module ──────────────────────────────────────────────
+// ── IO Module ──────────────────────────────────────────────
 import "io"
 
 print("")

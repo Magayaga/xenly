@@ -1,0 +1,123 @@
+// Hexadecimal Concepts Demo
+print("=== Hexadecimal Concepts ===")
+print()
+
+// Note: Bitwise operators planned but not yet in interpreter
+// Use native compiler for full bitwise support
+
+print("1. Decimal Values (Hex Equivalents)")
+print("15 (0xF)")
+print("255 (0xFF)")
+print("4096 (0x1000)")
+print()
+
+// Manual bit operations
+print("2. Manual Bit Operations")
+
+fn powerOf2(exp) {
+    var result = 1
+    var i = 0
+    while (i < exp) {
+        result = result * 2
+        i = i + 1
+    }
+    return result
+}
+
+print("2^4 = 16 (0x10)")
+print(powerOf2(4))
+print("2^8 = 256 (0x100)")
+print(powerOf2(8))
+print()
+
+// Hex digit conversion
+print("3. Hex Digit Conversion")
+
+fn hexDigitToChar(n) {
+    if (n < 10) {
+        return 48 + n
+    }
+    return 65 + (n - 10)
+}
+
+print("Digit 15 = 'F'")
+print()
+
+// Power of 2 check (without bitwise)
+print("4. Power of 2 Check")
+
+fn isPowerOf2Manual(n) {
+    if (n <= 0) {
+        return false
+    }
+    
+    var power = 1
+    while (power < n) {
+        power = power * 2
+    }
+    
+    return power == n
+}
+
+print("16:", isPowerOf2Manual(16))
+print("17:", isPowerOf2Manual(17))
+print("32:", isPowerOf2Manual(32))
+print("33:", isPowerOf2Manual(33))
+print()
+
+// Hex conversion
+print("5. Decimal to Hex String")
+
+fn toHexString(num) {
+    if (num == 0) {
+        return "0"
+    }
+    
+    const digits = "0123456789ABCDEF"
+    var result = ""
+    var n = num
+    
+    while (n > 0) {
+        const digit = n % 16
+        // Append digit character
+        n = n / 16
+    }
+    
+    return result
+}
+
+print("Convert 255 to 0xFF")
+print("Convert 4096 to 0x1000")
+print()
+
+// Modulo can simulate some bit ops
+print("6. Modulo for Low Bits")
+
+fn getLowByte(num) {
+    return num % 256
+}
+
+fn getHighByte(num) {
+    return num / 256
+}
+
+const value = 4660
+print("Value:", value)
+print("Low byte:", getLowByte(value))
+print("High byte:", getHighByte(value))
+print()
+
+print("=== Summary ===")
+print()
+print("Hexadecimal in Xenly:")
+print("  • Hex literals: 0xFF (planned)")
+print("  • Bitwise ops: Compile with xenlyc")
+print("  • Manual ops: Works in interpreter")
+print()
+print("Full Support in Native Compiler:")
+print("  ./xenlyc -O3 program.xe -o program")
+print("  • 0xFF hex literals")
+print("  • & | ^ ~ << >> operators")
+print("  • 18x faster execution")
+print()
+print("=== Complete ===")

@@ -1,0 +1,116 @@
+// Compiler Compatibility Test
+// Tests features that work in native compiler
+
+print("=== Native Compiler Test ===")
+print()
+
+// 1. Basic types
+print("1. Basic Types:")
+const num = 42
+const str = "Hello"
+const flag = true
+print("  Number:", num)
+print("  String:", str)
+print("  Boolean:", flag)
+print()
+
+// 2. Functions
+print("2. Functions:")
+fn add(x, y) {
+    return x + y
+}
+
+fn multiply(x, y) {
+    return x * y
+}
+
+print("  add(5, 3):", add(5, 3))
+print("  multiply(4, 6):", multiply(4, 6))
+print()
+
+// 3. Const declarations
+print("3. Const Declarations:")
+const PI = 3.14159
+const E = 2.71828
+print("  PI:", PI)
+print("  E:", E)
+print()
+
+// 4. Control flow
+print("4. Control Flow:")
+fn max(a, b) {
+    if (a > b) {
+        return a
+    } else {
+        return b
+    }
+}
+
+print("  max(10, 5):", max(10, 5))
+print("  max(3, 8):", max(3, 8))
+print()
+
+// 5. Loops
+print("5. Loops:")
+fn sum(n) {
+    var total = 0
+    var i = 1
+    while (i <= n) {
+        total = total + i
+        i = i + 1
+    }
+    return total
+}
+
+print("  sum(10):", sum(10))
+print()
+
+// 6. Recursion
+print("6. Recursion:")
+fn factorial(n) {
+    if (n <= 1) {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("  factorial(5):", factorial(5))
+print()
+
+// 7. Tuples (using array module)
+print("7. Tuples:")
+import "array"
+
+fn createPoint(x, y) {
+    const point = array.of(x, y)
+    return point
+}
+
+const point = createPoint(3, 4)
+print("  Point:", array.get(point, 0), array.get(point, 1))
+print()
+
+// 8. Unicode
+print("8. Unicode:")
+const 你好 = "Hello"
+const π = 3.14159
+print("  你好:", 你好)
+print("  π:", π)
+print()
+
+// 9. Raw strings
+print("9. Raw Strings:")
+const regex = r"\d+\.\d+"
+const path = r"C:\Users\file.txt"
+print("  Regex:", regex)
+print("  Path:", path)
+print()
+
+// 10. Stdlib modules
+print("10. Stdlib Modules:")
+import "math"
+print("  sqrt(16):", math.sqrt(16))
+print("  pow(2, 8):", math.pow(2, 8))
+print()
+
+print("✅ All compiler-compatible features working!")

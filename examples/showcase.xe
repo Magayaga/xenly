@@ -1,11 +1,11 @@
-# ─────────────────────────────────────────────────────────
-#   X E N L Y   —   Full Feature Showcase
-# ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+//   X E N L Y   —   Full Feature Showcase
+// ─────────────────────────────────────────────────────────
 
 import "math"
 import "string"
 
-# ── Variables & Types ──────────────────────────────────────
+// ── Variables & Types ──────────────────────────────────────
 var title = "Xenly Showcase"
 var pi    = 3.14159
 var debug = false
@@ -15,7 +15,7 @@ print("║     " + title + "                ║")
 print("╚══════════════════════════════════════╝")
 print("")
 
-# ── Functions ──────────────────────────────────────────────
+// ── Functions ──────────────────────────────────────────────
 fn clamp(value, lo, hi) {
     if (value < lo) {
         return lo
@@ -43,14 +43,14 @@ fn banner(text) {
     print("└" + border + "┘")
 }
 
-# ── Demonstrate clamp ──────────────────────────────────────
+// ── Demonstrate clamp ──────────────────────────────────────
 banner("Clamp Function")
 print("  clamp(5, 0, 10)   =", clamp(5, 0, 10))
 print("  clamp(-5, 0, 10)  =", clamp(-5, 0, 10))
 print("  clamp(15, 0, 10)  =", clamp(15, 0, 10))
 print("")
 
-# ── Recursive: GCD ─────────────────────────────────────────
+// ── Recursive: GCD ─────────────────────────────────────────
 fn gcd(a, b) {
     if (b == 0) {
         return a
@@ -64,7 +64,7 @@ print("  gcd(100, 75) =", gcd(100, 75))
 print("  gcd(17, 13) =", gcd(17, 13))
 print("")
 
-# ── While loop: collatz sequence ───────────────────────────
+// ── While loop: collatz sequence ───────────────────────────
 fn collatz_steps(n) {
     var steps = 0
     while (n != 1) {
@@ -86,7 +86,7 @@ while (nums <= 27) {
 }
 print("")
 
-# ── Math module usage ──────────────────────────────────────
+// ── Math module usage ──────────────────────────────────────
 banner("Math Operations")
 print("  sqrt(2)     =", math.sqrt(2))
 print("  pow(2,8)    =", math.pow(2, 8))
@@ -94,7 +94,7 @@ print("  floor(pi)   =", math.floor(pi))
 print("  ceil(pi)    =", math.ceil(pi))
 print("")
 
-# ── String module usage ────────────────────────────────────
+// ── String module usage ────────────────────────────────────
 banner("String Operations")
 var msg = "hello xenly"
 print("  original  :", msg)
@@ -104,7 +104,7 @@ print("  len       :", string.len(msg))
 print("  contains  :", string.contains(msg, "xenly"))
 print("")
 
-# ── Logical operators ──────────────────────────────────────
+// ── Logical operators ──────────────────────────────────────
 banner("Logic")
 print("  true and true  =", true and true)
 print("  true and false =", true and false)
@@ -113,7 +113,7 @@ print("  not true       =", not true)
 print("  not false      =", not false)
 print("")
 
-# ── Nested function: power-of-two checker ──────────────────
+// ── Nested function: power-of-two checker ──────────────────
 fn is_power_of_two(n) {
     if (n <= 0) {
         return false

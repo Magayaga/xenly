@@ -1,0 +1,426 @@
+// ════════════════════════════════════════════════════════════════
+//  sysmon.xe  —  Declarative Linux System Monitor
+//
+//  Demonstrates:
+//    • Declarative multi-panel layout
+//    • Computed state values (percentages, rates)
+//    • Rule-based colour (green→yellow→red by threshold)
+//    • Sparkline history charts
+//    • Table with conditional row highlighting
+//    • State-driven badge colours
+//    • HStack (horizontal component rows)
+// ════════════════════════════════════════════════════════════════
+
+import "io"
+import "os"
+import "array"
+import "string"
+import "math"
+
+// ── ANSI helpers ──────────────────────────────────────────────
+fn pos(row, col) {
+    var r = "" + row
+    var c = "" + col
+    io.write("\033[" + r + ";" + c + "H")
+}
+fn seqPos(row, col) {
+    var r = "" + row
+    var c = "" + col
+    return "\033[" + r + ";" + c + "H"
+}
+fn reset()          { io.write("\033[0m")   }
+fn bold()           { io.write("\033[1m")   }
+fn dim()            { io.write("\033[2m")   }
+fn fgBlack()        { io.write("\033[30m")  }
+fn fgGreen()        { io.write("\033[32m")  }
+fn fgYellow()       { io.write("\033[33m")  }
+fn fgCyan()         { io.write("\033[36m")  }
+fn fgWhite()        { io.write("\033[37m")  }
+fn fgBrightBlack()  { io.write("\033[90m")  }
+fn fgBrightRed()    { io.write("\033[91m")  }
+fn fgBrightGreen()  { io.write("\033[92m")  }
+fn fgBrightYellow() { io.write("\033[93m")  }
+fn fgBrightCyan()   { io.write("\033[96m")  }
+fn fgBrightWhite()  { io.write("\033[97m")  }
+fn bgBlack()        { io.write("\033[40m")  }
+fn bgRed()          { io.write("\033[41m")  }
+fn bgGreen()        { io.write("\033[42m")  }
+fn bgYellow()       { io.write("\033[43m")  }
+fn bgBlue()         { io.write("\033[44m")  }
+fn bgBrightBlack()  { io.write("\033[100m") }
+fn bgBrightBlue()   { io.write("\033[104m") }
+fn bgBrightGreen()  { io.write("\033[102m") }
+
+// ── Rule-based helpers ────────────────────────────────────────
+// These functions embody declarative rules:
+//   "if usage > 80%, colour is red; if > 60%, yellow; else green"
+
+fn usageFg(pct) {
+    if (pct > 80) { fgBrightRed()    return 0 }
+    if (pct > 60) { fgBrightYellow() return 0 }
+    fgBrightGreen()
+}
+
+fn usageBg(pct) {
+    if (pct > 80) { bgRed()    fgBrightWhite() return 0 }
+    if (pct > 60) { bgYellow() fgBlack()       return 0 }
+    bgGreen() fgBlack()
+}
+
+fn pad(s, w) {
+    var r = s
+    var c = string.len(r)
+    while (c < w) { r = r + " " c = c + 1 }
+    return r
+}
+
+fn rpad(s, w) {
+    var r = s
+    var c = string.len(r)
+    while (c < w) { r = " " + r c = c + 1 }
+    return r
+}
+
+// ── Compound components ───────────────────────────────────────
+
+fn panel(row, col, rows, cols, title) {
+    var inner = cols - 2
+    var tlen = string.len(title)
+    var sf = (inner - tlen - 2) / 2
+    pos(row, col)
+    fgCyan() io.write("╔")
+    var i = 0
+    while (i < sf) { io.write("═") i = i + 1 }
+    io.write(" ") bold() fgBrightWhite() io.write(title)
+    reset() fgCyan() io.write(" ")
+    i = 0
+    while (i < sf) { io.write("═") i = i + 1 }
+    io.write("╗") reset()
+    i = 1
+    while (i < rows - 1) {
+        var r = row + i
+        pos(r, col) fgCyan() io.write("║") reset()
+        var rc = col + cols - 1
+        pos(r, rc) fgCyan() io.write("║") reset()
+        i = i + 1
+    }
+    var br = row + rows - 1
+    pos(br, col) fgCyan() io.write("╚")
+    i = 0
+    while (i < inner) { io.write("═") i = i + 1 }
+    io.write("╝") reset()
+}
+
+fn progressBar(seq, val, max, width) {
+    var filled = val * width / max
+    var empty = width - filled
+    var pct = val * 100 / max
+    io.write(seq)
+    fgBrightWhite() io.write("[")
+    usageFg(pct)
+    var i = 0
+    while (i < filled) { io.write("█") i = i + 1 }
+    fgBrightBlack()
+    i = 0
+    while (i < empty) { io.write("░") i = i + 1 }
+    fgBrightWhite() io.write("] ")
+    bold() usageFg(pct) io.write("" + pct + "%")
+    reset()
+}
+
+fn metricBar(seq, label, val, max, width) {
+    io.write(seq)
+    bold() fgBrightWhite() io.write(label) reset()
+    progressBar(seqPos(0, 0), val, max, width)
+}
+
+fn sparkline(seq, values, maxVal) {
+    var bars = array.create(8)
+    array.set(bars, 0, "▁") array.set(bars, 1, "▂")
+    array.set(bars, 2, "▃") array.set(bars, 3, "▄")
+    array.set(bars, 4, "▅") array.set(bars, 5, "▆")
+    array.set(bars, 6, "▇") array.set(bars, 7, "█")
+    io.write(seq)
+    var i = 0
+    while (i < array.len(values)) {
+        var v = array.get(values, i)
+        var pct = v * 100 / maxVal
+        usageFg(pct)
+        var idx = v * 7 / maxVal
+        io.write(array.get(bars, idx))
+        i = i + 1
+    }
+    reset()
+}
+
+fn statusBar(row, msg) {
+    pos(row, 1)
+    bgBrightBlue() fgBrightWhite() bold()
+    var padded = "  " + msg
+    var cur = string.len(padded)
+    while (cur < 80) { padded = padded + " " cur = cur + 1 }
+    io.write(padded) reset()
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DECLARATIVE STATE  —  single source of truth
+// ════════════════════════════════════════════════════════════════
+
+// CPU state
+var cpuUser   = 34
+var cpuSystem = 18
+var cpuIdle   = 48
+var cpuTotal  = cpuUser + cpuSystem  // = 52%
+
+// CPU history (20 ticks)
+var cpuHist = array.create(0)
+array.push(cpuHist, 28) array.push(cpuHist, 35) array.push(cpuHist, 42)
+array.push(cpuHist, 38) array.push(cpuHist, 51) array.push(cpuHist, 63)
+array.push(cpuHist, 55) array.push(cpuHist, 48) array.push(cpuHist, 71)
+array.push(cpuHist, 84) array.push(cpuHist, 77) array.push(cpuHist, 69)
+array.push(cpuHist, 73) array.push(cpuHist, 65) array.push(cpuHist, 58)
+array.push(cpuHist, 61) array.push(cpuHist, 55) array.push(cpuHist, 52)
+array.push(cpuHist, 49) array.push(cpuHist, 52)
+
+// Memory state (MB)
+var memUsed  = 6240
+var memCache = 2180
+var memFree  = 7964
+var memTotal = 16384
+
+// Disk state (GB)
+var diskRead  = 142
+var diskWrite = 87
+var diskUsed  = 387
+var diskTotal = 512
+
+// Network state (Mbps)
+var netRx = 124
+var netTx = 38
+var netPktRx = 8420
+var netPktTx = 5130
+
+// Process table
+var procNames  = array.create(0)
+var procPids   = array.create(0)
+var procCpu    = array.create(0)
+var procMem    = array.create(0)
+var procStatus = array.create(0)
+
+array.push(procNames, "xenly")      array.push(procPids, "4096")
+array.push(procCpu, "34.2")         array.push(procMem, "512")
+array.push(procStatus, "running")
+
+array.push(procNames, "postgres")   array.push(procPids, "1281")
+array.push(procCpu, "18.4")         array.push(procMem, "2100")
+array.push(procStatus, "running")
+
+array.push(procNames, "nginx")      array.push(procPids, "1024")
+array.push(procCpu, "2.1")          array.push(procMem, "128")
+array.push(procStatus, "running")
+
+array.push(procNames, "redis")      array.push(procPids, "1890")
+array.push(procCpu, "0.8")          array.push(procMem, "256")
+array.push(procStatus, "sleeping")
+
+array.push(procNames, "prometheus") array.push(procPids, "2001")
+array.push(procCpu, "4.1")          array.push(procMem, "180")
+array.push(procStatus, "running")
+
+// System info
+var hostname = "xenly-server"
+var platform = os.platform()
+var uptime   = "14d 3h 22m"
+var loadAvg  = "0.52 0.68 0.71"
+
+// ── Computed values ───────────────────────────────────────────
+var memUsedPct  = memUsed * 100 / memTotal
+var memCachePct = memCache * 100 / memTotal
+var diskUsedPct = diskUsed * 100 / diskTotal
+
+// ════════════════════════════════════════════════════════════════
+//  RENDER  —  declarative layout
+// ════════════════════════════════════════════════════════════════
+
+io.write("\033[2J\033[H\033[?25l")
+
+// ── Title bar ─────────────────────────────────────────────────
+statusBar(1, "⬡ Xenly System Monitor  │  " + hostname + "  │  " + platform + "  │  Up: " + uptime)
+
+// ── CPU Panel ─────────────────────────────────────────────────
+panel(3, 1, 9, 50, "CPU")
+
+pos(4, 3) bold() fgBrightWhite() io.write("Total:  ") reset()
+progressBar(seqPos(4, 11), cpuTotal, 100, 30)
+
+pos(5, 3) bold() fgBrightWhite() io.write("User:   ") reset()
+progressBar(seqPos(5, 11), cpuUser, 100, 30)
+
+pos(6, 3) bold() fgBrightWhite() io.write("System: ") reset()
+progressBar(seqPos(6, 11), cpuSystem, 100, 30)
+
+pos(7, 3) bold() fgBrightWhite() io.write("Idle:   ") reset()
+fgBrightBlack() io.write("" + cpuIdle + "%") reset()
+
+pos(8, 3)
+fgBrightBlack() io.write("Load avg: ") reset()
+fgBrightCyan() io.write(loadAvg) reset()
+
+pos(9, 3)
+sparkline(seqPos(9, 3), cpuHist, 100)
+fgBrightBlack() io.write(" 20 ticks") reset()
+
+pos(10, 3)
+fgBrightBlack() io.write("peak:")
+fgBrightRed() bold() io.write(" 84%")
+reset()
+fgBrightBlack() io.write("  avg:")
+fgBrightYellow() bold() io.write(" 58%")
+reset()
+fgBrightBlack() io.write("  now:")
+bold() usageFg(cpuTotal) io.write(" " + cpuTotal + "%")
+reset()
+
+// ── Memory Panel ──────────────────────────────────────────────
+panel(3, 52, 9, 28, "Memory")
+
+pos(4, 54)
+bold() fgBrightWhite() io.write("Used:  ") reset()
+progressBar(seqPos(4, 61), memUsedPct, 100, 13)
+
+pos(5, 54)
+bold() fgBrightWhite() io.write("Cache: ") reset()
+fgBrightCyan()
+io.write("[")
+var ci = 0
+while (ci < 8) {
+    if (ci < memCachePct * 13 / 100) { io.write("▓") }
+    if (ci >= memCachePct * 13 / 100) { fgBrightBlack() io.write("░") fgBrightCyan() }
+    ci = ci + 1
+}
+io.write("] ")
+io.write("" + memCachePct + "%")
+reset()
+
+pos(6, 54)
+bold() fgBrightWhite() io.write("Free:  ") reset()
+fgBrightGreen() io.write("" + memFree + " MB") reset()
+
+pos(7, 54)
+bold() fgBrightWhite() io.write("Total: ") reset()
+fgBrightWhite() io.write("" + memTotal + " MB") reset()
+
+pos(8, 54)
+// Rule: badge colour from used percentage
+if (memUsedPct > 80) { bgRed()    fgBrightWhite() bold() io.write(" CRITICAL ") }
+if (memUsedPct > 60) {
+    if (memUsedPct <= 80) { bgYellow() fgBlack() bold() io.write("  WARNING  ") }
+}
+if (memUsedPct <= 60) { bgGreen()  fgBlack()       bold() io.write("   NORMAL  ") }
+reset()
+
+// ── Disk I/O Panel ────────────────────────────────────────────
+panel(13, 1, 7, 50, "Disk I/O")
+
+pos(14, 3)
+bold() fgBrightWhite() io.write("Used:    ") reset()
+progressBar(seqPos(14, 12), diskUsedPct, 100, 30)
+
+pos(15, 3)
+bold() fgBrightWhite() io.write("Read:    ") reset()
+fgBrightGreen() io.write(rpad("" + diskRead, 5) + " MB/s") reset()
+
+pos(16, 3)
+bold() fgBrightWhite() io.write("Write:   ") reset()
+fgBrightYellow() io.write(rpad("" + diskWrite, 5) + " MB/s") reset()
+
+pos(17, 3)
+bold() fgBrightWhite() io.write("Total:   ") reset()
+fgBrightWhite() io.write("" + diskUsed + " / " + diskTotal + " GB") reset()
+
+pos(18, 3)
+fgBrightBlack() io.write("Partitions: /dev/sda1  /dev/sda2  /dev/sdb1") reset()
+
+// ── Network Panel ─────────────────────────────────────────────
+panel(13, 52, 7, 28, "Network")
+
+pos(14, 54)
+bold() fgBrightWhite() io.write("RX: ") reset()
+fgBrightGreen() bold() io.write(rpad("" + netRx, 6) + " Mbps") reset()
+
+pos(15, 54)
+bold() fgBrightWhite() io.write("TX: ") reset()
+fgBrightYellow() bold() io.write(rpad("" + netTx, 6) + " Mbps") reset()
+
+pos(16, 54)
+fgBrightBlack() io.write("Pkts RX: ") fgBrightWhite()
+io.write("" + netPktRx) reset()
+
+pos(17, 54)
+fgBrightBlack() io.write("Pkts TX: ") fgBrightWhite()
+io.write("" + netPktTx) reset()
+
+pos(18, 54)
+fgBrightBlack() io.write("eth0  lo  docker0") reset()
+
+// ── Process Table ─────────────────────────────────────────────
+panel(21, 1, 10, 79, "Processes")
+
+pos(22, 3)
+bold() bgBrightBlack() fgBrightCyan()
+io.write("  " + pad("PROCESS", 14) + pad("PID", 8) + pad("CPU%", 8) + pad("MEM(MB)", 10) + pad("STATUS", 10))
+reset()
+
+pos(23, 3)
+fgBrightBlack()
+io.write("  ──────────────  ──────────  ──────────  ──────────  ──────────")
+reset()
+
+var pi = 0
+while (pi < array.len(procNames)) {
+    var name   = array.get(procNames, pi)
+    var pid    = array.get(procPids, pi)
+    var cpu    = array.get(procCpu, pi)
+    var mem    = array.get(procMem, pi)
+    var status = array.get(procStatus, pi)
+
+    pos(24 + pi, 3)
+
+    // Rule: highlight high-CPU processes
+    var cpuNum = 0
+    if (cpu == "34.2") { cpuNum = 34 }
+    if (cpu == "18.4") { cpuNum = 18 }
+    if (cpu == "2.1")  { cpuNum = 2  }
+    if (cpu == "0.8")  { cpuNum = 0  }
+    if (cpu == "4.1")  { cpuNum = 4  }
+
+    if (cpuNum > 20) { bgBrightBlue() fgBrightWhite() bold() }
+    if (cpuNum <= 20) { fgWhite() }
+
+    io.write("  " + pad(name, 14) + pad(pid, 8))
+
+    // CPU% with rule-based colour
+    if (cpuNum > 20) { io.write(pad(cpu + "%", 8) + pad(mem, 10)) }
+    if (cpuNum <= 20) {
+        reset()
+        if (cpuNum > 10) { fgBrightYellow() } 
+        if (cpuNum <= 10) { fgBrightGreen() }
+        io.write(pad(cpu + "%", 8))
+        reset() fgWhite()
+        io.write(pad(mem, 10))
+    }
+
+    // Status badge
+    reset()
+    if (status == "running")  { fgBrightGreen() bold() io.write(status) }
+    if (status == "sleeping") { fgBrightBlack()        io.write(status) }
+
+    reset()
+    pi = pi + 1
+}
+
+// ── Footer ─────────────────────────────────────────────────────
+statusBar(32, "  r: refresh   p: processes   n: network   d: disk   q: quit  │  Platform: " + platform)
+
+pos(34, 1)
+io.write("\033[?25h") reset() io.write("\n")

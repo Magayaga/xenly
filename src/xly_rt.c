@@ -1,13 +1,4 @@
 /*
- * XENLY - high-level and general-purpose programming language
- * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
- *
- * It is initially written in C programming language.
- *
- * It is available for Linux and macOS operating systems.
- *
- */
-/*
  * xly_rt.c  —  Xenly native-compiler runtime library
  *
  * Compiled Xenly binaries call into this.  It is compiled once into
@@ -342,11 +333,41 @@ XlyVal *value_clone(XlyVal *v) {
         case VAL_BOOL:     return xly_bool(v->boolean);
         case VAL_NULL:     return xly_null();
         case VAL_ARRAY: {
-            XlyVal **items = (XlyVal **)malloc(sizeof(XlyVal *) * v->array_len);
+            // FIX: xly_array_create sets cap = len ? len : 4.
+            // Allocate at least that many slots so a push() after clone() doesn't
+            // write past the end of the backing array.
+            size_t alloc = v->array_len > 0 ? v->array_len : 4;
+            XlyVal **items = (XlyVal **)malloc(sizeof(XlyVal *) * alloc);
             for (size_t i = 0; i < v->array_len; i++) items[i] = value_clone(v->array[i]);
             return xly_array_create(items, v->array_len);
         }
         default:           return v;  // functions, classes: shared ref
     }
+}
+
+/* ── array/string indexing ─────────────────────────────────────────── */
+XlyVal *xly_index(XlyVal *collection, XlyVal *index_val) {
+    if (!collection || !index_val) return xly_null();
+    
+    if (index_val->type != VAL_NUMBER) return xly_null();
+    int index = (int)index_val->num;
+    
+    if (collection->type == VAL_ARRAY) {
+        if (index < 0 || (size_t)index >= collection->array_len) {
+            return xly_null();
+        }
+        return collection->array[index];
+    }
+    
+    if (collection->type == VAL_STRING) {
+        int len = (int)strlen(collection->str);
+        if (index < 0 || index >= len) {
+            return xly_null();
+        }
+        char buf[2] = {collection->str[index], '\0'};
+        return xly_str(buf);
+    }
+    
+    return xly_null();
 }
 

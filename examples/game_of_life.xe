@@ -1,0 +1,142 @@
+// Conway's Game of Life
+print("=== Conway's Game of Life ===")
+print()
+
+import "array"
+
+const WIDTH = 20
+const HEIGHT = 10
+const GENS = 15
+
+fn createBoard() {
+    const board = []
+    var y = 0
+    while (y < HEIGHT) {
+        const row = array.create(WIDTH, 0)
+        array.push(board, row)
+        y = y + 1
+    }
+    return board
+}
+
+fn initGlider(board) {
+    const r5 = array.get(board, 5)
+    const r6 = array.get(board, 6)
+    const r7 = array.get(board, 7)
+    const one = 1
+    const c5 = 5
+    const c6 = 6
+    const c7 = 7
+    
+    array.set(r5, c6, one)
+    array.set(r6, c7, one)
+    array.set(r7, c5, one)
+    array.set(r7, c6, one)
+    array.set(r7, c7, one)
+    
+    return board
+}
+
+fn countN(board, x, y) {
+    var count = 0
+    const zero = 0
+    const one = 1
+    const two = 2
+    
+    var dy = -1
+    while (dy <= one) {
+        var dx = -1
+        while (dx <= one) {
+            const nx = x + dx
+            const ny = y + dy
+            const xok = (nx >= zero and nx < WIDTH)
+            const yok = (ny >= zero and ny < HEIGHT)
+            const isself = (dx == zero and dy == zero)
+            
+            if (isself == zero and xok and yok) {
+                const row = array.get(board, ny)
+                const val = array.get(row, nx)
+                if (val == one) {
+                    count = count + one
+                }
+            }
+            dx = dx + one
+        }
+        dy = dy + one
+    }
+    return count
+}
+
+fn nextGen(board) {
+    const newBoard = createBoard()
+    const zero = 0
+    const one = 1
+    const two = 2
+    const three = 3
+    
+    var y = zero
+    while (y < HEIGHT) {
+        var x = zero
+        const oldRow = array.get(board, y)
+        const newRow = array.get(newBoard, y)
+        
+        while (x < WIDTH) {
+            const n = countN(board, x, y)
+            const alive = array.get(oldRow, x)
+            
+            const live2 = (alive == one and n == two)
+            const live3 = (alive == one and n == three)
+            const born = (alive == zero and n == three)
+            
+            if (live2 or live3 or born) {
+                array.set(newRow, x, one)
+            }
+            
+            x = x + one
+        }
+        y = y + one
+    }
+    return newBoard
+}
+
+fn display(board, gen) {
+    const zero = 0
+    const one = 1
+    
+    print("Generation:", gen)
+    var y = zero
+    while (y < HEIGHT) {
+        const row = array.get(board, y)
+        var x = zero
+        while (x < WIDTH) {
+            const val = array.get(row, x)
+            if (val == one) {
+                print("*")
+            } else {
+                print(" ")
+            }
+            x = x + one
+        }
+        print()
+        y = y + one
+    }
+    print()
+}
+
+print("Starting simulation")
+print()
+
+const zero = 0
+const one = 1
+
+var board = createBoard()
+board = initGlider(board)
+
+var gen = zero
+while (gen < GENS) {
+    display(board, gen)
+    board = nextGen(board)
+    gen = gen + one
+}
+
+print("=== Complete ===")

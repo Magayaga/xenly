@@ -1,0 +1,124 @@
+// Reflective Programming Demo
+print("Reflective Programming")
+print()
+
+import "type"
+
+// Type Checking
+print("1. Type Checking")
+print(type.isNumber(42))
+print(type.isString("hello"))
+print(type.isBoolean(true))
+print()
+
+// Safe Division
+print("2. Safe Division")
+
+fn safeDivide(a, b) {
+    if (type.isNumber(a) == false) {
+        print("Error: a not number")
+        return null
+    }
+    
+    if (type.isNumber(b) == false) {
+        print("Error: b not number")
+        return null
+    }
+    
+    if (b == 0) {
+        print("Error: div by zero")
+        return null
+    }
+    
+    return a / b
+}
+
+print(safeDivide(10, 2))
+print(safeDivide(10, 0))
+print()
+
+// Type Assertions
+print("3. Type Assertions")
+
+fn assertNumber(x) {
+    return type.isNumber(x)
+}
+
+print(assertNumber(42))
+print(assertNumber("hi"))
+print()
+
+// Polymorphic Functions
+print("4. Polymorphic Stringify")
+
+fn stringify(value) {
+    if (type.isNumber(value)) {
+        return "Number"
+    }
+    
+    if (type.isString(value)) {
+        return "String"
+    }
+    
+    if (type.isBoolean(value)) {
+        return "Boolean"
+    }
+    
+    if (type.isNull(value)) {
+        return "Null"
+    }
+    
+    return "Unknown"
+}
+
+print(stringify(42))
+print(stringify("hello"))
+print(stringify(true))
+print()
+
+// Type-based Dispatch
+print("5. Type Dispatch")
+
+fn process(value) {
+    if (type.isNumber(value)) {
+        return value * 2
+    }
+    
+    if (type.isString(value)) {
+        return value
+    }
+    
+    return null
+}
+
+print(process(5))
+print(process("test"))
+print()
+
+// Runtime Validation
+print("6. Validation")
+
+fn validateAge(age) {
+    if (type.isNumber(age) == false) {
+        return false
+    }
+    
+    if (age < 0) {
+        return false
+    }
+    
+    if (age > 150) {
+        return false
+    }
+    
+    return true
+}
+
+print(validateAge(30))
+print(validateAge(-5))
+print(validateAge(200))
+print()
+
+print("Summary:")
+print("Type introspection working!")
+print("Complete!")

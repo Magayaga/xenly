@@ -1,0 +1,8 @@
+// Simple enum test
+print("Testing enum...")
+
+enum Option {
+    Some(value)
+}
+
+print("✓ enum defined")

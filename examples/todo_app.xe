@@ -1,0 +1,327 @@
+// ════════════════════════════════════════════════════════════════
+//  todo_app.xe  —  Declarative Task Manager
+//
+//  Demonstrates:
+//    • Declarative state (task list, filter, counts)
+//    • Computed values derived from state
+//    • Component re-render from state change
+//    • Rule-based UI (badge colour from state value)
+//    • Conditional rendering
+//    • SwiftUI-style List + ForEach pattern
+// ════════════════════════════════════════════════════════════════
+
+import "io"
+import "array"
+import "string"
+
+// ── ANSI helpers ──────────────────────────────────────────────
+fn pos(row, col)    { var r = "" + row var c = "" + col io.write("\033[" + r + ";" + c + "H") }
+fn reset()          { io.write("\033[0m")   }
+fn bold()           { io.write("\033[1m")   }
+fn dim()            { io.write("\033[2m")   }
+fn fgBrightWhite()  { io.write("\033[97m")  }
+fn fgBrightYellow() { io.write("\033[93m")  }
+fn fgBrightGreen()  { io.write("\033[92m")  }
+fn fgBrightRed()    { io.write("\033[91m")  }
+fn fgBrightCyan()   { io.write("\033[96m")  }
+fn fgBrightBlack()  { io.write("\033[90m")  }
+fn fgCyan()         { io.write("\033[36m")  }
+fn fgWhite()        { io.write("\033[37m")  }
+fn bgBrightBlue()   { io.write("\033[104m") }
+fn bgGreen()        { io.write("\033[42m")  }
+fn bgRed()          { io.write("\033[41m")  }
+fn bgYellow()       { io.write("\033[43m")  }
+fn bgBlue()         { io.write("\033[44m")  }
+fn bgBrightBlack()  { io.write("\033[100m") }
+fn fgBlack()        { io.write("\033[30m")  }
+
+// ── Helpers ───────────────────────────────────────────────────
+fn pad(s, w) {
+    var result = s
+    var cur = string.len(result)
+    while (cur < w) { result = result + " " cur = cur + 1 }
+    return result
+}
+
+fn bar(posSeq, val, max, w) {
+    io.write(posSeq)
+    var filled = val * w / max
+    var empty = w - filled
+    fgBrightWhite() io.write("[")
+    fgBrightGreen()
+    var i = 0
+    while (i < filled) { io.write("█") i = i + 1 }
+    fgBrightBlack()
+    i = 0
+    while (i < empty) { io.write("░") i = i + 1 }
+    fgBrightWhite() io.write("]")
+    reset()
+}
+
+fn badge(posSeq, text, kind) {
+    io.write(posSeq)
+    if (kind == "success") { bgGreen()  fgBlack() bold() }
+    if (kind == "warn")    { bgYellow() fgBlack() bold() }
+    if (kind == "error")   { bgRed()    fgBrightWhite() bold() }
+    if (kind == "info")    { bgBlue()   fgBrightWhite() bold() }
+    io.write(" " + text + " ")
+    reset()
+}
+
+fn panel(row, col, rows, cols, title) {
+    var inner = cols - 2
+    var tlen = string.len(title)
+    var sf = (inner - tlen - 2) / 2
+    var seq = "" + row + ";" + col
+    io.write("\033[" + seq + "H")
+    fgCyan() io.write("╔")
+    var i = 0
+    while (i < sf) { io.write("═") i = i + 1 }
+    io.write(" ") bold() fgBrightWhite() io.write(title)
+    reset() fgCyan() io.write(" ")
+    i = 0
+    while (i < sf) { io.write("═") i = i + 1 }
+    io.write("╗") reset()
+    i = 1
+    while (i < rows - 1) {
+        var r = row + i
+        io.write("\033[" + r + ";" + col + "H") fgCyan() io.write("║") reset()
+        var rc = col + cols - 1
+        io.write("\033[" + r + ";" + rc + "H") fgCyan() io.write("║") reset()
+        i = i + 1
+    }
+    var br = row + rows - 1
+    io.write("\033[" + br + ";" + col + "H") fgCyan() io.write("╚")
+    i = 0
+    while (i < inner) { io.write("═") i = i + 1 }
+    io.write("╝") reset()
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DECLARATIVE STATE
+//  This is the single source of truth for the entire UI.
+// ════════════════════════════════════════════════════════════════
+
+// Task list — parallel arrays (id, text, done, priority)
+var taskIds   = array.create(0)
+var taskTexts = array.create(0)
+var taskDone  = array.create(0)
+var taskPrio  = array.create(0)   // "high" | "med" | "low"
+
+// Seed with initial tasks
+array.push(taskIds,   "1") array.push(taskTexts, "Fix parser double-free bug")
+array.push(taskDone,  1)   array.push(taskPrio,  "high")
+
+array.push(taskIds,   "2") array.push(taskTexts, "Build xui declarative framework")
+array.push(taskDone,  1)   array.push(taskPrio,  "high")
+
+array.push(taskIds,   "3") array.push(taskTexts, "Write layout engine (VStack/HStack)")
+array.push(taskDone,  1)   array.push(taskPrio,  "high")
+
+array.push(taskIds,   "4") array.push(taskTexts, "Add reactive state engine")
+array.push(taskDone,  1)   array.push(taskPrio,  "med")
+
+array.push(taskIds,   "5") array.push(taskTexts, "Create dashboard demo")
+array.push(taskDone,  1)   array.push(taskPrio,  "med")
+
+array.push(taskIds,   "6") array.push(taskTexts, "Write todo app demo")
+array.push(taskDone,  0)   array.push(taskPrio,  "med")
+
+array.push(taskIds,   "7") array.push(taskTexts, "Write system monitor demo")
+array.push(taskDone,  0)   array.push(taskPrio,  "low")
+
+array.push(taskIds,   "8") array.push(taskTexts, "Package final release")
+array.push(taskDone,  0)   array.push(taskPrio,  "low")
+
+// UI state
+var filterMode = "all"   // "all" | "active" | "done"
+var selectedId = "6"
+
+// ── Computed values (derived from state, not stored) ──────────
+fn countTotal()  { return array.len(taskIds) }
+
+fn countDone() {
+    var n = 0
+    var i = 0
+    while (i < array.len(taskDone)) {
+        var d = array.get(taskDone, i)
+        if (d == 1) { n = n + 1 }
+        i = i + 1
+    }
+    return n
+}
+
+fn countActive() {
+    return countTotal() - countDone()
+}
+
+fn pctDone() {
+    var total = countTotal()
+    if (total == 0) { return 0 }
+    return countDone() * 100 / total
+}
+
+fn taskVisible(i) {
+    var done = array.get(taskDone, i)
+    if (filterMode == "all")    { return 1 }
+    if (filterMode == "active") {
+        if (done == 0) { return 1 }
+        return 0
+    }
+    if (filterMode == "done") {
+        if (done == 1) { return 1 }
+        return 0
+    }
+    return 1
+}
+
+// ════════════════════════════════════════════════════════════════
+//  RENDER  —  describes WHAT the screen should show
+//  Pure function of state.
+// ════════════════════════════════════════════════════════════════
+
+io.write("\033[2J\033[H\033[?25l")
+
+// ── Header ────────────────────────────────────────────────────
+pos(1, 1)
+bgBrightBlue() fgBrightWhite() bold()
+io.write("  ✓ Xenly Task Manager  —  Declarative Linux UI                                  ")
+reset()
+
+// ── Summary panel ─────────────────────────────────────────────
+panel(3, 1, 7, 40, "Project Progress")
+
+pos(4, 3)
+bold() fgBrightWhite() io.write("Tasks:  ")
+reset() fgBrightYellow()
+io.write("" + countDone() + " / " + countTotal() + " completed")
+reset()
+
+var seq = "" + 5 + ";" + 3
+bar("\033[" + seq + "H", countDone(), countTotal(), 30)
+
+pos(6, 3)
+bold() fgBrightWhite() io.write("Active: ") reset()
+fgBrightRed() io.write("" + countActive())
+reset()
+
+pos(6, 16)
+bold() fgBrightWhite() io.write("Done:   ") reset()
+fgBrightGreen() io.write("" + countDone())
+reset()
+
+pos(7, 3)
+bold() fgBrightWhite() io.write("Progress: ") reset()
+fgBrightYellow() bold() io.write("" + pctDone() + "%")
+reset()
+
+// ── Filter tabs ───────────────────────────────────────────────
+panel(3, 42, 7, 38, "Filters")
+
+pos(4, 44)
+bold() fgBrightWhite() io.write("Show: ") reset()
+
+// Declarative filter buttons — state drives which is "active"
+pos(5, 44)
+if (filterMode == "all")    { bgGreen() fgBlack() bold() }
+if (filterMode != "all")    { bgBrightBlack() fgBrightWhite() }
+io.write("[ All    ]") reset() io.write("  ")
+
+if (filterMode == "active") { bgGreen() fgBlack() bold() }
+if (filterMode != "active") { bgBrightBlack() fgBrightWhite() }
+io.write("[ Active ]") reset() io.write("  ")
+
+if (filterMode == "done")   { bgGreen() fgBlack() bold() }
+if (filterMode != "done")   { bgBrightBlack() fgBrightWhite() }
+io.write("[ Done   ]")
+reset()
+
+pos(7, 44)
+fgBrightBlack() io.write("Filter: ") reset()
+fgBrightCyan() bold() io.write(filterMode) reset()
+
+pos(8, 44)
+fgBrightBlack() io.write("Visible: ") reset()
+// Count visible tasks
+var visCount = 0
+var vi = 0
+while (vi < countTotal()) {
+    if (taskVisible(vi) == 1) { visCount = visCount + 1 }
+    vi = vi + 1
+}
+fgBrightYellow() io.write("" + visCount + " tasks")
+reset()
+
+// ── Task list ─────────────────────────────────────────────────
+panel(11, 1, 14, 79, "Tasks")
+
+var listRow = 12
+var i = 0
+while (i < array.len(taskIds)) {
+    if (taskVisible(i) == 1) {
+        var id   = array.get(taskIds, i)
+        var text = array.get(taskTexts, i)
+        var done = array.get(taskDone, i)
+        var prio = array.get(taskPrio, i)
+
+        pos(listRow, 3)
+
+        // Checkbox
+        if (done == 1) { fgBrightGreen() bold() io.write("[✓] ") }
+        if (done == 0) { fgBrightBlack()         io.write("[ ] ") }
+        reset()
+
+        // Priority badge (rule-based: state drives colour)
+        if (prio == "high") { bgRed()    fgBrightWhite() bold() io.write(" H ") }
+        if (prio == "med")  { bgYellow() fgBlack()       bold() io.write(" M ") }
+        if (prio == "low")  { bgBlue()   fgBrightWhite() bold() io.write(" L ") }
+        reset()
+        io.write(" ")
+
+        // Task text — strikethrough style if done
+        if (done == 1) { fgBrightBlack() dim() }
+        if (done == 0) {
+            if (id == selectedId) { fgBrightWhite() bold() }
+            if (id != selectedId) { fgWhite() }
+        }
+        io.write(pad(text, 55))
+        reset()
+
+        // Selection indicator
+        if (id == selectedId) {
+            io.write("  ◀")
+        }
+
+        listRow = listRow + 1
+    }
+    i = i + 1
+}
+
+// ── Notifications / Actions ───────────────────────────────────
+panel(26, 1, 5, 79, "Recent Actions")
+
+pos(27, 3)
+fgBrightGreen() bold() io.write("✔  ") reset() fgBrightWhite()
+io.write("Parser double-free bug fixed — variables now pass correctly to all functions")
+reset()
+
+pos(28, 3)
+fgBrightGreen() bold() io.write("✔  ") reset() fgBrightWhite()
+io.write("XUI framework loaded — 30+ declarative components available")
+reset()
+
+pos(29, 3)
+fgBrightCyan() bold() io.write("ℹ  ") reset() fgBrightWhite()
+io.write("Layout engine ready — VStack/HStack/Panel composition working")
+reset()
+
+// ── Status bar ────────────────────────────────────────────────
+pos(32, 1)
+bgBrightBlue() fgBrightWhite() bold()
+io.write("  ↑↓: navigate   space: toggle   f: filter   a: add   d: delete   q: quit     ")
+reset()
+
+// ── Restore cursor ────────────────────────────────────────────
+pos(34, 1)
+io.write("\033[?25h") reset()
+io.write("\n")

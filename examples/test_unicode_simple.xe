@@ -1,0 +1,2 @@
+const hello = "Hello 世界 🌍"
+print(hello)

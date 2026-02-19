@@ -1,0 +1,125 @@
+// Comprehensive Performance Benchmark
+print("=== Xenly Performance Benchmark ===")
+print()
+
+// Benchmark 1: Fibonacci (recursion heavy)
+fn fib(n) {
+    if (n <= 1) {
+        return n
+    }
+    const n1 = n - 1
+    const n2 = n - 2
+    return fib(n1) + fib(n2)
+}
+
+print("1. Fibonacci(30)...")
+const fib_result = fib(30)
+print("   Result:", fib_result)
+print()
+
+// Benchmark 2: Factorial (recursion)
+fn factorial(n) {
+    if (n <= 1) {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("2. Factorial(20)...")
+const fact_result = factorial(20)
+print("   Result:", fact_result)
+print()
+
+// Benchmark 3: Prime checking (loops)
+fn isPrime(n) {
+    if (n < 2) return false
+    if (n == 2) return true
+    if (n % 2 == 0) return false
+    
+    var i = 3
+    while (i * i <= n) {
+        if (n % i == 0) {
+            return false
+        }
+        i = i + 2
+    }
+    return true
+}
+
+print("3. Count primes up to 10000...")
+var primeCount = 0
+var num = 2
+while (num < 10000) {
+    if (isPrime(num)) {
+        primeCount = primeCount + 1
+    }
+    num = num + 1
+}
+print("   Prime count:", primeCount)
+print()
+
+// Benchmark 4: Array operations
+print("4. Array operations (100000 iterations)...")
+var sum = 0
+var i = 0
+while (i < 100000) {
+    sum = sum + i
+    i = i + 1
+}
+print("   Sum:", sum)
+print()
+
+// Benchmark 5: Nested loops
+print("5. Nested loops (1000x1000)...")
+var total = 0
+var outer = 0
+while (outer < 1000) {
+    var inner = 0
+    while (inner < 1000) {
+        total = total + 1
+        inner = inner + 1
+    }
+    outer = outer + 1
+}
+print("   Total:", total)
+print()
+
+// Benchmark 6: Function calls
+fn add(a, b) { return a + b }
+fn multiply(a, b) { return a * b }
+
+print("6. Function calls (100000 iterations)...")
+var result = 0
+var j = 0
+while (j < 100000) {
+    result = add(multiply(j, 2), 1)
+    j = j + 1
+}
+print("   Result:", result)
+print()
+
+// Benchmark 7: Arithmetic operations
+print("7. Arithmetic operations (1000000 iterations)...")
+var arith = 0
+var k = 0
+while (k < 1000000) {
+    arith = arith + k * 2 - 1
+    k = k + 1
+}
+print("   Result:", arith)
+print()
+
+// Benchmark 8: Comparisons
+print("8. Comparison operations (1000000 iterations)...")
+var compCount = 0
+var m = 0
+while (m < 1000000) {
+    if (m > 500000) {
+        compCount = compCount + 1
+    }
+    m = m + 1
+}
+print("   Count:", compCount)
+print()
+
+print("✅ Benchmark complete!")

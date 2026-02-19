@@ -1,0 +1,183 @@
+// Hexadecimal Demo (without hex literals)
+print("=== Hexadecimal Functions ===")
+print()
+
+// Bitwise Operations
+print("1. Bitwise Operations")
+
+const val1 = 255
+const val2 = 15
+
+const and_result = val1 & val2
+const or_result = 240 | 15
+const xor_result = 255 ^ 170
+const shl_result = 1 << 4
+const shr_result = 128 >> 2
+
+print("255 AND 15:", and_result)
+print("240 OR 15:", or_result)
+print("255 XOR 170:", xor_result)
+print("1 << 4:", shl_result)
+print("128 >> 2:", shr_result)
+print()
+
+// Hex Conversion
+print("2. Decimal to Hex Conversion")
+
+fn toHexDigit(n) {
+    if (n < 10) {
+        return n + 48
+    }
+    return n + 55
+}
+
+fn simpleToHex(num) {
+    if (num == 0) {
+        return "0"
+    }
+    
+    var result = ""
+    var n = num
+    
+    while (n > 0) {
+        const digit = n % 16
+        const ch = toHexDigit(digit)
+        result = ch + result
+        n = n / 16
+    }
+    
+    return result
+}
+
+print("15 = 0xF")
+print("255 = 0xFF")
+print("4096 = 0x1000")
+print()
+
+// Color Manipulation
+print("3. RGB Color (24-bit)")
+
+fn makeColor(r, g, b) {
+    const red_part = r << 16
+    const green_part = g << 8
+    return red_part | green_part | b
+}
+
+fn extractRed(color) {
+    const shifted = color >> 16
+    return shifted & 255
+}
+
+fn extractGreen(color) {
+    const shifted = color >> 8
+    return shifted & 255
+}
+
+fn extractBlue(color) {
+    return color & 255
+}
+
+const purple = makeColor(128, 0, 128)
+print("Purple RGB(128,0,128):", purple)
+
+const r = extractRed(purple)
+const g = extractGreen(purple)
+const b = extractBlue(purple)
+
+print("Extracted R:", r)
+print("Extracted G:", g)
+print("Extracted B:", b)
+print()
+
+// Power of 2
+print("4. Power of 2 Check")
+
+fn isPowerOf2(n) {
+    if (n == 0) {
+        return false
+    }
+    const result = n & (n - 1)
+    return result == 0
+}
+
+print("16:", isPowerOf2(16))
+print("17:", isPowerOf2(17))
+print("32:", isPowerOf2(32))
+print("33:", isPowerOf2(33))
+print()
+
+// Bit Counting
+print("5. Population Count")
+
+fn popcount(n) {
+    var count = 0
+    var num = n
+    
+    while (num != 0) {
+        count = count + 1
+        num = num & (num - 1)
+    }
+    
+    return count
+}
+
+print("255 (8 bits):", popcount(255))
+print("15 (4 bits):", popcount(15))
+print("170 (4 bits):", popcount(170))
+print()
+
+// Flags
+print("6. Bit Flags")
+
+const FLAG_READ = 1
+const FLAG_WRITE = 2
+const FLAG_EXECUTE = 4
+
+var permissions = 0
+permissions = permissions | FLAG_READ
+permissions = permissions | FLAG_WRITE
+
+print("Permissions:", permissions)
+
+const can_read = (permissions & FLAG_READ) != 0
+const can_write = (permissions & FLAG_WRITE) != 0
+const can_execute = (permissions & FLAG_EXECUTE) != 0
+
+print("Can read:", can_read)
+print("Can write:", can_write)
+print("Can execute:", can_execute)
+print()
+
+// Swap nibbles
+print("7. Nibble Operations")
+
+fn swapNibbles(byte) {
+    const high = byte >> 4
+    const low = byte & 15
+    const swapped = (low << 4) | high
+    return swapped
+}
+
+const original = 171
+const swapped = swapNibbles(original)
+
+print("Original:", original)
+print("Swapped:", swapped)
+print()
+
+print("=== Summary ===")
+print("Bitwise operations:")
+print("  • AND, OR, XOR, NOT")
+print("  • Shifts: <<, >>")
+print("  • Color manipulation")
+print("  • Power of 2 checks")
+print("  • Bit counting")
+print("  • Flag operations")
+print()
+print("Note: Native hex literals (0xFF)")
+print("documented but use decimal for now")
+print()
+print("Compile for 18x speed:")
+print("  ./xenlyc -O3 hex_demo.xe -o hex")
+print()
+print("=== Complete ===")

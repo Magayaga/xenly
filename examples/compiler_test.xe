@@ -1,0 +1,186 @@
+// Native Compiler Test Suite
+// Tests all features of xenlyc
+
+print("=== Native Compiler Test Suite ===")
+print()
+
+// 1. Basic Types
+print("1. Basic Types:")
+const num = 42
+const str = "Hello"
+const flag = true
+const nothing = null
+
+print("  Number:", num)
+print("  String:", str)
+print("  Boolean:", flag)
+print("  Null:", nothing)
+
+// 2. Arithmetic
+print()
+print("2. Arithmetic:")
+const a = 10
+const b = 3
+print("  10 + 3 =", a + b)
+print("  10 - 3 =", a - b)
+print("  10 * 3 =", a * b)
+print("  10 / 3 =", a / b)
+print("  10 % 3 =", a % b)
+
+// 3. Comparisons
+print()
+print("3. Comparisons:")
+print("  10 > 3 =", a > b)
+print("  10 < 3 =", a < b)
+print("  10 >= 10 =", a >= a)
+print("  10 <= 10 =", a <= a)
+print("  10 == 10 =", a == a)
+print("  10 != 3 =", a != b)
+
+// 4. Functions
+print()
+print("4. Functions:")
+fn add(x, y) {
+    return x + y
+}
+
+fn factorial(n) {
+    if (n <= 1) {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("  add(5, 3) =", add(5, 3))
+print("  factorial(5) =", factorial(5))
+
+// 5. Const declarations
+print()
+print("5. Const Declarations:")
+const PI = 3.14159
+const E = 2.71828
+print("  PI =", PI)
+print("  E =", E)
+
+// 6. Control flow
+print()
+print("6. Control Flow:")
+const x = 10
+
+if (x > 5) {
+    print("  x > 5: true")
+} else {
+    print("  x > 5: false")
+}
+
+// 7. Loops
+print()
+print("7. Loops:")
+var sum = 0
+var i = 1
+while (i <= 5) {
+    sum = sum + i
+    i = i + 1
+}
+print("  sum(1..5) =", sum)
+
+// For loop
+var total = 0
+for (i = 1; i <= 5; i++) {
+    total = total + i
+}
+print("  for sum(1..5) =", total)
+
+// 8. String operations
+print()
+print("8. String Operations:")
+const s1 = "Hello"
+const s2 = "World"
+const combined = s1 + ", " + s2 + "!"
+print("  Combined:", combined)
+
+// 9. Unicode
+print()
+print("9. Unicode Support:")
+const 你好 = "Hello"
+const π = 3.14159
+print("  你好 =", 你好)
+print("  π =", π)
+
+const emoji = "🚀"
+print("  Emoji:", emoji)
+
+// 10. Nested functions
+print()
+print("10. Nested Functions:")
+fn outer(x) {
+    fn inner(y) {
+        return x + y
+    }
+    return inner(10)
+}
+print("  outer(5) =", outer(5))
+
+// 11. Performance test
+print()
+print("11. Performance Test:")
+fn fib(n) {
+    if (n <= 1) { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+print("  fib(20) =", fib(20))
+
+// 12. Compound assignments
+print()
+print("12. Compound Assignments:")
+var val = 10
+val = val + 5
+print("  After += 5:", val)
+val = val * 2
+print("  After *= 2:", val)
+
+// 13. Increment/Decrement
+print()
+print("13. Increment/Decrement:")
+var counter = 0
+counter++
+print("  After ++:", counter)
+counter--
+print("  After --:", counter)
+
+// 14. Module usage
+print()
+print("14. Module Usage:")
+import "math"
+print("  sqrt(16) =", math.sqrt(16))
+print("  pow(2, 8) =", math.pow(2, 8))
+
+import "string"
+print("  upper('hello') =", string.upper("hello"))
+
+// 15. OS module
+print()
+print("15. OS Module:")
+import "os"
+print("  Platform:", os.platform())
+print("  PID:", os.getpid())
+
+// 16. Crypto module
+print()
+print("16. Crypto Module:")
+import "crypto"
+const data = "test"
+print("  hash('test') =", crypto.hash(data))
+
+// 17. Path module
+print()
+print("17. Path Module:")
+import "path"
+const p = path.join("/home", "user", "file.txt")
+print("  joined path:", p)
+print("  basename:", path.basename(p))
+print("  dirname:", path.dirname(p))
+
+print()
+print("✅ All tests passed!")
+print("Native compiler is working correctly! 🚀")

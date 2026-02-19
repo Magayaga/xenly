@@ -1,0 +1,235 @@
+// ═══════════════════════════════════════════════════════════════════
+// Functional Programming: Pattern Matching
+// ═══════════════════════════════════════════════════════════════════
+
+print("=== Pattern Matching with match ===")
+
+// ─── Basic Pattern Matching ──────────────────────────────────────────
+
+print("\n=== Matching Literals ===")
+
+const grade = 85
+
+const letterGrade = match grade {
+    100 => "Perfect!",
+    85  => "B",
+    70  => "C",
+    _   => "Other grade"
+}
+
+print("Grade", grade, "=", letterGrade)
+
+// String matching
+const color = "red"
+
+const meaning = match color {
+    "red"   => "Stop",
+    "yellow" => "Caution",
+    "green" => "Go",
+    _       => "Unknown color"
+}
+
+print("Color", color, "means:", meaning)
+
+// ─── Matching with ADTs ──────────────────────────────────────────────
+
+print("\n=== Matching Option Types ===")
+
+enum Option {
+    Some(value) |
+    None
+}
+
+// Function that uses pattern matching on Option
+fn optionToString(opt) {
+    return match opt {
+        Some(val) => "Value: " + string.toString(val),
+        None      => "No value",
+        _         => "Unknown option"
+    }
+}
+
+const some42 = Some(42)
+const nothing = None
+
+print(optionToString(some42))    # "Value: 42"
+print(optionToString(nothing))   # "No value"
+
+// ─── Matching Result Types ───────────────────────────────────────────
+
+print("\n=== Matching Result Types ===")
+
+enum Result {
+    Ok(value) |
+    Err(message)
+}
+
+fn handleResult(res) {
+    return match res {
+        Ok(val)  => "Success: " + string.toString(val),
+        Err(msg) => "Error: " + msg,
+        _        => "Unknown result"
+    }
+}
+
+const success = Ok("Data loaded")
+const failure = Err("Connection failed")
+
+print(handleResult(success))   # "Success: Data loaded"
+print(handleResult(failure))   # "Error: Connection failed"
+
+// ─── Pattern Matching with Destructuring ─────────────────────────────
+
+print("\n=== Destructuring Patterns ===")
+
+// Binary tree
+enum Tree {
+    Leaf(value) |
+    Branch(left, right)
+}
+
+// Count nodes in tree using pattern matching
+fn countNodes(tree) {
+    return match tree {
+        Leaf(val)       => 1,
+        Branch(l, r)    => countNodes(l) + countNodes(r),
+        _               => 0
+    }
+}
+
+const myTree = Branch(
+    Branch(Leaf(1), Leaf(2)),
+    Leaf(3)
+)
+
+const nodeCount = countNodes(myTree)
+print("Tree has", nodeCount, "leaf nodes")
+
+// ─── Complex Pattern Matching ────────────────────────────────────────
+
+print("\n=== Complex Patterns ===")
+
+// List type
+enum List {
+    Cons(head, tail) |
+    Nil
+}
+
+// Calculate list length using pattern matching
+fn listLength(list) {
+    return match list {
+        Nil           => 0,
+        Cons(h, tail) => 1 + listLength(tail),
+        _             => 0
+    }
+}
+
+// Build list [1, 2, 3, 4]
+const myList = Cons(1, Cons(2, Cons(3, Cons(4, Nil))))
+
+print("List length:", listLength(myList))
+
+// Sum elements using pattern matching
+fn sumList(list) {
+    return match list {
+        Nil           => 0,
+        Cons(h, tail) => h + sumList(tail),
+        _             => 0
+    }
+}
+
+print("List sum:", sumList(myList))
+
+// ─── State Machine with Pattern Matching ─────────────────────────────
+
+print("\n=== State Machine ===")
+
+enum TrafficLight {
+    Red |
+    Yellow |
+    Green
+}
+
+fn nextLight(current) {
+    return match current {
+        Red    => Green,
+        Yellow => Red,
+        Green  => Yellow,
+        _      => Red
+    }
+}
+
+fn canGo(light) {
+    return match light {
+        Green => true,
+        _     => false
+    }
+}
+
+const light = Red
+const next = nextLight(light)
+
+print("Current light:", light)
+print("Next light:", next)
+print("Can go?", canGo(light))
+print("Can go after next?", canGo(next))
+
+// ─── HTTP Status Code Example ────────────────────────────────────────
+
+print("\n=== HTTP Status Codes ===")
+
+enum HttpStatus {
+    Ok |
+    NotFound |
+    ServerError(details) |
+    BadRequest(reason)
+}
+
+fn handleResponse(status) {
+    return match status {
+        Ok                  => "Request successful",
+        NotFound            => "Resource not found",
+        ServerError(det)    => "Server error: " + det,
+        BadRequest(reason)  => "Bad request: " + reason,
+        _                   => "Unknown status"
+    }
+}
+
+const responses = [
+    Ok,
+    NotFound,
+    ServerError("Database connection lost"),
+    BadRequest("Missing required field 'email'")
+]
+
+print("HTTP responses:")
+var i = 0
+for (i = 0; i < array.length(responses); i++) {
+    const response = responses[i]
+    print("  ", handleResponse(response))
+}
+
+// ─── Safe Division with Pattern Matching ─────────────────────────────
+
+print("\n=== Safe Division ===")
+
+fn safeDivide(a, b) {
+    if (b == 0) {
+        return Err("Division by zero")
+    }
+    return Ok(a / b)
+}
+
+fn divideAndFormat(a, b) {
+    const result = safeDivide(a, b)
+    return match result {
+        Ok(value) => string.toString(a) + " / " + string.toString(b) + " = " + string.toString(value),
+        Err(msg)  => "Error: " + msg,
+        _         => "Unknown error"
+    }
+}
+
+print(divideAndFormat(10, 2))   # "10 / 2 = 5"
+print(divideAndFormat(10, 0))   # "Error: Division by zero"
+
+print("\n✓ Pattern matching examples complete")

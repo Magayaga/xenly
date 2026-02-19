@@ -1,0 +1,12 @@
+// Test assignment
+print("Step 1")
+
+enum Option {
+    Some(value)
+}
+
+print("Step 2")
+var someVal = Some(42)
+
+print("Step 3: someVal =", someVal)
+print("Done")

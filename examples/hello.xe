@@ -1,4 +1,4 @@
-# ─── Hello World ─────────────────────────────────────────
-# The simplest Xenly program
+// ─── Hello World ─────────────────────────────────────────
+// The simplest Xenly program
 
 print("Hello, World!")

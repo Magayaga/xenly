@@ -1,13 +1,4 @@
 /*
- * XENLY - high-level and general-purpose programming language
- * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
- *
- * It is initially written in C programming language.
- *
- * It is available for Linux and macOS operating systems.
- *
- */
-/*
  * codegen.c  —  Xenly AST  →  x86-64 AT&T assembly (System V AMD64 ABI)
  *
  * Design contract:
@@ -215,11 +206,12 @@ static void emit_expr(CG *cg, ASTNode *node) {
          * eval left → if falsy jump to end (result = left)
          * eval right → result = right                          */
         if (strcmp(op, "and") == 0) {
-            char lbl_end[64];
-            fresh_label(cg, lbl_end, sizeof(lbl_end));
+            char lbl_end[64], lbl_done[64];
+            int seq = cg->label_seq++;
+            snprintf(lbl_end,  sizeof(lbl_end),  ".Lxly_%d_and_end",  seq);
+            snprintf(lbl_done, sizeof(lbl_done), ".Lxly_%d_and_done", seq);
 
             emit_expr(cg, node->children[0]);          /* left → %rax */
-            /* spill left to stack; test truthiness; branch */
             emit(cg, "    pushq   %%rax");             /* [left] on stack */
             emit(cg, "    movq    %%rax, %%rdi");
             emit(cg, "    call    xly_truthy");        /* eax = 0|1 */
@@ -228,10 +220,10 @@ static void emit_expr(CG *cg, ASTNode *node) {
             /* truthy: discard left, eval right */
             emit(cg, "    addq    $8, %%rsp");         /* pop left (discard) */
             emit_expr(cg, node->children[1]);          /* right → %rax */
-            emit(cg, "    jmp     .Lxly_and_done_%d", cg->label_seq);
+            emit(cg, "    jmp     %s", lbl_done);
             emit(cg, "%s:", lbl_end);                  /* falsy exit: left still on stack */
             emit(cg, "    popq    %%rax");             /* restore left into %rax */
-            emit(cg, ".Lxly_and_done_%d:", cg->label_seq++);
+            emit(cg, "%s:", lbl_done);
             break;
         }
 
@@ -239,8 +231,10 @@ static void emit_expr(CG *cg, ASTNode *node) {
          * eval left → if truthy jump to end (result = left)
          * eval right → result = right                          */
         if (strcmp(op, "or") == 0) {
-            char lbl_end[64];
-            fresh_label(cg, lbl_end, sizeof(lbl_end));
+            char lbl_end[64], lbl_done[64];
+            int seq = cg->label_seq++;
+            snprintf(lbl_end,  sizeof(lbl_end),  ".Lxly_%d_or_end",  seq);
+            snprintf(lbl_done, sizeof(lbl_done), ".Lxly_%d_or_done", seq);
 
             emit_expr(cg, node->children[0]);
             emit(cg, "    pushq   %%rax");
@@ -250,10 +244,10 @@ static void emit_expr(CG *cg, ASTNode *node) {
             emit(cg, "    jnz     %s", lbl_end);       /* truthy → keep left */
             emit(cg, "    addq    $8, %%rsp");
             emit_expr(cg, node->children[1]);
-            emit(cg, "    jmp     .Lxly_or_done_%d", cg->label_seq);
+            emit(cg, "    jmp     %s", lbl_done);
             emit(cg, "%s:", lbl_end);
             emit(cg, "    popq    %%rax");
-            emit(cg, ".Lxly_or_done_%d:", cg->label_seq++);
+            emit(cg, "%s:", lbl_done);
             break;
         }
 
@@ -348,23 +342,86 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 emit(cg, "    call    xly_num");
             }
         } else {
-            /* Slow path for other ops: eval, push, call runtime function */
-            emit_expr(cg, node->children[0]);          /* left  → %rax */
-            emit(cg, "    pushq   %%rax");             /* spill left */
-            emit_expr(cg, node->children[1]);          /* right → %rax */
-            emit(cg, "    movq    %%rax, %%rsi");      /* rsi = right */
-            emit(cg, "    popq    %%rdi");             /* rdi = left  */
+            /* ── Comparisons and other ops ─────────────────────────────────── */
+            int is_comparison = (strcmp(op,"<") == 0 || strcmp(op,">") == 0 || 
+                                strcmp(op,"<=") == 0 || strcmp(op,">=") == 0 ||
+                                strcmp(op,"==") == 0 || strcmp(op,"!=") == 0);
+            
+            if (is_comparison) {
+                /* OPTIMIZATION: Unboxed comparisons for numbers */
+                if (node->children[0]->type == NODE_NUMBER && 
+                    node->children[1]->type == NODE_NUMBER) {
+                    /* Compile-time constant folding */
+                    double left_val = node->children[0]->num_value;
+                    double right_val = node->children[1]->num_value;
+                    int result;
+                    if      (strcmp(op,"<") == 0)  result = left_val < right_val;
+                    else if (strcmp(op,">") == 0)  result = left_val > right_val;
+                    else if (strcmp(op,"<=") == 0) result = left_val <= right_val;
+                    else if (strcmp(op,">=") == 0) result = left_val >= right_val;
+                    else if (strcmp(op,"==") == 0) result = left_val == right_val;
+                    else                           result = left_val != right_val;
+                    
+                    emit(cg, "    movl    $%d, %%edi", result);
+                    emit(cg, "    call    xly_bool");
+                } else {
+                    /* Runtime unboxed comparison */
+                    char lbl_slow[64], lbl_end[64];
+                    fresh_label(cg, lbl_slow, sizeof(lbl_slow));
+                    fresh_label(cg, lbl_end, sizeof(lbl_end));
+                    
+                    emit_expr(cg, node->children[0]);
+                    emit(cg, "    pushq   %%rax");
+                    emit_expr(cg, node->children[1]);
+                    emit(cg, "    movq    %%rax, %%rsi");
+                    emit(cg, "    popq    %%rdi");
+                    
+                    /* Check if both are numbers */
+                    emit(cg, "    cmpl    $0, (%%rdi)");
+                    emit(cg, "    jne     %s", lbl_slow);
+                    emit(cg, "    cmpl    $0, (%%rsi)");
+                    emit(cg, "    jne     %s", lbl_slow);
+                    
+                    /* Fast path: unbox and compare */
+                    emit(cg, "    movsd   8(%%rdi), %%xmm0");
+                    emit(cg, "    movsd   8(%%rsi), %%xmm1");
+                    emit(cg, "    ucomisd %%xmm1, %%xmm0");
+                    
+                    if (strcmp(op,"<") == 0)       emit(cg, "    setb    %%al");
+                    else if (strcmp(op,">") == 0)  emit(cg, "    seta    %%al");
+                    else if (strcmp(op,"<=") == 0) emit(cg, "    setbe   %%al");
+                    else if (strcmp(op,">=") == 0) emit(cg, "    setae   %%al");
+                    else if (strcmp(op,"==") == 0) emit(cg, "    sete    %%al");
+                    else                           emit(cg, "    setne   %%al");
+                    
+                    emit(cg, "    movzbl  %%al, %%edi");
+                    emit(cg, "    call    xly_bool");
+                    emit(cg, "    jmp     %s", lbl_end);
+                    
+                    /* Slow path */
+                    emit(cg, "%s:", lbl_slow);
+                    const char *fn = NULL;
+                    if      (strcmp(op,"==") == 0) fn = "xly_eq";
+                    else if (strcmp(op,"!=") == 0) fn = "xly_neq";
+                    else if (strcmp(op,"<")  == 0) fn = "xly_lt";
+                    else if (strcmp(op,">")  == 0) fn = "xly_gt";
+                    else if (strcmp(op,"<=") == 0) fn = "xly_lte";
+                    else if (strcmp(op,">=") == 0) fn = "xly_gte";
+                    if (fn) emit(cg, "    call    %s", fn);
+                    emit(cg, "%s:", lbl_end);
+                }
+            } else {
+                /* Slow path for other ops */
+                emit_expr(cg, node->children[0]);
+                emit(cg, "    pushq   %%rax");
+                emit_expr(cg, node->children[1]);
+                emit(cg, "    movq    %%rax, %%rsi");
+                emit(cg, "    popq    %%rdi");
 
-            const char *fn = NULL;
-            if      (strcmp(op,"%")  == 0) fn = "xly_mod";
-            else if (strcmp(op,"==") == 0) fn = "xly_eq";
-            else if (strcmp(op,"!=") == 0) fn = "xly_neq";
-            else if (strcmp(op,"<")  == 0) fn = "xly_lt";
-            else if (strcmp(op,">")  == 0) fn = "xly_gt";
-            else if (strcmp(op,"<=") == 0) fn = "xly_lte";
-            else if (strcmp(op,">=") == 0) fn = "xly_gte";
-
-            if (fn) emit(cg, "    call    %s", fn);
+                const char *fn = NULL;
+                if (strcmp(op,"%") == 0) fn = "xly_mod";
+                if (fn) emit(cg, "    call    %s", fn);
+            }
         }
         break;
     }
@@ -379,16 +436,28 @@ static void emit_expr(CG *cg, ASTNode *node) {
 
     /* ── user function call ──────────────────────────────────────────
      * Eval args left-to-right, push each.  Then pop into SysV regs
-     * in the right order.  Up to 6 args supported.                    */
+     * in the right order.  The SysV AMD64 ABI passes the first 6
+     * arguments in registers; args beyond 6 are unsupported (stack
+     * passing requires a more complex ABI-conformant prologue).      */
     case NODE_FN_CALL: {
         int nargs = (int)node->child_count;
+        /* Clamp to 6: more than 6 args requires stack-based passing which
+         * we don't yet implement. Emit a codegen error but continue. */
+        if (nargs > 6) {
+            fprintf(stderr,
+                "[xenlyc] warning: function '%s' called with %d args; "
+                "only 6 args supported via registers — extra args ignored.\n",
+                node->str_value, nargs);
+            cg->had_error = 1;
+            nargs = 6;
+        }
+        static const char *regs[] = {"rdi","rsi","rdx","rcx","r8","r9"};
         for (int i = 0; i < nargs; i++) {
             emit_expr(cg, node->children[i]);
             emit(cg, "    pushq   %%rax");
         }
-        /* stack (top→bottom): argN-1 … arg1 arg0
-         * pop in order: first pop = argN-1 → sysv_regs[N-1], …, last pop = arg0 → rdi */
-        static const char *regs[] = {"rdi","rsi","rdx","rcx","r8","r9"};
+        /* Stack (top→bottom): arg[n-1] … arg[1] arg[0]
+         * Pop in reverse so arg[0] lands in rdi, arg[1] in rsi, etc. */
         for (int i = nargs - 1; i >= 0; i--)
             emit(cg, "    popq    %%%s", regs[i]);
         emit(cg, "    call    .Lxly_fn_%s", node->str_value);
@@ -400,31 +469,34 @@ static void emit_expr(CG *cg, ASTNode *node) {
      *                            XlyVal **args, size_t argc)
      *            rdi             rsi             rdx              rcx
      *
-     * We build the arg array on the stack (contiguous, first-arg at
-     * lowest address).  Eval args left-to-right pushing each; then
-     * compute the base pointer.                                        */
+     * We allocate space for the arg array on the stack using sub+store
+     * (not push) so alignment is deterministic regardless of call nesting.
+     * Layout: sub N_aligned from rsp, store args[0..argc-1] at rsp[0..n-1].
+     * N_aligned = ((argc*8) + 15) & ~15  ensures 16-byte alignment is kept.  */
     case NODE_METHOD_CALL: {
         const char *mod_name = node->children[0]->str_value;
         const char *fn_name  = node->str_value;
         int argc = (int)node->child_count - 1;   /* children[1..] are args */
 
-        /* Eval args and push in REVERSE order so arg[0] ends up at lowest address.
-         * After all pushes, rsp points to arg[0], rsp+8 to arg[1], etc. */
-        for (int i = argc; i >= 1; i--) {
-            emit_expr(cg, node->children[i]);
-            emit(cg, "    pushq   %%rax");
-        }
-        /* After argc pushes, rsp points to arg[0] */
-        int pad = (argc & 1) ? 8 : 0;
-        if (pad) emit(cg, "    subq    $8, %%rsp");
+        /* Round argc*8 up to multiple of 16 to preserve 16-byte alignment */
+        int slot_bytes  = argc * 8;
+        int alloc_bytes = argc > 0 ? ((slot_bytes + 15) & ~15) : 0;
 
-        /* rdx = &args[0] = rsp + pad */
-        if (argc > 0) {
-            emit(cg, "    movq    %%rsp, %%rdx");
-            if (pad) emit(cg, "    addq    $%d, %%rdx", pad);
-        } else {
-            emit(cg, "    xorq    %%rdx, %%rdx");  /* NULL */
+        if (alloc_bytes > 0)
+            emit(cg, "    subq    $%d, %%rsp", alloc_bytes);
+
+        /* Eval each arg left-to-right, store directly into the reserved slots.
+         * Slot 0 (lowest address) = arg[0], slot 1 = arg[1], etc. */
+        for (int i = 0; i < argc; i++) {
+            emit_expr(cg, node->children[i + 1]);
+            emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
         }
+
+        /* rdx = pointer to args array (or NULL if no args) */
+        if (argc > 0)
+            emit(cg, "    movq    %%rsp, %%rdx");
+        else
+            emit(cg, "    xorq    %%rdx, %%rdx");
 
         const char *ml = intern_string(cg, mod_name);
         const char *fl = intern_string(cg, fn_name);
@@ -433,9 +505,8 @@ static void emit_expr(CG *cg, ASTNode *node) {
         emit(cg, "    movl    $%d, %%ecx", argc);
         emit(cg, "    call    xly_call_module");
 
-        /* clean up: argc*8 + pad */
-        int cleanup = argc * 8 + pad;
-        if (cleanup) emit(cg, "    addq    $%d, %%rsp", cleanup);
+        if (alloc_bytes > 0)
+            emit(cg, "    addq    $%d, %%rsp", alloc_bytes);
         break;
     }
 
@@ -465,6 +536,47 @@ static void emit_expr(CG *cg, ASTNode *node) {
         break;
     }
 
+    /* ── array literal [expr, expr, ...] ───────────────────────────── */
+    case NODE_ARRAY_LITERAL: {
+        int nelems = (int)node->child_count;
+
+        /* Use sub+store (not push) so alignment is deterministic.
+         * xly_array_create(XlyVal **elements, size_t count): rdi, rsi */
+        int alloc_bytes = nelems > 0 ? (((nelems * 8) + 15) & ~15) : 0;
+
+        if (alloc_bytes > 0)
+            emit(cg, "    subq    $%d, %%rsp", alloc_bytes);
+
+        /* Eval each element left-to-right, store at rsp[i*8] */
+        for (int i = 0; i < nelems; i++) {
+            emit_expr(cg, node->children[i]);
+            emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
+        }
+
+        if (nelems > 0)
+            emit(cg, "    movq    %%rsp, %%rdi");
+        else
+            emit(cg, "    xorq    %%rdi, %%rdi");  /* NULL for empty */
+        emit(cg, "    movq    $%d, %%rsi", nelems);
+        emit(cg, "    call    xly_array_create");
+
+        if (alloc_bytes > 0)
+            emit(cg, "    addq    $%d, %%rsp", alloc_bytes);
+        break;
+    }
+
+    /* ── array/string indexing arr[index] ──────────────────────────── */
+    case NODE_INDEX: {
+        /* children[0] = array/string, children[1] = index */
+        emit_expr(cg, node->children[0]);  /* array in rax */
+        emit(cg, "    pushq   %%rax");
+        emit_expr(cg, node->children[1]);  /* index in rax */
+        emit(cg, "    movq    %%rax, %%rsi");  /* index to rsi */
+        emit(cg, "    popq    %%rdi");         /* array to rdi */
+        emit(cg, "    call    xly_index");
+        break;
+    }
+
     /* ── fallback ──────────────────────────────────────────────────── */
     default:
         emit(cg, "    call    xly_null");
@@ -479,8 +591,9 @@ static void emit_stmt(CG *cg, ASTNode *node) {
 
     switch (node->type) {
 
-    /* ── var decl ──────────────────────────────────────────────────── */
-    case NODE_VAR_DECL: {
+    /* ── var/const decl ────────────────────────────────────────────── */
+    case NODE_VAR_DECL:
+    case NODE_CONST_DECL: {
         int off = var_declare(cg, node->str_value);
         if (node->child_count > 0)
             emit_expr(cg, node->children[0]);
@@ -545,32 +658,27 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         /*
          * xly_print(XlyVal **vals, size_t n)   — rdi, rsi
          *
-         * Push args in REVERSE order so arg[0] lands at rsp (lowest
-         * address).  Layout after all pushes:
-         *   rsp+0:       arg[0]   ← rdi
-         *   rsp+8:       arg[1]
-         *   …
-         *   rsp+(n-1)*8: arg[n-1]
-         *
-         * Alignment: n pushes + optional pad.  If n is odd we add a
-         * dummy 8-byte sub first so that rsp is 16-aligned at call.
+         * Use sub+store (not push) so alignment is deterministic.
+         * alloc_bytes = ((n*8) + 15) & ~15 keeps rsp 16-aligned.
          */
         int n = (int)node->child_count;
-        int pad = (n & 1) ? 1 : 0;
-        if (pad) emit(cg, "    subq    $8, %%rsp");
+        int alloc_bytes = n > 0 ? (((n * 8) + 15) & ~15) : 0;
 
-        /* Eval and push in reverse order so arg[0] ends up at rsp */
-        for (int i = n - 1; i >= 0; i--) {
+        if (alloc_bytes > 0)
+            emit(cg, "    subq    $%d, %%rsp", alloc_bytes);
+
+        /* Eval each arg left-to-right, store at rsp[i*8] */
+        for (int i = 0; i < n; i++) {
             emit_expr(cg, node->children[i]);
-            emit(cg, "    pushq   %%rax");
+            emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
         }
-        /* rsp now points directly to arg[0] */
+
         emit(cg, "    movq    %%rsp, %%rdi");
         emit(cg, "    movl    $%d, %%esi", n);
         emit(cg, "    call    xly_print");
-        /* pop args + pad */
-        int cleanup = n * 8 + (pad ? 8 : 0);
-        if (cleanup) emit(cg, "    addq    $%d, %%rsp", cleanup);
+
+        if (alloc_bytes > 0)
+            emit(cg, "    addq    $%d, %%rsp", alloc_bytes);
         break;
     }
 
@@ -798,6 +906,28 @@ static void emit_function(CG *cg, ASTNode *fn) {
     for (size_t i = 0; i < nparams && i < 6; i++) {
         int off = var_declare(cg, fn->params[i].name);
         emit(cg, "    movq    %%%s, %d(%%rbp)", pregs[i], off);
+        
+        /* Handle optional/default parameters */
+        if (fn->params[i].is_optional || fn->params[i].default_value) {
+            char lbl_has_arg[64];
+            fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
+            
+            /* Check if argument is null (not provided) */
+            emit(cg, "    movq    %d(%%rbp), %%rax", off);
+            emit(cg, "    testq   %%rax, %%rax");
+            emit(cg, "    jnz     %s", lbl_has_arg);
+            
+            /* Argument not provided - use default */
+            if (fn->params[i].default_value) {
+                /* Evaluate default value expression */
+                emit_expr(cg, fn->params[i].default_value);
+                emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+            } else {
+                /* Optional without default - already null */
+            }
+            
+            emit(cg, "%s:", lbl_has_arg);
+        }
     }
 
     /* body */
@@ -856,12 +986,22 @@ int codegen(ASTNode *program, const char *outpath) {
         emit(&cg, "%s:", cg.strings[i].label);
         fprintf(cg.out, "    .asciz  \"");
         for (const char *s = cg.strings[i].text; *s; s++) {
-            switch (*s) {
+            unsigned char ch = (unsigned char)*s;
+            switch (ch) {
                 case '\n': fputs("\\n",  cg.out); break;
                 case '\t': fputs("\\t",  cg.out); break;
+                case '\r': fputs("\\r",  cg.out); break;
                 case '\\': fputs("\\\\", cg.out); break;
                 case '"':  fputs("\\\"", cg.out); break;
-                default:   fputc(*s,     cg.out); break;
+                default:
+                    // For UTF-8 multibyte sequences and high bytes, use octal escapes
+                    // This ensures proper encoding in assembly
+                    if (ch >= 0x80 || ch < 0x20) {
+                        fprintf(cg.out, "\\%03o", ch);
+                    } else {
+                        fputc(ch, cg.out);
+                    }
+                    break;
             }
         }
         fputs("\"\n", cg.out);

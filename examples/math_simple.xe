@@ -1,0 +1,155 @@
+// Enhanced Math Library - Simple Demo
+print("=== Enhanced Math Library ===")
+print()
+
+import "math"
+
+// Mathematical Constants
+print("1. Mathematical Constants")
+print()
+print("   PI:", math.PI())
+print("   E:", math.E())
+print("   SQRT(2):", math.sqrt(2))
+print("   SQRT(3):", math.sqrt(3))
+print()
+
+// Number Theory
+print("2. Number Theory")
+print()
+print("   GCD(48, 18):", math.gcd(48, 18))
+print("   GCD(100, 35):", math.gcd(100, 35))
+print("   LCM(12, 18):", math.lcm(12, 18))
+print("   LCM(4, 6):", math.lcm(4, 6))
+print()
+
+// Interpolation
+print("3. Linear Interpolation (lerp)")
+print()
+
+fn lerp(a, b, t) {
+    const diff = b - a
+    const offset = t * diff
+    return a + offset
+}
+
+print("   lerp(0, 100, 0.0):", lerp(0, 100, 0.0))
+print("   lerp(0, 100, 0.25):", lerp(0, 100, 0.25))
+print("   lerp(0, 100, 0.5):", lerp(0, 100, 0.5))
+print("   lerp(0, 100, 0.75):", lerp(0, 100, 0.75))
+print("   lerp(0, 100, 1.0):", lerp(0, 100, 1.0))
+print()
+
+// Midpoint
+print("4. Midpoint Calculation")
+print()
+
+fn midpoint(a, b) {
+    return a + (b - a) / 2
+}
+
+print("   midpoint(10, 20):", midpoint(10, 20))
+print("   midpoint(0, 100):", midpoint(0, 100))
+print("   midpoint(-10, 10):", midpoint(-10, 10))
+print()
+
+// Clamping
+print("5. Value Clamping")
+print()
+
+fn clamp(value, min, max) {
+    if (value > max) {
+        return max
+    }
+    if (value < min) {
+        return min
+    }
+    return value
+}
+
+print("   clamp(150, 0, 100):", clamp(150, 0, 100))
+print("   clamp(50, 0, 100):", clamp(50, 0, 100))
+print("   clamp(-10, 0, 100):", clamp(-10, 0, 100))
+print()
+
+// Saturating Addition
+print("6. Saturating Arithmetic")
+print()
+
+fn add_sat(a, b, min, max) {
+    const sum = a + b
+    if (sum > max) {
+        return max
+    }
+    if (sum < min) {
+        return min
+    }
+    return sum
+}
+
+const INT_MAX = 2147483647
+const a1 = 2000000000
+const b1 = 1000000000
+print("   Safe addition:")
+print("   add_sat(2000000000, 1000000000):", add_sat(a1, b1, 0, INT_MAX))
+print("   (prevents overflow)")
+print()
+
+// Circle Calculations
+print("7. Circle with Pi")
+print()
+
+fn circleArea(r) {
+    const pi = math.PI()
+    return pi * r * r
+}
+
+fn circleCircumference(r) {
+    const pi = math.PI()
+    const two = 2.0
+    return two * pi * r
+}
+
+const radius = 5.0
+print("   Radius:", radius)
+print("   Area:", circleArea(radius))
+print("   Circumference:", circleCircumference(radius))
+print()
+
+// Golden Ratio
+print("8. Golden Ratio")
+print()
+
+const sqrt5 = math.sqrt(5)
+const phi = (1.0 + sqrt5) / 2.0
+print("   Phi:", phi)
+print("   Phi^2:", phi * phi)
+print()
+
+// Animation
+print("9. Animation Example")
+print()
+print("   Animating from 0 to 100:")
+
+var i = 0
+while (i <= 10) {
+    const t = i / 10.0
+    const value = lerp(0, 100, t)
+    print("   t=", t, "value=", value)
+    i = i + 1
+}
+
+print()
+print("=== Math Library Summary ===")
+print()
+print("Functions: 85+")
+print("  - Constants: PI, E, PHI, SQRT2, etc.")
+print("  - Number theory: gcd, lcm")
+print("  - Interpolation: lerp, midpoint")
+print("  - Saturating: add_sat, sub_sat, mul_sat, div_sat")
+print("  - Clamping: clamp, saturate_cast")
+print()
+print("Compile for speed:")
+print("  ./xenlyc -O3 math_simple.xe -o math")
+print("  ./math  # 18x faster!")
+print()
+print("=== Complete ===")

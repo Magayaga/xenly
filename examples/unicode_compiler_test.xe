@@ -1,0 +1,126 @@
+// Unicode Native Compiler Test
+// Tests Unicode support in xenlyc
+
+print("=== Unicode Native Compiler Test ===")
+print()
+
+// 1. UTF-8 String Literals
+print("1. UTF-8 String Literals:")
+const greeting = "Hello, 世界! 🌍"
+const emoji = "😀 😎 🚀 🎉 ⭐"
+const multilang = "English, Español, 中文, 日本語, العربية, Русский"
+
+print("  ", greeting)
+print("  ", emoji)
+print("  ", multilang)
+
+// 2. Unicode Identifiers
+print()
+print("2. Unicode Identifiers:")
+const 你好 = "Hello in Chinese"
+const привет = "Hello in Russian"
+const مرحبا = "Hello in Arabic"
+const こんにちは = "Hello in Japanese"
+const π = 3.14159
+
+print("  你好:", 你好)
+print("  привет:", привет)
+print("  こんにちは:", こんにちは)
+print("  π:", π)
+
+// 3. Unicode Escape Sequences
+print()
+print("3. Unicode Escape Sequences:")
+const heart = "\u2764"  // ❤
+const star = "\u2B50"   // ⭐
+const rocket = "\u{1F680}"  // 🚀
+
+print("  Heart:", heart)
+print("  Star:", star)
+print("  Rocket:", rocket)
+
+// 4. Unicode in Functions
+print()
+print("4. Unicode in Functions:")
+fn greet世界(name) {
+    return "你好, " + name + "! 👋"
+}
+
+print("  ", greet世界("Alice"))
+print("  ", greet世界("世界"))
+
+// 5. Mathematical Notation
+print()
+print("5. Mathematical Notation:")
+const τ = 2 * π
+const Δ = 0.001
+const α = 0.5
+
+print("  π =", π)
+print("  τ =", τ)
+print("  Δ =", Δ)
+print("  α =", α)
+
+// 6. Unicode String Concatenation
+print()
+print("6. Unicode String Concatenation:")
+const part1 = "Hello "
+const part2 = "世界"
+const part3 = " 🌍"
+const combined = part1 + part2 + part3
+
+print("  Combined:", combined)
+
+// 7. Emoji in Expressions
+print()
+print("7. Emoji in Expressions:")
+const happy = "😀"
+const cool = "😎"
+const love = "😍"
+
+print("  Happy:", happy)
+print("  Cool:", cool)
+print("  Love:", love)
+
+// 8. Mixed Scripts
+print()
+print("8. Mixed Scripts:")
+const en = "Hello"
+const zh = "你好"
+const ru = "Привет"
+const ar = "مرحبا"
+
+print("  English:", en)
+print("  Chinese:", zh)
+print("  Russian:", ru)
+print("  Arabic:", ar)
+
+// 9. Unicode in Comparisons
+print()
+print("9. Unicode in Comparisons:")
+const x = "世界"
+const y = "世界"
+const z = "hello"
+
+if (x == y) {
+    print("  ✓ Unicode equality works!")
+}
+
+if (x == z) {
+    print("  ✗ This shouldn't print")
+} else {
+    print("  ✓ Unicode inequality works!")
+}
+
+// 10. Unicode in Loops
+print()
+print("10. Unicode in Loops:")
+var count = 0
+for (count = 0; count < 5; count++) {
+    const emojis = ["😀", "😎", "😍", "🤔", "😴"]
+    // Can't use array access in compiler yet
+    print("  Loop iteration:", count + 1)
+}
+
+print()
+print("✅ Native compiler Unicode support works!")

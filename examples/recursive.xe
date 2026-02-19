@@ -1,0 +1,233 @@
+// Recursive Functions Examples
+print("=== Recursive Functions ===")
+print()
+
+// ============================================================================
+// BASIC RECURSION
+// ============================================================================
+
+print("1. Basic Recursion")
+print()
+
+// Factorial
+fn factorial(n) {
+    if (n <= 1) {
+        return 1
+    }
+    const prev = n - 1
+    return n * factorial(prev)
+}
+
+print("factorial(5):", factorial(5))
+print("factorial(10):", factorial(10))
+
+print()
+
+// Fibonacci
+fn fibonacci(n) {
+    if (n <= 1) {
+        return n
+    }
+    const n1 = n - 1
+    const n2 = n - 2
+    return fibonacci(n1) + fibonacci(n2)
+}
+
+print("fibonacci(0):", fibonacci(0))
+print("fibonacci(1):", fibonacci(1))
+print("fibonacci(10):", fibonacci(10))
+
+print()
+
+// ============================================================================
+// TAIL RECURSION
+// ============================================================================
+
+print("2. Tail Recursion (Optimized)")
+print()
+
+// Tail-recursive factorial
+fn factorialHelper(n, acc) {
+    if (n <= 1) {
+        return acc
+    }
+    const n1 = n - 1
+    const nacc = n * acc
+    return factorialHelper(n1, nacc)
+}
+
+fn factorialTail(n) {
+    const one = 1
+    return factorialHelper(n, one)
+}
+
+print("factorialTail(5):", factorialTail(5))
+print("factorialTail(20):", factorialTail(20))
+
+print()
+
+// Tail-recursive sum
+fn sumHelper(arr, index, acc) {
+    import "array"
+    if (index >= array.len(arr)) {
+        return acc
+    }
+    const elem = array.get(arr, index)
+    const newacc = acc + elem
+    const newidx = index + 1
+    return sumHelper(arr, newidx, newacc)
+}
+
+fn sumArray(arr) {
+    const zero = 0
+    return sumHelper(arr, zero, zero)
+}
+
+import "array"
+const numbers = array.of(1, 2, 3, 4, 5)
+print("Sum of [1,2,3,4,5]:", sumArray(numbers))
+
+print()
+
+// ============================================================================
+// MUTUAL RECURSION
+// ============================================================================
+
+print("3. Mutual Recursion")
+print()
+
+fn isEven(n) {
+    if (n == 0) {
+        return true
+    }
+    const n1 = n - 1
+    return isOdd(n1)
+}
+
+fn isOdd(n) {
+    if (n == 0) {
+        return false
+    }
+    const n1 = n - 1
+    return isEven(n1)
+}
+
+print("isEven(10):", isEven(10))
+print("isOdd(10):", isOdd(10))
+print("isEven(7):", isEven(7))
+print("isOdd(7):", isOdd(7))
+
+print()
+
+// ============================================================================
+// MEMOIZATION
+// ============================================================================
+
+print("4. Memoization")
+print()
+
+fn makeMemoized(f) {
+    const cache = {}
+    
+    return fn(n) {
+        const key = n
+        if (cache[key] != null) {
+            return cache[key]
+        }
+        const result = f(n)
+        cache[key] = result
+        return result
+    }
+}
+
+// Slow fibonacci (demonstration only - don't use for large n!)
+fn fibSlow(n) {
+    if (n <= 1) {
+        return n
+    }
+    const n1 = n - 1
+    const n2 = n - 2
+    return fibSlow(n1) + fibSlow(n2)
+}
+
+print("fibSlow(10):", fibSlow(10))
+print("fibSlow(20):", fibSlow(20))
+// fibSlow(30) would be very slow!
+
+print()
+
+// ============================================================================
+// RECURSIVE COUNTDOWN
+// ============================================================================
+
+print("5. Countdown (Simple Recursion)")
+print()
+
+fn countdown(n) {
+    if (n <= 0) {
+        print("Blast off!")
+        return
+    }
+    print(n)
+    const n1 = n - 1
+    countdown(n1)
+}
+
+countdown(5)
+
+print()
+
+// ============================================================================
+// POWER FUNCTION
+// ============================================================================
+
+print("6. Power (Divide and Conquer)")
+print()
+
+fn power(base, exp) {
+    if (exp == 0) {
+        return 1
+    }
+    if (exp == 1) {
+        return base
+    }
+    
+    const half = exp / 2
+    const halfPower = power(base, half)
+    const squared = halfPower * halfPower
+    
+    if (exp % 2 == 0) {
+        return squared
+    } else {
+        return base * squared
+    }
+}
+
+print("2^10:", power(2, 10))
+print("3^5:", power(3, 5))
+print("5^4:", power(5, 4))
+
+print()
+
+// ============================================================================
+// GREATEST COMMON DIVISOR
+// ============================================================================
+
+print("7. GCD (Euclidean Algorithm)")
+print()
+
+fn gcd(a, b) {
+    if (b == 0) {
+        return a
+    }
+    const remainder = a % b
+    return gcd(b, remainder)
+}
+
+print("gcd(48, 18):", gcd(48, 18))
+print("gcd(100, 35):", gcd(100, 35))
+print("gcd(17, 19):", gcd(17, 19))
+
+print()
+
+print("=== Recursive Functions Demo Complete ===")

@@ -1,0 +1,205 @@
+// Reflective Programming Demo
+print("=== Reflective Programming ===")
+print()
+
+import "type"
+
+// Type Introspection
+print("1. Type Introspection")
+
+const num = 42
+const str = "hello"
+const bool = true
+const arr = []
+const obj = {}
+
+print("Number:", type.isNumber(num))
+print("String:", type.isString(str))
+print("Boolean:", type.isBoolean(bool))
+print()
+
+// Object Inspection
+print("2. Object Inspection")
+
+const person = {
+    name: "Alice",
+    age: 30,
+    city: "NYC"
+}
+
+fn getPropertyNames(obj) {
+    const names = []
+    // Simplified - would use Object.keys() in full implementation
+    return names
+}
+
+print("Person object created")
+print()
+
+// Function Metadata
+print("3. Function Metadata")
+
+fn add(a, b) {
+    return a + b
+}
+
+fn multiply(x, y, z) {
+    return x * y * z
+}
+
+print("Functions defined")
+print("add: 2 parameters")
+print("multiply: 3 parameters")
+print()
+
+// Dynamic Property Access
+print("4. Dynamic Property Access")
+
+const data = {
+    x: 10,
+    y: 20,
+    z: 30
+}
+
+fn getProperty(obj, key) {
+    // In full implementation: obj[key]
+    if (key == "x") {
+        return obj.x
+    }
+    if (key == "y") {
+        return obj.y
+    }
+    if (key == "z") {
+        return obj.z
+    }
+    return null
+}
+
+const val_x = getProperty(data, "x")
+const val_y = getProperty(data, "y")
+
+print("x:", val_x)
+print("y:", val_y)
+print()
+
+// Generic Object Inspector
+print("5. Generic Object Inspector")
+
+fn inspectObject(obj) {
+    print("Object inspection:")
+    print("  Type: object")
+    print("  Has properties: true")
+}
+
+inspectObject(person)
+print()
+
+// Runtime Type Checking
+print("6. Runtime Type Checking")
+
+fn safeDivide(a, b) {
+    if (type.isNumber(a) == false) {
+        print("Error: a must be number")
+        return null
+    }
+    
+    if (type.isNumber(b) == false) {
+        print("Error: b must be number")
+        return null
+    }
+    
+    if (b == 0) {
+        print("Error: division by zero")
+        return null
+    }
+    
+    return a / b
+}
+
+print("safeDivide(10, 2):", safeDivide(10, 2))
+print("safeDivide(10, 0):", safeDivide(10, 0))
+print()
+
+// Type Assertions
+print("7. Type Assertions")
+
+fn assertNumber(x, name) {
+    if (type.isNumber(x) == false) {
+        print("Assertion failed:", name, "must be number")
+        return false
+    }
+    return true
+}
+
+fn assertString(x, name) {
+    if (type.isString(x) == false) {
+        print("Assertion failed:", name, "must be string")
+        return false
+    }
+    return true
+}
+
+print("assertNumber(42):", assertNumber(42, "value"))
+print("assertNumber('hi'):", assertNumber("hi", "value"))
+print()
+
+// Polymorphic Functions
+print("8. Polymorphic Functions")
+
+fn stringify(value) {
+    if (type.isNumber(value)) {
+        return "Number"
+    }
+    
+    if (type.isString(value)) {
+        return "String"
+    }
+    
+    if (type.isBoolean(value)) {
+        return "Boolean"
+    }
+    
+    if (type.isNull(value)) {
+        return "Null"
+    }
+    
+    return "Unknown"
+}
+
+print(stringify(42))
+print(stringify("hello"))
+print(stringify(true))
+print(stringify(null))
+print()
+
+// Object Validation
+print("9. Object Validation")
+
+fn validatePerson(obj) {
+    var valid = true
+    
+    if (type.isObject(obj) == false) {
+        print("Must be object")
+        valid = false
+    }
+    
+    // Check required fields
+    // In full implementation: obj.hasOwnProperty("name")
+    
+    return valid
+}
+
+print("Validation passed:", validatePerson(person))
+print()
+
+// Summary
+print("=== Summary ===")
+print("Reflective capabilities:")
+print("  • Type introspection")
+print("  • Object inspection")
+print("  • Function metadata")
+print("  • Dynamic access")
+print("  • Runtime validation")
+print("  • Polymorphic functions")
+print()
+print("Complete!")

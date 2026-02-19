@@ -1,0 +1,278 @@
+// Design by Contract Examples
+print("=== Design by Contract Programming ===")
+print()
+
+// Note: Full contract support (requires/ensures) requires parser implementation
+// This file shows the intended usage patterns
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1. ASSERTIONS (Currently Working)
+// ═══════════════════════════════════════════════════════════════════════════
+print("1. Assertions:")
+
+// Manual assertion pattern
+fn myAssert(condition, message) {
+    if (not condition) {
+        print("ASSERTION FAILED:", message)
+        // In production, would throw error
+    }
+}
+
+fn safeDivide(a, b) {
+    myAssert(b != 0, "Denominator must not be zero")
+    return a / b
+}
+
+print("  safeDivide(10, 2) =", safeDivide(10, 2))
+// safeDivide(10, 0) would fail assertion
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2. PRECONDITION PATTERN
+// ═══════════════════════════════════════════════════════════════════════════
+print("2. Precondition Pattern:")
+
+fn sqrt(x) {
+    // Precondition: x >= 0
+    if (x < 0) {
+        print("PRECONDITION FAILED: sqrt requires x >= 0")
+        return null
+    }
+    
+    import "math"
+    return math.sqrt(x)
+}
+
+print("  sqrt(16) =", sqrt(16))
+print("  sqrt(-1) =", sqrt(-1))  // Fails precondition
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3. POSTCONDITION PATTERN
+// ═══════════════════════════════════════════════════════════════════════════
+print("3. Postcondition Pattern:")
+
+fn absolute(x) {
+    var result = null
+    
+    if (x < 0) {
+        result = 0 - x
+    } else {
+        result = x
+    }
+    
+    // Postcondition: result >= 0
+    if (result < 0) {
+        print("POSTCONDITION FAILED: result must be >= 0")
+    }
+    
+    return result
+}
+
+print("  absolute(5) =", absolute(5))
+print("  absolute(-5) =", absolute(-5))
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. RANGE VALIDATION
+// ═══════════════════════════════════════════════════════════════════════════
+print("4. Range Validation:")
+
+fn clamp(value, min, max) {
+    // Precondition: min <= max
+    if (min > max) {
+        print("PRECONDITION FAILED: min must be <= max")
+        return value
+    }
+    
+    var result = value
+    if (result < min) result = min
+    if (result > max) result = max
+    
+    // Postcondition: min <= result <= max
+    if (result < min or result > max) {
+        print("POSTCONDITION FAILED: result out of range")
+    }
+    
+    return result
+}
+
+print("  clamp(5, 0, 10) =", clamp(5, 0, 10))
+print("  clamp(-5, 0, 10) =", clamp(-5, 0, 10))
+print("  clamp(15, 0, 10) =", clamp(15, 0, 10))
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. ARRAY BOUNDS CHECKING
+// ═══════════════════════════════════════════════════════════════════════════
+print("5. Array Bounds Checking:")
+
+import "array"
+
+fn safeGet(arr, index) {
+    // Preconditions
+    if (arr == null) {
+        print("PRECONDITION FAILED: array must not be null")
+        return null
+    }
+    
+    const len = array.len(arr)
+    if (index < 0 or index >= len) {
+        print("PRECONDITION FAILED: index out of bounds")
+        return null
+    }
+    
+    return array.get(arr, index)
+}
+
+const numbers = array.of(10, 20, 30, 40, 50)
+print("  safeGet(numbers, 2) =", safeGet(numbers, 2))
+print("  safeGet(numbers, 10) =", safeGet(numbers, 10))  // Out of bounds
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. STATE VALIDATION
+// ═══════════════════════════════════════════════════════════════════════════
+print("6. State Validation (Bank Account):")
+
+fn createBankAccount(accountNum, initialBalance) {
+    // Preconditions
+    if (accountNum <= 0) {
+        print("PRECONDITION FAILED: accountNum must be > 0")
+        return null
+    }
+    
+    if (initialBalance < 0) {
+        print("PRECONDITION FAILED: initialBalance must be >= 0")
+        return null
+    }
+    
+    return {
+        accountNumber: accountNum,
+        balance: initialBalance,
+        
+        // Invariant checker
+        checkInvariant: fn() {
+            if (this.balance < 0) {
+                print("INVARIANT FAILED: balance must be >= 0")
+                return false
+            }
+            return true
+        },
+        
+        deposit: fn(amount) {
+            // Precondition
+            if (amount <= 0) {
+                print("PRECONDITION FAILED: amount must be > 0")
+                return
+            }
+            
+            const oldBalance = this.balance
+            this.balance = this.balance + amount
+            
+            // Postcondition
+            if (this.balance != oldBalance + amount) {
+                print("POSTCONDITION FAILED: incorrect balance")
+            }
+            
+            this.checkInvariant()
+        },
+        
+        withdraw: fn(amount) {
+            // Preconditions
+            if (amount <= 0) {
+                print("PRECONDITION FAILED: amount must be > 0")
+                return
+            }
+            
+            if (this.balance < amount) {
+                print("PRECONDITION FAILED: insufficient funds")
+                return
+            }
+            
+            const oldBalance = this.balance
+            this.balance = this.balance - amount
+            
+            // Postcondition
+            if (this.balance != oldBalance - amount) {
+                print("POSTCONDITION FAILED: incorrect balance")
+            }
+            
+            this.checkInvariant()
+        },
+        
+        getBalance: fn() {
+            const result = this.balance
+            
+            // Postcondition
+            if (result < 0) {
+                print("POSTCONDITION FAILED: balance must be >= 0")
+            }
+            
+            return result
+        }
+    }
+}
+
+const account = createBankAccount(12345, 1000)
+print("  Initial balance:", account.getBalance())
+
+account.deposit(500)
+print("  After deposit(500):", account.getBalance())
+
+account.withdraw(200)
+print("  After withdraw(200):", account.getBalance())
+
+print("  Attempting withdraw(2000)...")
+account.withdraw(2000)  // Should fail precondition
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 7. MATHEMATICAL CONTRACTS
+// ═══════════════════════════════════════════════════════════════════════════
+print("7. Mathematical Contracts:")
+
+import "math"
+
+fn factorial(n) {
+    // Preconditions
+    if (n < 0) {
+        print("PRECONDITION FAILED: n must be >= 0")
+        return null
+    }
+    
+    if (n > 170) {
+        print("PRECONDITION FAILED: n must be <= 170 (overflow)")
+        return null
+    }
+    
+    var result = 1
+    var i = 1
+    while (i <= n) {
+        result = result * i
+        i = i + 1
+    }
+    
+    // Postcondition
+    if (result <= 0) {
+        print("POSTCONDITION FAILED: result must be > 0")
+    }
+    
+    return result
+}
+
+print("  factorial(5) =", factorial(5))
+print("  factorial(-1) =", factorial(-1))  // Fails precondition
+
+print()
+
+print("✅ Design by Contract patterns demonstrated!")
+print()
+print("Note: Full syntax support (requires/ensures keywords)")
+print("      will be available in the next version.")

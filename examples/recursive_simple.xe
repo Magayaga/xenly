@@ -1,0 +1,90 @@
+// Simple Recursive Functions
+print("=== Recursive Functions ===")
+print()
+
+// Factorial - classic recursion
+fn factorial(n) {
+    if (n <= 1) {
+        return 1
+    }
+    // Calculate previous
+    var prev = n
+    prev = prev - 1
+    const result = factorial(prev)
+    return n * result
+}
+
+print("Factorial Examples:")
+print("5! =", factorial(5))
+print("10! =", factorial(10))
+print()
+
+// Countdown - simple recursion
+fn countdown(n) {
+    if (n <= 0) {
+        print("Blast off!")
+        return
+    }
+    print(n)
+    var next = n
+    next = next - 1
+    countdown(next)
+}
+
+print("Countdown from 5:")
+countdown(5)
+print()
+
+// GCD - Euclidean algorithm
+fn gcd(a, b) {
+    if (b == 0) {
+        return a
+    }
+    const remainder = a % b
+    return gcd(b, remainder)
+}
+
+print("GCD Examples:")
+print("gcd(48, 18) =", gcd(48, 18))
+print("gcd(100, 35) =", gcd(100, 35))
+print()
+
+// Power function
+fn power(base, exp) {
+    if (exp == 0) {
+        return 1
+    }
+    if (exp == 1) {
+        return base
+    }
+    var newexp = exp
+    newexp = newexp - 1
+    const prev = power(base, newexp)
+    return base * prev
+}
+
+print("Power Examples:")
+print("2^5 =", power(2, 5))
+print("3^4 =", power(3, 4))
+print()
+
+// Tail recursive factorial
+fn factHelper(n, acc) {
+    if (n <= 1) {
+        return acc
+    }
+    var n1 = n
+    n1 = n1 - 1
+    var newacc = n * acc
+    return factHelper(n1, newacc)
+}
+
+fn factTail(n) {
+    return factHelper(n, 1)
+}
+
+print("Tail Recursive Factorial:")
+print("factTail(20) =", factTail(20))
+print()
+
+print("=== Demo Complete ===")

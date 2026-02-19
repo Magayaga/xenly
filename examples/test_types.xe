@@ -1,0 +1,73 @@
+// Type System Features Test
+print("=== Type System Features ===")
+print()
+
+// Test 1: Type Inference (already works)
+print("1. Type Inference:")
+const x = 42
+const y = "hello"
+const z = true
+
+print("  x =", x, "(inferred: number)")
+print("  y =", y, "(inferred: string)")
+print("  z =", z, "(inferred: bool)")
+print()
+
+// Test 2: Tuples (array pattern)
+print("2. Tuples (Array Pattern):")
+
+fn createPoint(x, y) {
+    return [x, y]
+}
+
+const point = createPoint(3, 4)
+print("  Point:", point[0], point[1])
+
+fn createPerson(name, age, city) {
+    return [name, age, city]
+}
+
+const person = createPerson("Alice", 30, "NYC")
+print("  Person:", person[0], person[1], person[2])
+print()
+
+// Test 3: Namespaces (object pattern)
+print("3. Namespaces (Object Pattern):")
+
+fn MathNamespace() {
+    fn square(x) { return x * x }
+    fn cube(x) { return x * x * x }
+    
+    return {
+        square: square,
+        cube: cube
+    }
+}
+
+const Math = MathNamespace()
+print("  Math.square(5):", Math.square(5))
+print("  Math.cube(3):", Math.cube(3))
+print()
+
+// Test 4: Nested namespaces
+print("4. Nested Namespaces:")
+
+fn GraphicsNamespace() {
+    fn Colors() {
+        return {
+            RED: "#FF0000",
+            GREEN: "#00FF00",
+            BLUE: "#0000FF"
+        }
+    }
+    
+    return {
+        Colors: Colors()
+    }
+}
+
+const Graphics = GraphicsNamespace()
+print("  Graphics.Colors.RED:", Graphics.Colors.RED)
+print()
+
+print("✅ Type system features working!")

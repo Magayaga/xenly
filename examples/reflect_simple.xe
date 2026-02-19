@@ -1,0 +1,59 @@
+// Reflective Programming
+print("Reflective Programming")
+print()
+
+import "type"
+
+// Type Checking
+print("1. Type Checking")
+
+const is_num = type.isNumber(42)
+const is_str = type.isString("hello")
+const is_bool = type.isBoolean(true)
+
+print(is_num)
+print(is_str)
+print(is_bool)
+print()
+
+// Type-based Behavior
+print("2. Type Dispatch")
+
+fn doubleIfNumber(value) {
+    const check = type.isNumber(value)
+    if (check) {
+        return value * 2
+    }
+    return 0
+}
+
+const result1 = doubleIfNumber(5)
+const result2 = doubleIfNumber(10)
+
+print(result1)
+print(result2)
+print()
+
+// Validation
+print("3. Validation")
+
+fn isValidAge(age) {
+    if (age < 0) {
+        return false
+    }
+    if (age > 150) {
+        return false
+    }
+    return true
+}
+
+const valid1 = isValidAge(30)
+const valid2 = isValidAge(-5)
+const valid3 = isValidAge(200)
+
+print(valid1)
+print(valid2)
+print(valid3)
+print()
+
+print("Reflection Complete!")

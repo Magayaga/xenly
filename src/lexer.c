@@ -1,13 +1,5 @@
-/*
- * XENLY - high-level and general-purpose programming language
- * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
- *
- * It is initially written in C programming language.
- *
- * It is available for Linux and macOS operating systems.
- *
- */
 #include "lexer.h"
+#include "unicode.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -40,10 +32,32 @@ static void skip_whitespace_no_newline(Lexer *l) {
 }
 
 static void skip_comment(Lexer *l) {
-    // Single-line comment: #
-    if (lexer_peek(l) == '#') {
+    char c = lexer_peek(l);
+    char n = lexer_peek_next(l);
+    
+    // Single-line comment: //
+    if (c == '/' && n == '/') {
+        lexer_advance(l); // skip first /
+        lexer_advance(l); // skip second /
         while (l->pos < l->length && lexer_peek(l) != '\n')
             lexer_advance(l);
+        return;
+    }
+    
+    // Multi-line comment: /* ... */
+    if (c == '/' && n == '*') {
+        lexer_advance(l); // skip /
+        lexer_advance(l); // skip *
+        while (l->pos < l->length) {
+            if (lexer_peek(l) == '*' && lexer_peek_next(l) == '/') {
+                lexer_advance(l); // skip *
+                lexer_advance(l); // skip /
+                return;
+            }
+            lexer_advance(l);
+        }
+        // Unterminated comment - just return
+        return;
     }
 }
 
@@ -61,6 +75,7 @@ typedef struct { const char *word; TokenType type; } Keyword;
 
 static const Keyword keywords[] = {
     { "var",    TOKEN_VAR },
+    { "const",  TOKEN_CONST },
     { "fn",     TOKEN_FN },
     { "return", TOKEN_RETURN },
     { "if",     TOKEN_IF },
@@ -91,17 +106,16 @@ static const Keyword keywords[] = {
     { "spawn",      TOKEN_SPAWN },
     { "await",      TOKEN_AWAIT },
     { "sleep",      TOKEN_SLEEP },
-    { "async",      TOKEN_ASYNC },
-    { "spawn",      TOKEN_SPAWN },
-    { "await",      TOKEN_AWAIT },
-    { "sleep",      TOKEN_SLEEP },
     { "typeof",  TOKEN_TYPEOF },
     { "instanceof", TOKEN_INSTANCEOF },
-    { "typeof",  TOKEN_TYPEOF },
-    { "instanceof", TOKEN_INSTANCEOF },
-    { "for",        TOKEN_FOR },
-    { "break",      TOKEN_BREAK },
-    { "continue",   TOKEN_CONTINUE },
+    { "enum",    TOKEN_ENUM },
+    { "match",   TOKEN_MATCH },
+    { "namespace", TOKEN_NAMESPACE },
+    { "type",    TOKEN_TYPE },
+    { "requires", TOKEN_REQUIRES },
+    { "ensures",  TOKEN_ENSURES },
+    { "invariant", TOKEN_INVARIANT },
+    { "assert",   TOKEN_ASSERT },
     { "in",         TOKEN_IN },
     { "and",     TOKEN_AND },
     { "or",     TOKEN_OR },
@@ -140,10 +154,16 @@ void token_destroy(Token *t) {
 Token lexer_next_token(Lexer *l) {
     skip_whitespace_no_newline(l);
 
-    // Skip comments
-    while (lexer_peek(l) == '#') {
-        skip_comment(l);
-        skip_whitespace_no_newline(l);
+    // Skip comments (// or /* */)
+    while (1) {
+        char c = lexer_peek(l);
+        char n = lexer_peek_next(l);
+        if ((c == '/' && n == '/') || (c == '/' && n == '*')) {
+            skip_comment(l);
+            skip_whitespace_no_newline(l);
+        } else {
+            break;
+        }
     }
 
     if (l->pos >= l->length)
@@ -159,6 +179,23 @@ Token lexer_next_token(Lexer *l) {
         return make_token(TOKEN_NEWLINE, "\\n", startLine, startCol);
     }
 
+    // ── Raw String Literal (r"..." or r'...') ──────────────────────────────────
+    if (c == 'r' && (lexer_peek_next(l) == '"' || lexer_peek_next(l) == '\'')) {
+        lexer_advance(l); // consume 'r'
+        char quote = lexer_advance(l); // consume opening quote
+        char buf[4096];
+        int len = 0;
+        
+        // Raw strings: no escape processing, everything literal
+        while (l->pos < l->length && lexer_peek(l) != quote) {
+            buf[len++] = lexer_advance(l);
+            if (len >= 4095) break;
+        }
+        buf[len] = '\0';
+        if (lexer_peek(l) == quote) lexer_advance(l); // consume closing quote
+        return make_token(TOKEN_STRING, buf, startLine, startCol);
+    }
+
     // ── String Literal ───────────────────────────────────────────────────────
     if (c == '"') {
         lexer_advance(l); // consume opening "
@@ -171,12 +208,55 @@ Token lexer_next_token(Lexer *l) {
                 switch (esc) {
                     case 'n':  buf[len++] = '\n'; break;
                     case 't':  buf[len++] = '\t'; break;
+                    case 'r':  buf[len++] = '\r'; break;
                     case '\\': buf[len++] = '\\'; break;
                     case '"':  buf[len++] = '"';  break;
                     case '0':  buf[len++] = '\0'; break;
+                    case 'u': {
+                        // Unicode escape: \uXXXX or \u{XXXXXX}
+                        if (lexer_peek(l) == '{') {
+                            lexer_advance(l); // skip {
+                            uint32_t cp = 0;
+                            int digits = 0;
+                            while (lexer_peek(l) != '}' && digits < 6) {
+                                char h = lexer_peek(l);
+                                if (h >= '0' && h <= '9') cp = cp * 16 + (h - '0');
+                                else if (h >= 'a' && h <= 'f') cp = cp * 16 + (h - 'a' + 10);
+                                else if (h >= 'A' && h <= 'F') cp = cp * 16 + (h - 'A' + 10);
+                                else break;
+                                lexer_advance(l);
+                                digits++;
+                            }
+                            if (lexer_peek(l) == '}') lexer_advance(l);
+                            // Encode to UTF-8
+                            char utf8[4];
+                            size_t bytes = utf8_encode(cp, utf8);
+                            for (size_t i = 0; i < bytes && len < 4095; i++) {
+                                buf[len++] = utf8[i];
+                            }
+                        } else {
+                            // \uXXXX format (4 hex digits)
+                            uint32_t cp = 0;
+                            for (int i = 0; i < 4; i++) {
+                                char h = lexer_peek(l);
+                                if (h >= '0' && h <= '9') cp = cp * 16 + (h - '0');
+                                else if (h >= 'a' && h <= 'f') cp = cp * 16 + (h - 'a' + 10);
+                                else if (h >= 'A' && h <= 'F') cp = cp * 16 + (h - 'A' + 10);
+                                else break;
+                                lexer_advance(l);
+                            }
+                            char utf8[4];
+                            size_t bytes = utf8_encode(cp, utf8);
+                            for (size_t i = 0; i < bytes && len < 4095; i++) {
+                                buf[len++] = utf8[i];
+                            }
+                        }
+                        break;
+                    }
                     default:   buf[len++] = esc;  break;
                 }
             } else {
+                // Copy UTF-8 byte sequences directly
                 buf[len++] = lexer_advance(l);
             }
             if (len >= 4095) break;
@@ -197,14 +277,46 @@ Token lexer_next_token(Lexer *l) {
     }
 
     // ── Identifier / Keyword ─────────────────────────────────────────────────
-    if (isalpha(c) || c == '_') {
-        char buf[256];
-        int len = 0;
-        while (l->pos < l->length && (isalnum(lexer_peek(l)) || lexer_peek(l) == '_'))
-            buf[len++] = lexer_advance(l);
-        buf[len] = '\0';
-        TokenType kw = lookup_keyword(buf);
-        return make_token(kw, buf, startLine, startCol);
+    // Support Unicode identifiers
+    if (isalpha(c) || c == '_' || ((unsigned char)c >= 0x80)) {
+        // Could be Unicode identifier
+        size_t bytes;
+        uint32_t cp = utf8_decode(&l->source[l->pos], &bytes);
+        
+        if (unicode_is_id_start(cp)) {
+            char buf[256];
+            int len = 0;
+            
+            // Add first character
+            for (size_t i = 0; i < bytes && len < 255; i++) {
+                buf[len++] = lexer_advance(l);
+            }
+            
+            // Continue with ID_Continue characters
+            while (l->pos < l->length) {
+                unsigned char next = (unsigned char)lexer_peek(l);
+                if (isalnum(next) || next == '_') {
+                    buf[len++] = lexer_advance(l);
+                } else if (next >= 0x80) {
+                    // Check if valid Unicode ID_Continue
+                    uint32_t next_cp = utf8_decode(&l->source[l->pos], &bytes);
+                    if (unicode_is_id_continue(next_cp)) {
+                        for (size_t i = 0; i < bytes && len < 255; i++) {
+                            buf[len++] = lexer_advance(l);
+                        }
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+                if (len >= 255) break;
+            }
+            
+            buf[len] = '\0';
+            TokenType kw = lookup_keyword(buf);
+            return make_token(kw, buf, startLine, startCol);
+        }
     }
 
     // ── Two-char Operators ───────────────────────────────────────────────────
@@ -244,7 +356,7 @@ Token lexer_next_token(Lexer *l) {
         case '?':
             if (n == '?') { lexer_advance(l); return make_token(TOKEN_NULLISH, "??", startLine, startCol); }
             if (n == '.') { lexer_advance(l); return make_token(TOKEN_OPTCHAIN, "?.", startLine, startCol); }
-            return make_token(TOKEN_ERROR, "?", startLine, startCol);
+            return make_token(TOKEN_QUESTION, "?", startLine, startCol);
     }
 
     // ── Single-char Tokens ───────────────────────────────────────────────────
@@ -259,6 +371,7 @@ Token lexer_next_token(Lexer *l) {
         case '.': return make_token(TOKEN_DOT,       ".", startLine, startCol);
         case ':': return make_token(TOKEN_COLON,     ":", startLine, startCol);
         case ';': return make_token(TOKEN_SEMICOLON,";", startLine, startCol);
+        case '|': return make_token(TOKEN_PIPE,      "|", startLine, startCol);
     }
 
     // ── Unknown ──────────────────────────────────────────────────────────────
@@ -296,6 +409,8 @@ const char *token_type_name(TokenType type) {
         case TOKEN_AWAIT:   return "AWAIT";
         case TOKEN_SLEEP:   return "SLEEP";
         case TOKEN_TYPEOF: return "TYPEOF"; case TOKEN_INSTANCEOF: return "INSTANCEOF";
+        case TOKEN_CONST: return "CONST"; case TOKEN_ENUM: return "ENUM";
+        case TOKEN_MATCH: return "MATCH"; case TOKEN_PIPE: return "|";
         case TOKEN_IN: return "IN";
         case TOKEN_PLUS: return "+"; case TOKEN_MINUS: return "-";
         case TOKEN_STAR: return "*"; case TOKEN_SLASH: return "/";

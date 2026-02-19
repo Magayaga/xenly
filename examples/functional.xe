@@ -1,0 +1,275 @@
+// Functional Programming in Xenly
+print("=== Functional Programming ===")
+print()
+
+import "array"
+
+// ============================================================================
+// HIGHER-ORDER FUNCTIONS
+// ============================================================================
+
+print("1. Higher-Order Functions")
+print()
+
+// Map - transform each element
+fn map(arr, f) {
+    const result = []
+    var i = 0
+    while (i < array.len(arr)) {
+        const elem = array.get(arr, i)
+        const transformed = f(elem)
+        array.push(result, transformed)
+        i = i + 1
+    }
+    return result
+}
+
+// Filter - select elements
+fn filter(arr, predicate) {
+    const result = []
+    var i = 0
+    while (i < array.len(arr)) {
+        const elem = array.get(arr, i)
+        if (predicate(elem)) {
+            array.push(result, elem)
+        }
+        i = i + 1
+    }
+    return result
+}
+
+// Reduce - aggregate values
+fn reduce(arr, f, initial) {
+    var acc = initial
+    var i = 0
+    while (i < array.len(arr)) {
+        const elem = array.get(arr, i)
+        acc = f(acc, elem)
+        i = i + 1
+    }
+    return acc
+}
+
+// Test map
+const numbers = array.of(1, 2, 3, 4, 5)
+print("Original:", array.join(numbers, ", "))
+
+const squared = map(numbers, fn(x) { return x * x })
+print("Squared:", array.join(squared, ", "))
+
+const doubled = map(numbers, fn(x) { return x + x })
+print("Doubled:", array.join(doubled, ", "))
+
+print()
+
+// Test filter
+print("2. Filter")
+print()
+
+const evens = filter(numbers, fn(x) { return x % 2 == 0 })
+print("Evens:", array.join(evens, ", "))
+
+const odds = filter(numbers, fn(x) { return x % 2 == 1 })
+print("Odds:", array.join(odds, ", "))
+
+const greaterThan3 = filter(numbers, fn(x) { return x > 3 })
+print("Greater than 3:", array.join(greaterThan3, ", "))
+
+print()
+
+// Test reduce
+print("3. Reduce")
+print()
+
+const sum = reduce(numbers, fn(acc, x) { return acc + x }, 0)
+print("Sum:", sum)
+
+const product = reduce(numbers, fn(acc, x) { return acc * x }, 1)
+print("Product:", product)
+
+const max = reduce(numbers, fn(acc, x) { 
+    if (x > acc) {
+        return x
+    }
+    return acc
+}, 0)
+print("Max:", max)
+
+print()
+
+// ============================================================================
+// FUNCTION COMPOSITION
+// ============================================================================
+
+print("4. Function Composition")
+print()
+
+fn compose(f, g) {
+    return fn(x) {
+        return f(g(x))
+    }
+}
+
+const addOne = fn(x) { return x + 1 }
+const timesTwo = fn(x) { return x * 2 }
+
+const addOneThenTimesTwo = compose(timesTwo, addOne)
+print("addOneThenTimesTwo(5):", addOneThenTimesTwo(5))
+
+print()
+
+// ============================================================================
+// CLOSURES
+// ============================================================================
+
+print("5. Closures")
+print()
+
+fn makeCounter() {
+    var count = 0
+    
+    return fn() {
+        count = count + 1
+        return count
+    }
+}
+
+const counter1 = makeCounter()
+print("Counter1:", counter1())
+print("Counter1:", counter1())
+print("Counter1:", counter1())
+
+const counter2 = makeCounter()
+print("Counter2:", counter2())
+print("Counter2:", counter2())
+
+print()
+
+fn makeMultiplier(factor) {
+    return fn(x) {
+        return x * factor
+    }
+}
+
+const triple = makeMultiplier(3)
+const quadruple = makeMultiplier(4)
+
+print("triple(5):", triple(5))
+print("quadruple(5):", quadruple(5))
+
+print()
+
+// ============================================================================
+// CURRYING
+// ============================================================================
+
+print("6. Currying")
+print()
+
+fn add(x) {
+    return fn(y) {
+        return x + y
+    }
+}
+
+const add5 = add(5)
+const add10 = add(10)
+
+print("add5(3):", add5(3))
+print("add10(3):", add10(3))
+
+print()
+
+// ============================================================================
+// PRACTICAL EXAMPLE
+// ============================================================================
+
+print("7. Practical Example - Data Processing")
+print()
+
+// Process list of numbers functionally
+const data = array.of(1, -2, 3, 4, -5, 6, 7, -8, 9, 10)
+print("Original data:", array.join(data, ", "))
+
+// Step 1: Filter positive numbers
+const positive = filter(data, fn(x) { return x > 0 })
+print("Positive:", array.join(positive, ", "))
+
+// Step 2: Square them
+const positiveSquared = map(positive, fn(x) { return x * x })
+print("Squared:", array.join(positiveSquared, ", "))
+
+// Step 3: Sum them
+const totalSum = reduce(positiveSquared, fn(acc, x) { return acc + x }, 0)
+print("Sum:", totalSum)
+
+print()
+
+// All in one pipeline
+const result = reduce(
+    map(
+        filter(data, fn(x) { return x > 0 }),
+        fn(x) { return x * x }
+    ),
+    fn(acc, x) { return acc + x },
+    0
+)
+
+print("Pipeline result:", result)
+
+print()
+
+// ============================================================================
+// OPTION TYPE (MAYBE)
+// ============================================================================
+
+print("8. Option Type")
+print()
+
+fn Some(value) {
+    return {
+        isSome: true,
+        value: value,
+        
+        getOr: fn(defaultValue) {
+            return this.value
+        }
+    }
+}
+
+const None = {
+    isSome: false,
+    
+    getOr: fn(defaultValue) {
+        return defaultValue
+    }
+}
+
+fn safeDivide(x, y) {
+    if (y == 0) {
+        return None
+    }
+    return Some(x / y)
+}
+
+const result1 = safeDivide(10, 2)
+print("10 / 2:", result1.getOr(0))
+
+const result2 = safeDivide(10, 0)
+print("10 / 0 (safe):", result2.getOr(0))
+
+print()
+
+// ============================================================================
+// SUMMARY
+// ============================================================================
+
+print("=== Functional Programming Demo Complete ===")
+print()
+print("Concepts demonstrated:")
+print("- Map, Filter, Reduce")
+print("- Function composition")
+print("- Closures")
+print("- Currying")
+print("- Option type")
+print("- Data transformation pipelines")

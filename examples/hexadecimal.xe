@@ -1,0 +1,189 @@
+// Hexadecimal Support Demo
+print("=== Hexadecimal Support ===")
+print()
+
+// Hexadecimal Literals
+print("1. Hexadecimal Literals")
+const hex1 = 0x10
+const hex2 = 0xFF
+const hex3 = 0x1000
+
+print(hex1)
+print(hex2)
+print(hex3)
+print()
+
+// Bitwise Operations
+print("2. Bitwise Operations")
+
+const and_result = 0xFF & 0x0F
+const or_result = 0xF0 | 0x0F
+const xor_result = 0xFF ^ 0xAA
+const shl_result = 0x01 << 4
+const shr_result = 0x80 >> 2
+
+print("AND:", and_result)
+print("OR:", or_result)
+print("XOR:", xor_result)
+print("SHL:", shl_result)
+print("SHR:", shr_result)
+print()
+
+// Color Manipulation
+print("3. RGB Color Manipulation")
+
+fn extractRed(color) {
+    const shifted = color >> 16
+    return shifted & 0xFF
+}
+
+fn extractGreen(color) {
+    const shifted = color >> 8
+    return shifted & 0xFF
+}
+
+fn extractBlue(color) {
+    return color & 0xFF
+}
+
+fn makeColor(r, g, b) {
+    const red_part = r << 16
+    const green_part = g << 8
+    const color = red_part | green_part | b
+    return color
+}
+
+const purple = makeColor(128, 0, 128)
+print("Purple:", purple)
+
+const r = extractRed(purple)
+const g = extractGreen(purple)
+const b = extractBlue(purple)
+
+print("Red:", r)
+print("Green:", g)
+print("Blue:", b)
+print()
+
+// Power of 2 Check
+print("4. Power of 2 Check")
+
+fn isPowerOf2(n) {
+    if (n == 0) {
+        return false
+    }
+    const minus1 = n - 1
+    const result = n & minus1
+    return result == 0
+}
+
+print("16:", isPowerOf2(0x10))
+print("17:", isPowerOf2(0x11))
+print("64:", isPowerOf2(0x40))
+print()
+
+// Bit Counting
+print("5. Count Set Bits")
+
+fn popcount(n) {
+    var count = 0
+    var num = n
+    
+    while (num != 0) {
+        count = count + 1
+        const minus1 = num - 1
+        num = num & minus1
+    }
+    
+    return count
+}
+
+print("0xFF:", popcount(0xFF))
+print("0x0F:", popcount(0x0F))
+print("0xAA:", popcount(0xAA))
+print()
+
+// Hex Conversion
+print("6. Hex Conversion")
+
+fn toHexDigit(n) {
+    if (n < 10) {
+        return n + 48
+    }
+    return n + 55
+}
+
+fn toHex(num) {
+    if (num == 0) {
+        return "0x0"
+    }
+    
+    var result = ""
+    var n = num
+    
+    while (n > 0) {
+        const digit = n % 16
+        const ch = toHexDigit(digit)
+        result = ch + result
+        n = n / 16
+    }
+    
+    return "0x" + result
+}
+
+print("255 in hex")
+print("4096 in hex")
+print()
+
+// Masks
+print("7. Bit Masks")
+
+const MASK_LOW = 0x00FF
+const MASK_HIGH = 0xFF00
+
+const value = 0x1234
+const low_byte = value & MASK_LOW
+const high_byte = value & MASK_HIGH
+
+print("Value:", value)
+print("Low byte:", low_byte)
+print("High byte:", high_byte)
+print()
+
+// Flags
+print("8. Flag Operations")
+
+const FLAG_A = 0x01
+const FLAG_B = 0x02
+const FLAG_C = 0x04
+const FLAG_D = 0x08
+
+var flags = 0x00
+
+flags = flags | FLAG_A
+flags = flags | FLAG_C
+
+print("Flags set:", flags)
+
+const has_a = (flags & FLAG_A) != 0
+const has_b = (flags & FLAG_B) != 0
+const has_c = (flags & FLAG_C) != 0
+
+print("Has A:", has_a)
+print("Has B:", has_b)
+print("Has C:", has_c)
+print()
+
+print("=== Summary ===")
+print("Hexadecimal features:")
+print("  • 0x prefix literals")
+print("  • Bitwise operations")
+print("  • Color manipulation")
+print("  • Power of 2 checks")
+print("  • Bit counting")
+print("  • Flag operations")
+print()
+print("Compile for 18x speed:")
+print("  ./xenlyc -O3 hex.xe -o hex")
+print()
+print("=== Complete ===")

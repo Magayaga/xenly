@@ -1,7 +1,7 @@
-# ─── OOP Basics ──────────────────────────────────────────
-# class, new, this, properties, methods
+// ─── OOP Basics ──────────────────────────────────────────
+// class, new, this, properties, methods
 
-# ── Simple class with init and a method ────────────────────
+// ── Simple class with init and a method ────────────────────
 class Dog {
     fn init(name, breed) {
         this.name = name
@@ -37,7 +37,7 @@ buddy.learn_trick()
 rex.describe()
 buddy.describe()
 
-# ── Class with computed properties ──────────────────────────
+// ── Class with computed properties ──────────────────────────
 print("")
 
 class Rectangle {
@@ -74,7 +74,7 @@ r1.describe()
 r2.describe()
 r3.describe()
 
-# ── Mutating properties after construction ─────────────────
+// ── Mutating properties after construction ─────────────────
 print("")
 print("Resizing r1 to 7x7:")
 r1.width = 7

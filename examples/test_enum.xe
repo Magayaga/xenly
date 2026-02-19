@@ -1,0 +1,17 @@
+// Test enum (algebraic data types)
+print("Testing enum...")
+
+enum Option {
+    Some(value),
+    None
+}
+
+print("✓ enum defined")
+
+const someVal = Some(42)
+const noneVal = None
+
+print("someVal:", someVal)
+print("noneVal:", noneVal)
+
+print("✓ enum works")

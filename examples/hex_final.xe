@@ -1,0 +1,59 @@
+// Hexadecimal Demo
+print("Hexadecimal Support")
+print()
+
+// Power of 2
+fn isPowerOf2(n) {
+    if (n <= 0) {
+        return false
+    }
+    
+    var power = 1
+    while (power < n) {
+        power = power * 2
+    }
+    
+    return power == n
+}
+
+print("Power of 2 Check:")
+print(isPowerOf2(16))
+print(isPowerOf2(17))
+print(isPowerOf2(32))
+print()
+
+// Byte extraction
+fn getLowByte(num) {
+    return num % 256
+}
+
+fn getHighByte(num) {
+    return num / 256
+}
+
+print("Byte Extraction (4660):")
+print(getLowByte(4660))
+print(getHighByte(4660))
+print()
+
+// Power calculation
+fn power2(exp) {
+    var result = 1
+    var i = 0
+    while (i < exp) {
+        result = result * 2
+        i = i + 1
+    }
+    return result
+}
+
+print("Powers of 2:")
+print(power2(4))
+print(power2(8))
+print(power2(12))
+print()
+
+print("Summary:")
+print("Hex literals in compiler")
+print("Bitwise ops in compiler")
+print("Complete!")

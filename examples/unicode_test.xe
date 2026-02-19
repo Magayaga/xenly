@@ -1,0 +1,123 @@
+// Unicode Support Test
+import "string"
+import "array"
+
+print("=== Unicode Support in Xenly ===")
+print()
+
+// 1. UTF-8 Strings
+print("1. UTF-8 Strings:")
+const greeting = "Hello, 世界! 🌍"
+print("  ", greeting)
+
+const emoji = "😀 😎 🚀 🎉 ⭐"
+print("  ", emoji)
+
+const multilang = "English, Español, 中文, 日本語, العربية, Русский"
+print("  ", multilang)
+
+// 2. Unicode Identifiers
+print()
+print("2. Unicode Identifiers:")
+const 你好 = "Hello in Chinese"
+const привет = "Hello in Russian"
+const مرحبا = "Hello in Arabic"
+const こんにちは = "Hello in Japanese"
+
+print("  你好:", 你好)
+print("  привет:", привет)
+print("  こんにちは:", こんにちは)
+
+// 3. Unicode Escape Sequences
+print()
+print("3. Unicode Escape Sequences:")
+const heart = "\u2764"  // ❤
+const star = "\u2B50"   // ⭐
+const rocket = "\u{1F680}"  // 🚀
+print("  Heart:", heart)
+print("  Star:", star)
+print("  Rocket:", rocket)
+
+// 4. Unicode String Functions
+print()
+print("4. Unicode String Functions:")
+const text = "Hello 世界 🌍"
+
+// Byte length vs character length
+print("  String:", text)
+print("  Byte length:", string.len(text))
+print("  Unicode length:", string.unicodeLength(text))
+
+// Unicode character at index
+print("  Char at 6:", string.unicodeCharAt(text, 6))  // 世
+print("  Char at 8:", string.unicodeCharAt(text, 8))  // 🌍
+
+// Unicode codepoints
+const cp1 = string.codePointAt(text, 6)  // 世
+const cp2 = string.codePointAt(text, 8)  // 🌍
+print("  Codepoint of '世':", cp1)
+print("  Codepoint of '🌍':", cp2)
+
+// Create from codepoint
+const fromCp = string.fromCodePoint(128640)  // 🚀
+print("  From codepoint 128640:", fromCp)
+
+// 5. Unicode in Functions
+print()
+print("5. Unicode in Functions:")
+fn greet(name) {
+    return "你好, " + name + "! 👋"
+}
+
+print("  ", greet("Alice"))
+print("  ", greet("世界"))
+
+// 6. Unicode in Loops
+print()
+print("6. Unicode in Loops:")
+const chars = ["α", "β", "γ", "δ", "ε"]
+var i = 0
+for (i = 0; i < array.len(chars); i++) {
+    print("  Greek letter", i + 1, ":", chars[i])
+}
+
+// 7. Unicode Math
+print()
+print("7. Unicode Math:")
+const π = 3.14159
+const τ = 2 * π
+const Δ = 0.0001
+
+print("  π =", π)
+print("  τ =", τ)
+print("  Δ =", Δ)
+
+// 8. Emoji Operations
+print()
+print("8. Emoji Operations:")
+const faces = "😀😎😍🤔😴"
+print("  Emojis:", faces)
+print("  Byte count:", string.len(faces))
+print("  Emoji count:", string.unicodeLength(faces))
+
+// 9. Mixed Scripts
+print()
+print("9. Mixed Scripts:")
+const mixed = "ASCII + 中文 + العربية + 日本語 + 😀"
+print("  ", mixed)
+print("  Length:", string.unicodeLength(mixed), "characters")
+
+// 10. Unicode Comments
+// English: This is a comment
+// Chinese: 这是一个注释
+// Japanese: これはコメントです
+// Arabic: هذا تعليق
+// Emoji: 📝 ✅ 🎯
+
+/* Multi-line Unicode:
+   English, 中文, العربية
+   日本語, Русский, Español
+   😀 🌍 🚀 */
+
+print()
+print("✅ Unicode support fully functional!")

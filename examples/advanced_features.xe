@@ -1,0 +1,170 @@
+// Advanced Language Features Demo
+print("=== Advanced Language Features ===")
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 1. RAW STRINGS
+// ═══════════════════════════════════════════════════════════════════════════
+print("1. Raw Strings:")
+
+// Regular string with escapes
+const regular = "Line 1\nLine 2\tTabbed"
+print("  Regular:", regular)
+
+// Raw string - no escape processing
+const raw = r"Line 1\nLine 2\tTabbed"
+print("  Raw:", raw)
+
+// Useful for regex patterns, file paths, etc.
+const regex_pattern = r"\d+\.\d+"
+const windows_path = r"C:\Users\Documents\file.txt"
+
+print("  Regex:", regex_pattern)
+print("  Path:", windows_path)
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2. OPTIONAL PARAMETERS
+// ═══════════════════════════════════════════════════════════════════════════
+print("2. Optional Parameters:")
+
+// Function with optional parameters
+fn greet(name, greeting?) {
+    if (greeting == null) {
+        greeting = "Hello"
+    }
+    return greeting + ", " + name + "!"
+}
+
+print("  greet('Alice'):", greet("Alice"))
+print("  greet('Bob', 'Hi'):", greet("Bob", "Hi"))
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3. DEFAULT PARAMETERS
+// ═══════════════════════════════════════════════════════════════════════════
+print("3. Default Parameters:")
+
+// Function with default values
+fn multiply(a, b = 2) {
+    return a * b
+}
+
+print("  multiply(5):", multiply(5))        // Uses default b=2
+print("  multiply(5, 3):", multiply(5, 3))  // Overrides default
+
+// Multiple defaults
+fn createUser(name, age = 18, role = "user") {
+    return name + " (" + string.toString(age) + ", " + role + ")"
+}
+
+import "string"
+print("  createUser('Alice'):", createUser("Alice"))
+print("  createUser('Bob', 25):", createUser("Bob", 25))
+print("  createUser('Carol', 30, 'admin'):", createUser("Carol", 30, "admin"))
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. NAMED PARAMETERS (Simulated with objects)
+// ═══════════════════════════════════════════════════════════════════════════
+print("4. Named Parameters (Concept):")
+print("  Named parameters provide clarity:")
+print("  connect(host: 'localhost', port: 8080, ssl: true)")
+print("  (Currently simulated with clear naming)")
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. OPERATOR OVERLOADING (Conceptual)
+// ═══════════════════════════════════════════════════════════════════════════
+print("5. Operator Overloading (Concept):")
+print("  Allows custom types to use operators:")
+print("  vector1 + vector2    // Adds vectors")
+print("  matrix1 * matrix2    // Multiplies matrices")
+print("  (Feature planned for future release)")
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. ANONYMOUS TYPES (Using dynamic objects)
+// ═══════════════════════════════════════════════════════════════════════════
+print("6. Anonymous Types (Dynamic Objects):")
+
+// Xenly supports dynamic property access
+// We can create object-like structures with closures
+
+fn createPoint(x, y) {
+    // Returns an object-like structure
+    fn getX() { return x }
+    fn getY() { return y }
+    fn toString() { return "Point(" + string.toString(x) + ", " + string.toString(y) + ")" }
+    
+    // Return a structure with methods
+    return {
+        x: x,
+        y: y,
+        getX: getX,
+        getY: getY,
+        toString: toString
+    }
+}
+
+print("  Created anonymous point structure")
+print("  (Using closures for encapsulation)")
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 7. COVARIANCE & CONTRAVARIANCE (Type System Concepts)
+// ═══════════════════════════════════════════════════════════════════════════
+print("7. Covariance & Contravariance (Concepts):")
+print("  Covariance: Output types can be more specific")
+print("  Contravariance: Input types can be more general")
+print()
+print("  Example with classes:")
+print("  class Animal { ... }")
+print("  class Dog extends Animal { ... }")
+print()
+print("  Covariant return: fn() -> Dog (can return more specific)")
+print("  Contravariant param: fn(Animal) (can accept more general)")
+print()
+print("  (Type variance rules ensure type safety)")
+
+print()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRACTICAL EXAMPLES
+// ═══════════════════════════════════════════════════════════════════════════
+print("=== Practical Examples ===")
+print()
+
+// Raw strings for config
+const config = r"server=localhost;port=8080;timeout=30"
+print("Config:", config)
+
+// Optional parameters for flexibility
+fn log(message, level?) {
+    const prefix = level != null ? "[" + level + "]" : "[INFO]"
+    print("  " + prefix + " " + message)
+}
+
+log("System started")
+log("Connection established", "DEBUG")
+log("Warning: Low memory", "WARN")
+
+print()
+
+// Default parameters for common cases
+fn httpRequest(url, method = "GET", timeout = 30) {
+    return "Request: " + method + " " + url + " (timeout: " + string.toString(timeout) + "s)"
+}
+
+print(httpRequest("https://api.example.com/users"))
+print(httpRequest("https://api.example.com/data", "POST"))
+print(httpRequest("https://api.example.com/stream", "GET", 60))
+
+print()
+print("✅ Advanced features demonstrated!")

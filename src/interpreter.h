@@ -1,12 +1,3 @@
-/*
- * XENLY - high-level and general-purpose programming language
- * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
- *
- * It is initially written in C programming language.
- *
- * It is available for Linux and macOS operating systems.
- *
- */
 #ifndef INTERPRETER_H
 #define INTERPRETER_H
 
@@ -26,6 +17,7 @@ typedef enum {
     VAL_CLASS,      // a class definition
     VAL_INSTANCE,   // an instantiated object
     VAL_ARRAY,      // a dynamic array of Values
+    VAL_ENUM_VARIANT, // an ADT variant instance (tagged union)
 } ValueType;
 
 typedef struct Value Value;
@@ -64,6 +56,7 @@ struct Value {
     char         *str;              // owned string (for VAL_STRING)
     int           boolean;
     int           local;            // 1 = local wrapper, freed by env_destroy (e.g. __super__)
+    int           fn_shared;        // 1 = FnDef is a shared reference (don't free on destroy)
     FnDef        *fn;               // for VAL_FUNCTION
     Value        *inner;            // for VAL_RETURN: wraps the actual return value
     ClassDef     *class_def;        // for VAL_CLASS
@@ -71,12 +64,20 @@ struct Value {
     Value       **array;            // for VAL_ARRAY: owned array of Value*
     size_t        array_len;        // for VAL_ARRAY: number of elements
     size_t        array_cap;        // for VAL_ARRAY: allocated capacity
+    
+    // ADT variant data
+    struct {
+        char     *tag;              // variant name (e.g. "Some", "None")
+        Value   **fields;           // variant field values
+        size_t    field_count;      // number of fields
+    } variant;                      // for VAL_ENUM_VARIANT
 };
 
 // ─── Environment (scope chain) ───────────────────────────────────────────────
 typedef struct EnvEntry {
     char  *name;
     Value *value;
+    int    is_const;        // 1 if this is a const binding (immutable)
     struct EnvEntry *next;
 } EnvEntry;
 
@@ -157,6 +158,7 @@ Value *value_string(const char *s);
 Value *value_bool(int b);
 Value *value_null(void);
 Value *value_array(Value **items, size_t len);   // takes ownership of items array and each item
+Value *value_variant(const char *tag, Value **fields, size_t field_count);  // creates ADT variant
 void   value_destroy(Value *v);
 char  *value_to_string(Value *v);   // returns a newly allocated string
 
@@ -165,6 +167,7 @@ Environment *env_create(Environment *parent);
 void         env_retain(Environment *env);   // increment refcount (for closures)
 void         env_destroy(Environment *env);  // decrement refcount; free when 0
 void         env_set(Environment *env, const char *name, Value *val);
+void         env_set_const(Environment *env, const char *name, Value *val);  // set immutable binding
 Value       *env_get(Environment *env, const char *name);
 
 #endif // INTERPRETER_H

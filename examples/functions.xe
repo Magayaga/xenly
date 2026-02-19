@@ -1,8 +1,8 @@
-# ─── Functions Demo ──────────────────────────────────────
-# fn keyword declares a function.
-# Functions can return values with 'return'.
+// ─── Functions Demo ──────────────────────────────────────
+// fn keyword declares a function.
+// Functions can return values with 'return'.
 
-# ── Simple function ────────────────────────────────────────
+// ── Simple function ────────────────────────────────────────
 fn greet(name) {
     print("Hello,", name + "!")
 }
@@ -10,7 +10,7 @@ fn greet(name) {
 greet("Alice")
 greet("Bob")
 
-# ── Function with return value ─────────────────────────────
+// ── Function with return value ─────────────────────────────
 fn add(a, b) {
     return a + b
 }
@@ -18,7 +18,7 @@ fn add(a, b) {
 var result = add(10, 20)
 print("10 + 20 =", result)
 
-# ── Recursive function: factorial ──────────────────────────
+// ── Recursive function: factorial ──────────────────────────
 fn factorial(n) {
     if (n <= 1) {
         return 1
@@ -29,7 +29,7 @@ fn factorial(n) {
 print("5! =", factorial(5))
 print("10! =", factorial(10))
 
-# ── Recursive function: fibonacci ──────────────────────────
+// ── Recursive function: fibonacci ──────────────────────────
 fn fib(n) {
     if (n <= 0) {
         return 0
@@ -42,7 +42,7 @@ fn fib(n) {
 
 print("fib(10) =", fib(10))
 
-# ── Function returning a computed value ────────────────────
+// ── Function returning a computed value ────────────────────
 fn is_even(n) {
     if (n % 2 == 0) {
         return true
@@ -53,7 +53,7 @@ fn is_even(n) {
 print("4 is even?", is_even(4))
 print("7 is even?", is_even(7))
 
-# ── Nested function calls ──────────────────────────────────
+// ── Nested function calls ──────────────────────────────────
 fn square(x) {
     return x * x
 }

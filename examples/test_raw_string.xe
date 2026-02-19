@@ -1,0 +1,5 @@
+// Test raw strings
+print("Regular string: Line 1\nLine 2")
+print("Raw string: ", r"Line 1\nLine 2")
+print("Regex: ", r"\d+\.\d+")
+print("Path: ", r"C:\Users\file.txt")
