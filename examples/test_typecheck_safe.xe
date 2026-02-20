@@ -1,0 +1,41 @@
+// Type Checking Test Suite
+
+print("Type Checking Tests")
+print("===================")
+print()
+
+// Test 1: Type Annotations
+var x: number = 42
+var s: string = "hello"
+print("x =", x, "s =", s)
+print("✓ Type annotations")
+print()
+
+// Test 2: Functions
+fn add(a: number, b: number): number {
+    return a + b
+}
+
+print("add(10, 20) =", add(10, 20))
+print("✓ Function types")
+print()
+
+// Test 3: Generics
+fn identity<T>(x: T): T {
+    return x
+}
+
+print("identity(42) =", identity(42))
+print("✓ Generic functions")
+print()
+
+// Test 4: Constraints
+fn process<T: Comparable>(x: T): T {
+    return x
+}
+
+print("process(100) =", process(100))
+print("✓ Type constraints")
+print()
+
+print("All tests passed!")

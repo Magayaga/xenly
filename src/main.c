@@ -5,6 +5,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "interpreter.h"
+#include "typecheck.h"
 
 // ─── Read entire file into a heap-allocated string ───────────────────────────
 static char *read_file(const char *path, size_t *out_len) {
@@ -37,13 +38,17 @@ static void print_usage(const char *prog) {
     printf("  \033[1;36m║   ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚══════╝ ╚═╝  ║\033[0m\n");
     printf("  \033[1;36m╚══════════════════════════════════════╝\033[0m\n");
     printf("\n");
-    printf("  \033[1;33mUsage:\033[0m  %s <file.xe>\n", prog);
-    printf("  \033[1;33mFlags:\033[0m  --version    Show version\n");
-    printf("          --help       Show this help\n");
-    printf("          --tokens     Dump token stream\n");
-    printf("          --ast        Dump AST tree\n\n");
-    printf("  \033[1;32mExamples:\033[0m\n");
+    printf("  \033[1;33mUsage:\033[0m  %s <file.xe> [options]\n", prog);
+    printf("\n  \033[1;33mOptions:\033[0m\n");
+    printf("          --version        Show version\n");
+    printf("          --help           Show this help\n");
+    printf("          --tokens         Dump token stream\n");
+    printf("          --ast            Dump AST tree\n");
+    printf("          --typecheck      Enable type checking (warnings)\n");
+    printf("          --typecheck-strict   Enable strict type checking (errors)\n");
+    printf("\n  \033[1;32mExamples:\033[0m\n");
     printf("          %s main.xe\n", prog);
+    printf("          %s --typecheck main.xe\n", prog);
     printf("          %s --tokens main.xe\n", prog);
     printf("          %s --ast main.xe\n\n", prog);
 }
@@ -73,6 +78,7 @@ int main(int argc, char **argv) {
     const char *filename   = NULL;
     int        dump_tok    = 0;
     int        dump_ast    = 0;
+    TypeCheckMode typecheck_mode = TYPECHECK_OFF;
 
     // ── Parse CLI args ─────────────────────────────────────────────────────
     for (int i = 1; i < argc; i++) {
@@ -86,6 +92,8 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[i], "--tokens") == 0) { dump_tok = 1; continue; }
         if (strcmp(argv[i], "--ast")    == 0) { dump_ast = 1; continue; }
+        if (strcmp(argv[i], "--typecheck") == 0) { typecheck_mode = TYPECHECK_WARN; continue; }
+        if (strcmp(argv[i], "--typecheck-strict") == 0) { typecheck_mode = TYPECHECK_ERROR; continue; }
         if (argv[i][0] != '-') { filename = argv[i]; continue; }
 
         fprintf(stderr, "\033[1;31m[Xenly] Unknown flag: %s\033[0m\n", argv[i]);
@@ -137,6 +145,22 @@ int main(int argc, char **argv) {
         lexer_destroy(lexer);
         free(source);
         return 0;
+    }
+
+    // ── Type check ─────────────────────────────────────────────────────────
+    if (typecheck_mode != TYPECHECK_OFF) {
+        int type_errors = typecheck_program(program, typecheck_mode);
+        if (type_errors > 0 && typecheck_mode == TYPECHECK_ERROR) {
+            fprintf(stderr, "\n\033[1;31m[Xenly] Type checking failed with %d error(s).\033[0m\n\n", type_errors);
+            ast_node_destroy(program);
+            parser_destroy(parser);
+            lexer_destroy(lexer);
+            free(source);
+            return 1;
+        }
+        if (type_errors > 0 && typecheck_mode == TYPECHECK_WARN) {
+            fprintf(stderr, "\n\033[1;33m[Xenly] Type checking produced %d warning(s), continuing...\033[0m\n\n", type_errors);
+        }
     }
 
     // ── Interpret ──────────────────────────────────────────────────────────

@@ -40,6 +40,21 @@ void ast_node_destroy(ASTNode *node) {
         }
         free(node->params);
     }
+    // Free type params
+    if (node->type_params) {
+        for (size_t i = 0; i < node->type_param_count; i++) {
+            free(node->type_params[i].name);
+            free(node->type_params[i].constraint);
+        }
+        free(node->type_params);
+    }
+    // Free type args
+    if (node->type_args) {
+        for (size_t i = 0; i < node->type_arg_count; i++) {
+            free(node->type_args[i]);
+        }
+        free(node->type_args);
+    }
     free(node->str_value);
     free(node->type_annotation);
     free(node->return_type);
