@@ -31,7 +31,7 @@ print("Hello, World!")
 
 A **Xenly** variable is created the moment you first assign a value to it.
 
-```swift
+```javascript
 // "var" variable to print()
 var hi = "Hello, World!"
 print(hi)
@@ -41,7 +41,7 @@ print(hi)
 
 ### 1. Download Xenly's source code
 
-You can download the git clone of the `xenly` programming language. It is available for the **macOS**, **WSL**, and **Linux** operating systems.
+You can download the git clone of the `xenly` programming language project. It is available for the **macOS**, **WSL** (Windows Subsystem for Linux), and **Linux** operating systems.
 
 
 ```bash
@@ -74,7 +74,7 @@ $ ./xenlyc
 ./xenly examples/hello.xe
 
 # Running xenlyc's examples (Native compiler)
-./xenlyc examples/hello.xe -o hello 
+./xenlyc examples/hello.xe -o hello
 ```
 
 ## Source Code Organization
@@ -99,6 +99,7 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
 
