@@ -1,5 +1,6 @@
 #include "interpreter.h"
 #include "modules.h"
+#include "multiproc.h"
 #include "lexer.h"
 #include "parser.h"
 #include <stdio.h>
@@ -211,6 +212,7 @@ void env_destroy(Environment *env) {
         free(cur->name);
         if (cur->value) {
             // VAL_FUNCTION: shared reference, never freed here (owned by declaring env)
+            // VAL_BUILTIN_FN: statically allocated, never freed
             // VAL_INSTANCE: shared reference, freed by shutdown_destroy
             // VAL_CLASS: shared references (from env_get) are NOT freed here.
             //   Local wrappers (e.g. __super__, marked with local=1) ARE freed —
@@ -218,6 +220,7 @@ void env_destroy(Environment *env) {
             if (cur->value->type == VAL_CLASS && cur->value->local) {
                 free(cur->value);   // free local wrapper only; ClassDef owned by global
             } else if (cur->value->type != VAL_FUNCTION &&
+                       cur->value->type != VAL_BUILTIN_FN &&
                        cur->value->type != VAL_CLASS &&
                        cur->value->type != VAL_INSTANCE) {
                 value_destroy(cur->value);
@@ -383,6 +386,10 @@ Interpreter *interpreter_create(void) {
     interp->current_exports = NULL;
     interp->task_queue      = NULL;
     interp->task_queue_tail = NULL;
+    
+    // Register multiprocessing builtins
+    register_multiproc_builtins(interp);
+    
     return interp;
 }
 
@@ -390,6 +397,13 @@ void interpreter_set_source_dir(Interpreter *interp, const char *dir) {
     if (!interp || !dir) return;
     free(interp->source_dir);
     interp->source_dir = strdup(dir);
+}
+
+void register_builtin(Interpreter *interp, const char *name, BuiltinFn fn) {
+    Value *builtin = (Value *)calloc(1, sizeof(Value));
+    builtin->type = VAL_BUILTIN_FN;
+    builtin->builtin_fn = fn;
+    env_set(interp->global, name, builtin);
 }
 
 void interpreter_destroy(Interpreter *interp) {
@@ -435,7 +449,7 @@ void interpreter_destroy(Interpreter *interp) {
 }
 
 // ─── Forward: Evaluator ──────────────────────────────────────────────────────
-static Value *eval(Interpreter *interp, ASTNode *node, Environment *env);
+Value *eval(Interpreter *interp, ASTNode *node, Environment *env);
 
 // ─── Import Module ───────────────────────────────────────────────────────────
 // ─── Forward declarations: user module helpers ──────────────────────────────
@@ -696,7 +710,7 @@ static int is_user_module(Interpreter *interp, const char *name) {
     return 0;
 }
 // ─── Main Eval Dispatch ──────────────────────────────────────────────────────
-static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
+Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
     if (!node || interp->had_error) return value_null();
 
     switch (node->type) {
@@ -882,6 +896,7 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         fnval->fn->param_count = node->param_count;
         fnval->fn->body       = node->children[0]; // the block
         fnval->fn->closure    = env;               // capture current env
+        fnval->fn->is_async   = (int)node->num_value;  // async flag from parser
         env_retain(env);                           // increment refcount
         env_set(env, node->str_value, fnval);
         return value_null();
@@ -890,7 +905,28 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
     // ── FN CALL ────────────────────────────────────────────────────────────
     case NODE_FN_CALL: {
         Value *fnval = env_get(env, node->str_value);
-        if (!fnval || fnval->type != VAL_FUNCTION) {
+        if (!fnval) {
+            fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: Undefined function '%s'.\033[0m\n",
+                    node->line, node->str_value);
+            interp->had_error = 1;
+            return value_null();
+        }
+        
+        // Handle built-in functions
+        if (fnval->type == VAL_BUILTIN_FN) {
+            // Evaluate all arguments
+            Value **args = (Value **)malloc(sizeof(Value *) * node->child_count);
+            for (size_t i = 0; i < node->child_count; i++) {
+                args[i] = eval(interp, node->children[i], env);
+            }
+            
+            // Call the builtin
+            Value *result = fnval->builtin_fn(args, node->child_count);
+            free(args);
+            return result;
+        }
+        
+        if (fnval->type != VAL_FUNCTION) {
             fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: '%s' is not a function.\033[0m\n",
                     node->line, node->str_value);
             interp->had_error = 1;
@@ -2173,6 +2209,91 @@ static Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         int truthy = is_truthy(cond);
         value_destroy(cond);
         return eval(interp, node->children[truthy ? 1 : 2], env);
+    }
+
+    // ── SPAWN (async task launch) ────────────────────────────────────────
+    case NODE_SPAWN: {
+        // spawn fn_call  — launches async function in background
+        ASTNode *call = node->children[0];
+        
+        if (call->type != NODE_FN_CALL && call->type != NODE_CALL_EXPR) {
+            fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: spawn expects a function call.\033[0m\n",
+                    node->line);
+            interp->had_error = 1;
+            return value_null();
+        }
+        
+        // Get the function
+        Value *fnval = NULL;
+        if (call->type == NODE_FN_CALL) {
+            fnval = env_get(env, call->str_value);
+        } else {
+            // NODE_CALL_EXPR: evaluate the callee
+            fnval = eval(interp, call->children[0], env);
+        }
+        
+        if (!fnval || fnval->type != VAL_FUNCTION) {
+            fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: spawn requires a function.\033[0m\n",
+                    node->line);
+            interp->had_error = 1;
+            return value_null();
+        }
+        
+        FnDef *fn = fnval->fn;
+        if (!fn->is_async) {
+            fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: spawn requires an async function.\033[0m\n",
+                    node->line);
+            interp->had_error = 1;
+            return value_null();
+        }
+        
+        // Evaluate arguments
+        size_t argc = (call->type == NODE_FN_CALL) ? call->child_count : 
+                      (call->child_count > 1 ? call->child_count - 1 : 0);
+        size_t arg_start = (call->type == NODE_CALL_EXPR) ? 1 : 0;
+        
+        Value **args = (Value **)malloc(sizeof(Value *) * argc);
+        for (size_t i = 0; i < argc; i++) {
+            args[i] = eval(interp, call->children[arg_start + i], env);
+        }
+        
+        // Create task and add to queue
+        Task *task = (Task *)calloc(1, sizeof(Task));
+        task->fn = fn;
+        task->args = args;
+        task->argc = argc;
+        task->call_env = env;
+        env_retain(env);
+        
+        // Enqueue task
+        if (interp->task_queue_tail) {
+            interp->task_queue_tail->next = task;
+            interp->task_queue_tail = task;
+        } else {
+            interp->task_queue = interp->task_queue_tail = task;
+        }
+        
+        // Return a task handle (for now, just return null)
+        // In a full implementation, return a Future/Promise value
+        return value_null();
+    }
+
+    // ── AWAIT (wait for async result) ────────────────────────────────────
+    case NODE_AWAIT: {
+        // await fn_call  — calls async function and waits for result
+        ASTNode *call = node->children[0];
+        
+        if (call->type != NODE_FN_CALL && call->type != NODE_CALL_EXPR) {
+            fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: await expects a function call.\033[0m\n",
+                    node->line);
+            interp->had_error = 1;
+            return value_null();
+        }
+        
+        // For now, just execute synchronously
+        // A full implementation would check if it's a Future/Promise and wait
+        Value *result = eval(interp, call, env);
+        return result;
     }
 
     default:

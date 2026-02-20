@@ -15,6 +15,7 @@ Module module_array(void);
 Module module_os(void);
 Module module_type(void);
 Module module_crypto(void);
+Module module_multiproc(void);
 Module module_path(void);
 
 #endif // MODULES_H

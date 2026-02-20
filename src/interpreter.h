@@ -11,6 +11,7 @@ typedef enum {
     VAL_BOOL,
     VAL_NULL,
     VAL_FUNCTION,   // user-defined fn
+    VAL_BUILTIN_FN, // built-in C function
     VAL_RETURN,     // sentinel: wraps a return value
     VAL_BREAK,      // sentinel: signals break
     VAL_CONTINUE,   // sentinel: signals continue
@@ -22,6 +23,9 @@ typedef enum {
 
 typedef struct Value Value;
 typedef struct Environment Environment;
+
+// ─── Native (built-in) function pointer ──────────────────────────────────────
+typedef Value* (*NativeFn)(Value **args, size_t argc);
 
 // ─── Function definition (stored inside a Value) ────────────────────────────
 typedef struct {
@@ -58,6 +62,7 @@ struct Value {
     int           local;            // 1 = local wrapper, freed by env_destroy (e.g. __super__)
     int           fn_shared;        // 1 = FnDef is a shared reference (don't free on destroy)
     FnDef        *fn;               // for VAL_FUNCTION
+    NativeFn      builtin_fn;       // for VAL_BUILTIN_FN
     Value        *inner;            // for VAL_RETURN: wraps the actual return value
     ClassDef     *class_def;        // for VAL_CLASS
     InstanceData *instance;         // for VAL_INSTANCE
@@ -86,9 +91,6 @@ struct Environment {
     Environment *parent;    // enclosing scope (NULL for global)
     int          refcount;  // reference count: closures retain, env_destroy releases
 };
-
-// ─── Native (built-in) function pointer ──────────────────────────────────────
-typedef Value* (*NativeFn)(Value **args, size_t argc);
 
 typedef struct {
     char      *name;
@@ -169,5 +171,9 @@ void         env_destroy(Environment *env);  // decrement refcount; free when 0
 void         env_set(Environment *env, const char *name, Value *val);
 void         env_set_const(Environment *env, const char *name, Value *val);  // set immutable binding
 Value       *env_get(Environment *env, const char *name);
+
+// Builtin function registration
+typedef Value *(*BuiltinFn)(Value **args, size_t argc);
+void register_builtin(Interpreter *interp, const char *name, BuiltinFn fn);
 
 #endif // INTERPRETER_H
