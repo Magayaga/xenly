@@ -91,6 +91,13 @@ typedef enum {
 // Forward declarations
 typedef struct ASTNode ASTNode;
 typedef struct Param   Param;
+typedef struct TypeParam TypeParam;
+
+// ─── Type Parameter (for generics) ──────────────────────────────────────────
+struct TypeParam {
+    char *name;              // e.g., "T", "U", "K", "V"
+    char *constraint;        // optional: "Comparable", "Numeric", or NULL
+};
 
 // ─── Function Parameter ─────────────────────────────────────────────────────
 struct Param {
@@ -118,6 +125,14 @@ struct ASTNode {
     // Function declarations: parameter list
     Param   *params;
     size_t   param_count;
+    
+    // Generic type parameters
+    TypeParam *type_params;
+    size_t     type_param_count;
+    
+    // Type arguments for generic calls (e.g., func<number, string>)
+    char    **type_args;
+    size_t    type_arg_count;
 
     // Type annotations (gradual typing)
     char    *type_annotation;      // for variables: var x: number

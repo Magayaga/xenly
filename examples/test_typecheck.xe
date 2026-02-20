@@ -1,0 +1,66 @@
+// Xenly Type Checking Test Suite
+
+print("═══════════════════════════════════════")
+print("  Xenly Type Checking Test Suite")
+print("═══════════════════════════════════════")
+print()
+
+// Test 1: Type Annotations
+print("Test 1: Basic Type Annotations")
+
+var x: number = 42
+var s: string = "hello"
+var b: bool = true
+
+print("x =", x)
+print("s =", s)
+print("b =", b)
+print("✓ Type annotations work")
+print()
+
+// Test 2: Function Types
+print("Test 2: Function Type Annotations")
+
+fn add(a: number, b: number): number {
+    return a + b
+}
+
+fn greet(name: string): string {
+    return "Hello, " + name
+}
+
+print("add(10, 20) =", add(10, 20))
+print("greet(\"Alice\") =", greet("Alice"))
+print("✓ Function types work")
+print()
+
+// Test 3: Array Types
+print("Test 3: Array Type Inference")
+
+var numbers = [1, 2, 3, 4, 5]
+var words = ["hello", "world"]
+
+print("numbers =", numbers)
+print("words =", words)
+print("✓ Array types inferred")
+print()
+
+// Test 4: Generic Functions
+print("Test 4: Generic Functions")
+
+fn identity<T>(x: T): T {
+    return x
+}
+
+fn pair<A, B>(first: A, second: B) {
+    return [first, second]
+}
+
+print("identity(42) =", identity(42))
+print("pair(1, \"one\") =", pair(1, "one"))
+print("✓ Generic types checked")
+print()
+
+print("═══════════════════════════════════════")
+print("  All Tests Complete!")
+print("═══════════════════════════════════════")

@@ -12,14 +12,15 @@
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 int modules_get(const char *name, Module *out) {
-    if (strcmp(name, "math")   == 0) { *out = module_math();   return 1; }
-    if (strcmp(name, "string") == 0) { *out = module_string(); return 1; }
-    if (strcmp(name, "io")     == 0) { *out = module_io();     return 1; }
-    if (strcmp(name, "array")  == 0) { *out = module_array();  return 1; }
-    if (strcmp(name, "os")     == 0) { *out = module_os();     return 1; }
-    if (strcmp(name, "type")   == 0) { *out = module_type();   return 1; }
-    if (strcmp(name, "crypto") == 0) { *out = module_crypto(); return 1; }
-    if (strcmp(name, "path")   == 0) { *out = module_path();   return 1; }
+    if (strcmp(name, "math")      == 0) { *out = module_math();      return 1; }
+    if (strcmp(name, "string")    == 0) { *out = module_string();    return 1; }
+    if (strcmp(name, "io")        == 0) { *out = module_io();        return 1; }
+    if (strcmp(name, "array")     == 0) { *out = module_array();     return 1; }
+    if (strcmp(name, "os")        == 0) { *out = module_os();        return 1; }
+    if (strcmp(name, "type")      == 0) { *out = module_type();      return 1; }
+    if (strcmp(name, "crypto")    == 0) { *out = module_crypto();    return 1; }
+    if (strcmp(name, "path")      == 0) { *out = module_path();      return 1; }
+    if (strcmp(name, "multiproc") == 0) { *out = module_multiproc(); return 1; }
     return 0;
 }
 
@@ -2079,5 +2080,147 @@ Module module_type(void) {
     m.name      = NULL;
     m.functions = type_fns;
     m.fn_count  = sizeof(type_fns)/sizeof(type_fns[0]) - 1;  // auto-count
+    return m;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MULTIPROC MODULE  — high-performance multiprocessing & concurrency
+// ═════════════════════════════════════════════════════════════════════════════
+#include "multiproc.h"
+
+static Value *mp_cpu_count(Value **args, size_t argc) {
+    (void)args; (void)argc;
+    long nproc = sysconf(_SC_NPROCESSORS_ONLN);
+    return value_number((double)nproc);
+}
+
+static Value *mp_channel_create(Value **args, size_t argc) {
+    size_t capacity = 0;
+    if (argc > 0 && args[0]->type == VAL_NUMBER) {
+        capacity = (size_t)args[0]->num;
+    }
+    Channel *chan = channel_create(capacity);
+    return value_number((double)(uintptr_t)chan);
+}
+
+static Value *mp_channel_send(Value **args, size_t argc) {
+    if (argc < 2) return value_number(-1);
+    Channel *chan = (Channel *)(uintptr_t)args[0]->num;
+    // Make a copy of the value to send (channel takes ownership)
+    Value *original = args[1];
+    Value *copy = NULL;
+    
+    switch (original->type) {
+        case VAL_NUMBER:
+            copy = value_number(original->num);
+            break;
+        case VAL_STRING:
+            copy = value_string(original->str);
+            break;
+        case VAL_BOOL:
+            copy = value_bool(original->boolean);
+            break;
+        case VAL_NULL:
+            copy = value_null();
+            break;
+        default:
+            // Complex types (functions, objects) - store reference
+            copy = original;
+            break;
+    }
+    
+    int result = channel_send(chan, copy);
+    return value_number((double)result);
+}
+
+static Value *mp_channel_recv(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    Channel *chan = (Channel *)(uintptr_t)args[0]->num;
+    return channel_recv(chan);
+}
+
+static Value *mp_channel_close(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    Channel *chan = (Channel *)(uintptr_t)args[0]->num;
+    channel_close(chan);
+    return value_null();
+}
+
+static Value *mp_channel_destroy(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    Channel *chan = (Channel *)(uintptr_t)args[0]->num;
+    channel_destroy(chan);
+    return value_null();
+}
+
+static Value *mp_thread_pool_create(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_NUMBER) return value_null();
+    size_t num_workers = (size_t)args[0]->num;
+    ThreadPool *pool = thread_pool_create(num_workers);
+    return value_number((double)(uintptr_t)pool);
+}
+
+static Value *mp_thread_pool_destroy(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    ThreadPool *pool = (ThreadPool *)(uintptr_t)args[0]->num;
+    thread_pool_destroy(pool);
+    return value_null();
+}
+
+static Value *mp_process_pool_create(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_NUMBER) return value_null();
+    size_t num_workers = (size_t)args[0]->num;
+    ProcessPool *pool = process_pool_create(num_workers);
+    return value_number((double)(uintptr_t)pool);
+}
+
+static Value *mp_process_pool_destroy(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    ProcessPool *pool = (ProcessPool *)(uintptr_t)args[0]->num;
+    process_pool_destroy(pool);
+    return value_null();
+}
+
+static Value *mp_future_get(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    Future *fut = (Future *)(uintptr_t)args[0]->num;
+    return future_get(fut);
+}
+
+static Value *mp_future_is_ready(Value **args, size_t argc) {
+    if (argc < 1) return value_bool(0);
+    Future *fut = (Future *)(uintptr_t)args[0]->num;
+    return value_bool(future_is_ready(fut));
+}
+
+static Value *mp_future_destroy(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    Future *fut = (Future *)(uintptr_t)args[0]->num;
+    future_destroy(fut);
+    return value_null();
+}
+
+static NativeFunc multiproc_fns[] = {
+    { "cpu_count",          mp_cpu_count },
+    { "channel_create",     mp_channel_create },
+    { "channel_send",       mp_channel_send },
+    { "channel_recv",       mp_channel_recv },
+    { "channel_close",      mp_channel_close },
+    { "channel_destroy",    mp_channel_destroy },
+    { "thread_pool_create", mp_thread_pool_create },
+    { "thread_pool_destroy", mp_thread_pool_destroy },
+    { "process_pool_create", mp_process_pool_create },
+    { "process_pool_destroy", mp_process_pool_destroy },
+    { "future_get",         mp_future_get },
+    { "future_is_ready",    mp_future_is_ready },
+    { "future_destroy",     mp_future_destroy },
+    { NULL, NULL }
+};
+
+Module module_multiproc(void) {
+    Module m;
+    m.name      = NULL;
+    m.functions = multiproc_fns;
+    m.fn_count  = sizeof(multiproc_fns)/sizeof(multiproc_fns[0]) - 1;
     return m;
 }

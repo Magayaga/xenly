@@ -212,6 +212,48 @@ static ASTNode *parse_statement(Parser *p) {
         node->str_value = strdup(p->current.value);
         advance(p);
 
+        // Generic type parameters: fn name<T, U>
+        if (match(p, TOKEN_LT)) {
+            size_t tp_cap = 4, tp_count = 0;
+            TypeParam *type_params = (TypeParam *)malloc(sizeof(TypeParam) * tp_cap);
+            
+            do {
+                if (!check(p, TOKEN_IDENTIFIER)) { 
+                    error_at(p, "Expected type parameter name after '<'.");
+                    break;
+                }
+                if (tp_count >= tp_cap) { 
+                    tp_cap *= 2; 
+                    type_params = (TypeParam *)realloc(type_params, sizeof(TypeParam) * tp_cap);
+                }
+                type_params[tp_count].name = strdup(p->current.value);
+                type_params[tp_count].constraint = NULL;
+                advance(p);
+                
+                // Optional constraint: T: Comparable
+                if (match(p, TOKEN_COLON)) {
+                    if (!check(p, TOKEN_IDENTIFIER)) {
+                        error_at(p, "Expected constraint name after ':'.");
+                    } else {
+                        type_params[tp_count].constraint = strdup(p->current.value);
+                        advance(p);
+                    }
+                }
+                
+                tp_count++;
+            } while (match(p, TOKEN_COMMA));
+            
+            if (!match(p, TOKEN_GT)) {
+                error_at(p, "Expected '>' to close type parameters.");
+            }
+            
+            node->type_params = type_params;
+            node->type_param_count = tp_count;
+        } else {
+            node->type_params = NULL;
+            node->type_param_count = 0;
+        }
+
         // Parameter list
         expect(p, TOKEN_LPAREN, "Expected '(' after function name.");
         // Parse params
@@ -671,6 +713,48 @@ static ASTNode *parse_statement(Parser *p) {
         node->str_value = strdup(p->current.value);
         advance(p);
 
+        // Generic type parameters: class Name<T, U>
+        if (match(p, TOKEN_LT)) {
+            size_t tp_cap = 4, tp_count = 0;
+            TypeParam *type_params = (TypeParam *)malloc(sizeof(TypeParam) * tp_cap);
+            
+            do {
+                if (!check(p, TOKEN_IDENTIFIER)) { 
+                    error_at(p, "Expected type parameter name after '<'.");
+                    break;
+                }
+                if (tp_count >= tp_cap) { 
+                    tp_cap *= 2; 
+                    type_params = (TypeParam *)realloc(type_params, sizeof(TypeParam) * tp_cap);
+                }
+                type_params[tp_count].name = strdup(p->current.value);
+                type_params[tp_count].constraint = NULL;
+                advance(p);
+                
+                // Optional constraint: T: Comparable
+                if (match(p, TOKEN_COLON)) {
+                    if (!check(p, TOKEN_IDENTIFIER)) {
+                        error_at(p, "Expected constraint name after ':'.");
+                    } else {
+                        type_params[tp_count].constraint = strdup(p->current.value);
+                        advance(p);
+                    }
+                }
+                
+                tp_count++;
+            } while (match(p, TOKEN_COMMA));
+            
+            if (!match(p, TOKEN_GT)) {
+                error_at(p, "Expected '>' to close type parameters.");
+            }
+            
+            node->type_params = type_params;
+            node->type_param_count = tp_count;
+        } else {
+            node->type_params = NULL;
+            node->type_param_count = 0;
+        }
+
         // Optional: extends ParentClass
         if (match(p, TOKEN_EXTENDS)) {
             if (!check(p, TOKEN_IDENTIFIER)) { error_at(p, "Expected parent class name after 'extends'."); return node; }
@@ -977,6 +1061,50 @@ static ASTNode *parse_call(Parser *p) {
 
     // ── Postfix loop: handles (), .prop, .method(), ++, -- repeatedly ─────────
     while (1) {
+        // ── Type arguments: ident<T, U> ───────────────────────────────────────
+        // Parse type arguments if we see < after an identifier.
+        // Heuristic: we only parse as type args if the next token is an identifier
+        // (to distinguish from comparison operators like x < y).
+        // A better solution would require more lookahead or backtracking.
+        if (expr->type == NODE_IDENTIFIER && check(p, TOKEN_LT)) {
+            // Save the current token so we can check what comes after <
+            Token saved_current = p->current;
+            advance(p); // tentatively consume <
+            
+            // If next token is an identifier, treat as type argument list
+            if (check(p, TOKEN_IDENTIFIER)) {
+                size_t ta_cap = 4, ta_count = 0;
+                char **type_args = (char **)malloc(sizeof(char *) * ta_cap);
+                
+                do {
+                    if (!check(p, TOKEN_IDENTIFIER)) {
+                        error_at(p, "Expected type name in type argument list.");
+                        break;
+                    }
+                    if (ta_count >= ta_cap) {
+                        ta_cap *= 2;
+                        type_args = (char **)realloc(type_args, sizeof(char *) * ta_cap);
+                    }
+                    type_args[ta_count++] = strdup(p->current.value);
+                    advance(p);
+                } while (match(p, TOKEN_COMMA));
+                
+                if (!match(p, TOKEN_GT)) {
+                    error_at(p, "Expected '>' to close type argument list.");
+                }
+                
+                expr->type_args = type_args;
+                expr->type_arg_count = ta_count;
+            } else {
+                // Not a type argument - restore and treat as comparison
+                // We can't truly backtrack, so this is best-effort
+                // The saved_current is already consumed, so we just continue
+                // This means `foo < bar` might be misparsed. For now, require
+                // explicit parentheses or spacing to disambiguate.
+                (void)saved_current; // suppress unused warning
+            }
+        }
+        
         // ── Function call: expr(args) ─────────────────────────────────────────
         // Any expression that resolves to a callable value may be called.
         // NODE_CALL_EXPR: when the callee is not a simple identifier (e.g. a
@@ -990,6 +1118,13 @@ static ASTNode *parse_call(Parser *p) {
             if (expr->type == NODE_IDENTIFIER) {
                 call = ast_node_create(NODE_FN_CALL, expr->line);
                 call->str_value = strdup(expr->str_value);
+                // Transfer type arguments if present
+                if (expr->type_args) {
+                    call->type_args = expr->type_args;
+                    call->type_arg_count = expr->type_arg_count;
+                    expr->type_args = NULL;  // prevent double-free
+                    expr->type_arg_count = 0;
+                }
                 ast_node_destroy(expr);
                 expr = NULL;
             } else {

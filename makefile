@@ -83,7 +83,8 @@ $(info Flags: $(CFLAGS))
 # ─── Interpreter ─────────────────────────────────────────────────────────────
 TARGET  = xenly
 INTERP_SRCS = src/main.c src/lexer.c src/ast.c src/parser.c \
-              src/interpreter.c src/modules.c src/typecheck.c src/unicode.c
+              src/interpreter.c src/modules.c src/typecheck.c src/unicode.c \
+              src/multiproc.c src/multiproc_builtins.c
 INTERP_OBJS = $(INTERP_SRCS:.c=.o)
 
 # ─── Native Compiler ─────────────────────────────────────────────────────────
@@ -97,7 +98,8 @@ XENLYC_OBJS = $(XENLYC_SRCS:.c=.o)
 # xly_rt.c  — value ops, print, module dispatch shim
 # modules.c — the 100 stdlib native functions (shared with interpreter)
 # unicode.c — UTF-8 handling
-RT_SRCS  = src/xly_rt.c src/modules.c src/unicode.c
+# multiproc.c — multiprocessing support
+RT_SRCS  = src/xly_rt.c src/modules.c src/unicode.c src/multiproc.c
 RT_OBJS  = $(RT_SRCS:.c=.o)
 RT_LIB   = libxly_rt.a
 
