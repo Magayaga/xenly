@@ -5,6 +5,7 @@
 #include "xdmml_extended.h"
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #if defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)
     #include <dlfcn.h>

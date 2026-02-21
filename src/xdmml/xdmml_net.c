@@ -9,6 +9,7 @@
 
 #if defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_MACOS) || defined(XDMML_PLATFORM_FREEBSD)
     #include <sys/socket.h>
+    #include <sys/time.h>
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <netdb.h>
@@ -76,7 +77,7 @@ XDMML_Result xdmml_connect(XDMML_Socket* socket, const char* host, uint16_t port
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
+    memcpy(&addr.sin_addr.s_addr, server->h_addr_list[0], server->h_length);
     
     if (connect(socket->fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         return XDMML_ERROR;

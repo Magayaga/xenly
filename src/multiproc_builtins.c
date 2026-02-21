@@ -191,7 +191,7 @@ Value *builtin_cpu_count(Value **args, size_t argc) {
 }
 
 // ─── Registration ─────────────────────────────────────────────────────────────
-void register_multiproc_builtins(struct Interpreter *interp) {
+void register_multiproc_builtins(Interpreter *interp) {
     // Thread pool
     register_builtin(interp, "thread_pool_create", builtin_thread_pool_create);
     register_builtin(interp, "thread_pool_submit", builtin_thread_pool_submit);

@@ -9,7 +9,6 @@
 #include <unistd.h>
 
 // Forward declarations
-struct Interpreter;
 struct Value;
 typedef struct Future Future;
 
@@ -105,6 +104,6 @@ Value *future_get(Future *fut);                    // blocks until ready
 int future_is_ready(Future *fut);
 
 // Built-in registration
-void register_multiproc_builtins(struct Interpreter *interp);
+void register_multiproc_builtins(Interpreter *interp);
 
 #endif // MULTIPROC_H

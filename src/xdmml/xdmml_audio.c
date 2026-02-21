@@ -7,9 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)
+#if (defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)) && defined(XDMML_HAS_ALSA)
     #include <alsa/asoundlib.h>
-    #define XDMML_HAS_ALSA 1
+#elif defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)
+    // ALSA not available — audio support disabled
 #elif defined(XDMML_PLATFORM_MACOS)
     #include <AudioToolbox/AudioToolbox.h>
     #define XDMML_HAS_COREAUDIO 1

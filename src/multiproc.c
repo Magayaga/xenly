@@ -18,7 +18,7 @@
 #include <stdio.h>
 
 // Forward declare eval from interpreter.c
-extern Value *eval(struct Interpreter *interp, ASTNode *node, Environment *env);
+extern Value *eval(Interpreter *interp, ASTNode *node, Environment *env);
 
 // ─── Future Implementation ────────────────────────────────────────────────────
 Future *future_create(void) {

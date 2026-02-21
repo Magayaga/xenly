@@ -18,7 +18,7 @@ static struct {
 
 // ─── Platform-Specific Includes ──────────────────────────────────────────────
 
-#if defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)
+#if (defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)) && defined(XDMML_HAS_X11)
     #include <X11/Xlib.h>
     #include <X11/Xutil.h>
     #ifdef XDMML_HAS_OPENGL
@@ -30,6 +30,11 @@ static struct {
     
     static Display* g_display = NULL;
     static int g_screen = 0;
+    
+#elif defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)
+    // X11 not available — headless/server mode only
+    #include <sys/time.h>
+    #include <unistd.h>
     
 #elif defined(XDMML_PLATFORM_MACOS)
     #include <CoreFoundation/CoreFoundation.h>
@@ -202,7 +207,9 @@ void xdmml_destroy_window(XDMML_Window* window) {
     
 #if defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)
     if (window->glx_context) {
+#ifdef XDMML_HAS_OPENGL
         glXDestroyContext(g_display, window->glx_context);
+#endif
     }
     if (window->xwindow) {
         XDestroyWindow(g_display, window->xwindow);
@@ -259,7 +266,9 @@ void xdmml_swap_window(XDMML_Window* window) {
     if (!window) return;
 #if defined(XDMML_PLATFORM_LINUX) || defined(XDMML_PLATFORM_FREEBSD)
     if (window->glx_context) {
+#ifdef XDMML_HAS_OPENGL
         glXSwapBuffers(g_display, window->xwindow);
+#endif
     }
 #endif
 }

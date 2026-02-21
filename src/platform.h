@@ -52,17 +52,25 @@
     // POSIX sysconf available
     #define XLY_HAS_SYSCONF 1
 #elif defined(XLY_PLATFORM_MACOS)
-    // macOS has sysconf but also sysctl
+    // macOS has sysconf; use it instead of sysctl to avoid BSD-type compatibility issues
     #define XLY_HAS_SYSCONF 1
-    #define XLY_HAS_SYSCTL 1
-    #include <sys/types.h>
-    #include <sys/sysctl.h>
 #elif defined(XLY_PLATFORM_WINDOWS)
     #include <windows.h>
 #endif
 
 static inline long xly_cpu_count(void) {
-#if defined(XLY_HAS_SYSCONF)
+#if defined(XLY_PLATFORM_MACOS)
+    // _SC_NPROCESSORS_ONLN is unavailable under strict _POSIX_C_SOURCE on macOS.
+    // Use sysctlbyname which has a stable, minimal prototype in sys/types.h.
+    int count = 0;
+    size_t count_len = sizeof(count);
+    // sysctlbyname is declared in sys/sysctl.h but we call through a forward decl
+    // to avoid pulling in BSD types that conflict with _POSIX_C_SOURCE.
+    extern int sysctlbyname(const char *, void *, size_t *, void *, size_t);
+    if (sysctlbyname("hw.logicalcpu", &count, &count_len, NULL, 0) == 0 && count > 0)
+        return (long)count;
+    return 1;
+#elif defined(XLY_HAS_SYSCONF)
     long nproc = sysconf(_SC_NPROCESSORS_ONLN);
     return (nproc > 0) ? nproc : 1;
 #elif defined(XLY_PLATFORM_WINDOWS)
@@ -146,10 +154,7 @@ static inline long xly_cpu_count(void) {
 
 // ─── Memory ──────────────────────────────────────────────────────────────────
 
-#if defined(XLY_PLATFORM_MACOS)
-    // macOS doesn't have malloc.h but has malloc in stdlib.h
-    #include <malloc/malloc.h>
-#elif defined(XLY_PLATFORM_LINUX) || \
+#if defined(XLY_PLATFORM_LINUX) || \
       defined(XLY_PLATFORM_FREEBSD) || \
       defined(XLY_PLATFORM_OPENBSD)
     #include <malloc.h>
