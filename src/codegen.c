@@ -1,19 +1,22 @@
 /*
- * codegen.c  —  Xenly AST  →  x86-64 AT&T assembly (System V AMD64 ABI)
+ * codegen.c  —  Xenly AST → native assembly
  *
- * Design contract:
- *   • Every call to emit_expr() leaves exactly one XlyVal* in %rax.
- *   • Every call to emit_stmt() leaves the stack pointer unchanged from
- *     where it was on entry (push/pop discipline).
- *   • Before ANY `call` instruction %rsp must be 16-byte aligned.  Our
- *     prologue does `push %rbp; sub $N, %rsp` where N is rounded to 16,
- *     so %rsp is 16-aligned inside the frame.  A single pushq misaligns;
- *     we therefore never leave a lone push dangling at a call site — we
- *     always pair pushes with pops, or use sub/add.
- *   • The red zone (128 bytes below %rsp) is NOT used; we never write
- *     below %rsp.
+ * Two backends, selected at compile time:
  *
- * Supported AST nodes:
+ *   x86-64  (Linux/BSD, macOS/Intel)
+ *     • AT&T syntax, System V AMD64 ABI
+ *     • Result XlyVal* in %rax after every emit_expr()
+ *     • %rsp 16-byte aligned before every call; no red-zone use
+ *
+ *   AArch64 / ARM64  (macOS Apple Silicon)
+ *     • Apple ARM64 ABI (AAPCS64 + Apple extensions)
+ *     • Result XlyVal* in x0 after every emit_expr_a64()
+ *     • sp must be 16-byte aligned at ALL times (not just at calls)
+ *     • Frame: stp x29,x30,[sp,#-N]!  /  mov x29,sp
+ *     • Variables at negative offsets from x29 (frame pointer)
+ *     • Integer args: x0-x7   FP args: d0-d7   Scratch: x9-x15
+ *
+ * Supported AST nodes (both backends):
  *   Literals    NUMBER STRING BOOL NULL
  *   Vars        VAR_DECL ASSIGN COMPOUND_ASSIGN INCREMENT DECREMENT IDENTIFIER
  *   Exprs       BINARY UNARY FN_CALL METHOD_CALL TYPEOF
@@ -46,6 +49,18 @@
 #  define XLY_GNU_STACK_SECTION ".section .note.GNU-stack,\"\",@progbits"
 #endif
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ARCH SELECTION
+ * ═══════════════════════════════════════════════════════════════════════════ */
+#if defined(__arm64__) || defined(__aarch64__)
+#  define XLY_ARCH_ARM64 1
+#else
+#  define XLY_ARCH_X86_64 1
+#endif
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * SHARED: codegen state (same layout for both backends)
+ * ═══════════════════════════════════════════════════════════════════════════ */
 /* ── codegen state ──────────────────────────────────────────────────────── */
 typedef struct {
     FILE   *out;
@@ -150,9 +165,11 @@ static void push_cnt(CG *cg, const char *l) {
 }
 static void pop_cnt(CG *cg) { free(cg->cnt_labels[--cg->cnt_top]); }
 
-/* ── forward declarations ──────────────────────────────────────────────── */
+/* ── forward declarations (x86-64 only) ────────────────────────────────── */
+#ifdef XLY_ARCH_X86_64
 static void emit_expr(CG *cg, ASTNode *node);
 static void emit_stmt(CG *cg, ASTNode *node);
+#endif
 
 /* ── pre-pass: count VAR_DECLs recursively ─────────────────────────────── */
 static int count_locals(ASTNode *node) {
@@ -164,6 +181,11 @@ static int count_locals(ASTNode *node) {
         n += count_locals(node->children[i]);
     return n;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * x86-64 BACKEND  (Linux/BSD + macOS Intel)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+#ifdef XLY_ARCH_X86_64
 
 /* ── load a double constant into %xmm0 ─────────────────────────────────
  * We sub 8 from rsp, write the bits, movsd, add 8 back.  No red-zone, no
@@ -273,7 +295,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
          * OPTIMIZATION: For arithmetic ops (+,-,*,/), emit unboxed floating-point
          * ops to avoid boxing overhead. BUT: + is also string concat, so we need
          * a runtime type check before unboxing. */
-        int is_arith = (strcmp(op,"+") == 0 || strcmp(op,"-") == 0 || 
+        int is_arith = (strcmp(op,"+") == 0 || strcmp(op,"-") == 0 ||
                         strcmp(op,"*") == 0 || strcmp(op,"/") == 0);
 
         if (is_arith) {
@@ -281,9 +303,9 @@ static void emit_expr(CG *cg, ASTNode *node) {
              * Strategy: check if left operand is a string at runtime.
              * If yes, fall back to xly_add. Otherwise, use unboxed path. */
             int is_plus = (strcmp(op,"+") == 0);
-            
+
             /* Handle special case: both operands are number literals */
-            if (node->children[0]->type == NODE_NUMBER && 
+            if (node->children[0]->type == NODE_NUMBER &&
                 node->children[1]->type == NODE_NUMBER) {
                 /* Ultra-fast path: compile-time constant folding */
                 double left_val = node->children[0]->num_value;
@@ -293,7 +315,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 else if (strcmp(op,"-") == 0) result = left_val - right_val;
                 else if (strcmp(op,"*") == 0) result = left_val * right_val;
                 else                          result = left_val / right_val;
-                
+
                 uint64_t bits;
                 memcpy(&bits, &result, sizeof(double));
                 emit(cg, "    subq    $8, %%rsp");
@@ -307,67 +329,67 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 char lbl_slow[64], lbl_end[64];
                 fresh_label(cg, lbl_slow, sizeof(lbl_slow));
                 fresh_label(cg, lbl_end, sizeof(lbl_end));
-                
+
                 /* Eval both operands */
                 emit_expr(cg, node->children[0]);
                 emit(cg, "    pushq   %%rax");  /* save left */
                 emit_expr(cg, node->children[1]);
                 emit(cg, "    movq    %%rax, %%rsi");  /* rsi = right */
                 emit(cg, "    popq    %%rdi");          /* rdi = left */
-                
+
                 /* Check if left is VAL_STRING (type == 1) */
                 emit(cg, "    cmpl    $1, (%%rdi)");    /* check left.type == VAL_STRING */
                 emit(cg, "    je      %s", lbl_slow);   /* if string, use slow path */
-                
+
                 /* Check if right is VAL_STRING */
                 emit(cg, "    cmpl    $1, (%%rsi)");    /* check right.type == VAL_STRING */
                 emit(cg, "    je      %s", lbl_slow);   /* if string, use slow path */
-                
+
                 /* Fast path: both are numbers, unbox and add */
                 emit(cg, "    movsd   8(%%rdi), %%xmm0");
                 emit(cg, "    movsd   8(%%rsi), %%xmm1");
                 emit(cg, "    addsd   %%xmm1, %%xmm0");
                 emit(cg, "    call    " XLY_SYM("xly_num"));
                 emit(cg, "    jmp     %s", lbl_end);
-                
+
                 /* Slow path: call xly_add for string concat or mixed types */
                 emit(cg, "%s:", lbl_slow);
                 emit(cg, "    call    " XLY_SYM("xly_add"));
-                
+
                 emit(cg, "%s:", lbl_end);
             } else {
                 /* For -, *, /: always use unboxed path (no string operations) */
-                
+
                 /* Eval left operand → %rax (XlyVal*) */
                 emit_expr(cg, node->children[0]);
                 emit(cg, "    pushq   %%rax");  /* save left boxed value */
-                
+
                 /* Eval right operand → %rax (XlyVal*) */
                 emit_expr(cg, node->children[1]);
                 emit(cg, "    movq    %%rax, %%rsi");  /* rsi = right boxed */
                 emit(cg, "    popq    %%rdi");          /* rdi = left boxed */
-                
+
                 /* Unbox both */
                 emit(cg, "    movsd   8(%%rdi), %%xmm0");
                 emit(cg, "    movsd   8(%%rsi), %%xmm1");
-                
+
                 /* Perform arithmetic */
                 if      (strcmp(op,"-") == 0) emit(cg, "    subsd   %%xmm1, %%xmm0");
                 else if (strcmp(op,"*") == 0) emit(cg, "    mulsd   %%xmm1, %%xmm0");
                 else if (strcmp(op,"/") == 0) emit(cg, "    divsd   %%xmm1, %%xmm0");
-                
+
                 /* Box result */
                 emit(cg, "    call    " XLY_SYM("xly_num"));
             }
         } else {
             /* ── Comparisons and other ops ─────────────────────────────────── */
-            int is_comparison = (strcmp(op,"<") == 0 || strcmp(op,">") == 0 || 
+            int is_comparison = (strcmp(op,"<") == 0 || strcmp(op,">") == 0 ||
                                 strcmp(op,"<=") == 0 || strcmp(op,">=") == 0 ||
                                 strcmp(op,"==") == 0 || strcmp(op,"!=") == 0);
-            
+
             if (is_comparison) {
                 /* OPTIMIZATION: Unboxed comparisons for numbers */
-                if (node->children[0]->type == NODE_NUMBER && 
+                if (node->children[0]->type == NODE_NUMBER &&
                     node->children[1]->type == NODE_NUMBER) {
                     /* Compile-time constant folding */
                     double left_val = node->children[0]->num_value;
@@ -379,7 +401,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
                     else if (strcmp(op,">=") == 0) result = left_val >= right_val;
                     else if (strcmp(op,"==") == 0) result = left_val == right_val;
                     else                           result = left_val != right_val;
-                    
+
                     emit(cg, "    movl    $%d, %%edi", result);
                     emit(cg, "    call    " XLY_SYM("xly_bool"));
                 } else {
@@ -387,35 +409,35 @@ static void emit_expr(CG *cg, ASTNode *node) {
                     char lbl_slow[64], lbl_end[64];
                     fresh_label(cg, lbl_slow, sizeof(lbl_slow));
                     fresh_label(cg, lbl_end, sizeof(lbl_end));
-                    
+
                     emit_expr(cg, node->children[0]);
                     emit(cg, "    pushq   %%rax");
                     emit_expr(cg, node->children[1]);
                     emit(cg, "    movq    %%rax, %%rsi");
                     emit(cg, "    popq    %%rdi");
-                    
+
                     /* Check if both are numbers */
                     emit(cg, "    cmpl    $0, (%%rdi)");
                     emit(cg, "    jne     %s", lbl_slow);
                     emit(cg, "    cmpl    $0, (%%rsi)");
                     emit(cg, "    jne     %s", lbl_slow);
-                    
+
                     /* Fast path: unbox and compare */
                     emit(cg, "    movsd   8(%%rdi), %%xmm0");
                     emit(cg, "    movsd   8(%%rsi), %%xmm1");
                     emit(cg, "    ucomisd %%xmm1, %%xmm0");
-                    
+
                     if (strcmp(op,"<") == 0)       emit(cg, "    setb    %%al");
                     else if (strcmp(op,">") == 0)  emit(cg, "    seta    %%al");
                     else if (strcmp(op,"<=") == 0) emit(cg, "    setbe   %%al");
                     else if (strcmp(op,">=") == 0) emit(cg, "    setae   %%al");
                     else if (strcmp(op,"==") == 0) emit(cg, "    sete    %%al");
                     else                           emit(cg, "    setne   %%al");
-                    
+
                     emit(cg, "    movzbl  %%al, %%edi");
                     emit(cg, "    call    " XLY_SYM("xly_bool"));
                     emit(cg, "    jmp     %s", lbl_end);
-                    
+
                     /* Slow path */
                     emit(cg, "%s:", lbl_slow);
                     const char *fn = NULL;
@@ -924,17 +946,17 @@ static void emit_function(CG *cg, ASTNode *fn) {
     for (size_t i = 0; i < nparams && i < 6; i++) {
         int off = var_declare(cg, fn->params[i].name);
         emit(cg, "    movq    %%%s, %d(%%rbp)", pregs[i], off);
-        
+
         /* Handle optional/default parameters */
         if (fn->params[i].is_optional || fn->params[i].default_value) {
             char lbl_has_arg[64];
             fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
-            
+
             /* Check if argument is null (not provided) */
             emit(cg, "    movq    %d(%%rbp), %%rax", off);
             emit(cg, "    testq   %%rax, %%rax");
             emit(cg, "    jnz     %s", lbl_has_arg);
-            
+
             /* Argument not provided - use default */
             if (fn->params[i].default_value) {
                 /* Evaluate default value expression */
@@ -943,7 +965,7 @@ static void emit_function(CG *cg, ASTNode *fn) {
             } else {
                 /* Optional without default - already null */
             }
-            
+
             emit(cg, "%s:", lbl_has_arg);
         }
     }
@@ -966,8 +988,8 @@ static void emit_function(CG *cg, ASTNode *fn) {
     cg->scope_depth  = sv_sd;
 }
 
-/* ── public entry ───────────────────────────────────────────────────────── */
-int codegen(ASTNode *program, const char *outpath) {
+/* ── x86-64 public entry (called by the dispatch codegen() below) ───────── */
+static int codegen_x86_64(ASTNode *program, const char *outpath) {
     CG cg;
     memset(&cg, 0, sizeof(cg));
     cg.out = fopen(outpath, "w");
@@ -1046,3 +1068,879 @@ int codegen(ASTNode *program, const char *outpath) {
 
     return cg.had_error;
 }
+
+#endif /* XLY_ARCH_X86_64 */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AArch64 / ARM64 BACKEND  (macOS Apple Silicon)
+ *
+ * ABI (Apple ARM64 / AAPCS64):
+ *   • Integer/pointer args:  x0–x7        Return: x0
+ *   • FP args:               d0–d7        Return: d0
+ *   • Caller-saved scratch:  x9–x15, d8–d15
+ *   • Callee-saved:          x19–x28, x29 (fp), x30 (lr)
+ *   • Frame pointer:         x29   Link register: x30
+ *   • sp MUST be 16-byte aligned at ALL times (enforced by hardware)
+ *   • No red zone on macOS/arm64
+ *
+ * Frame layout per function:
+ *   sp after prologue:   [x29|x30] at highest addresses, locals below
+ *   Variable slots:      negative offsets from x29 (e.g. [x29, #-8])
+ *   Spill slots:         we use str/ldr pairs around calls instead of
+ *                        push/pop (no push/pop on AArch64)
+ *
+ * Key emit conventions:
+ *   emit_expr_a64(cg, node)  — result XlyVal* lands in x0; sp unchanged
+ *   emit_stmt_a64(cg, node)  — sp unchanged on exit
+ *   bl   SYM               — branch-with-link (call)
+ *   adrp x9, SYM@PAGE      — load PC-relative address (2-instr sequence)
+ *   add  x9, x9, SYM@PAGEOFF
+ * ═══════════════════════════════════════════════════════════════════════════ */
+#ifdef XLY_ARCH_ARM64
+
+/* ── runtime symbol name helper (ARM64 only) ─────────────────────────────
+ * XLY_SYM() is a compile-time string concatenation macro, so it cannot
+ * accept a runtime variable.  xly_sym_a64() returns a pointer to a static
+ * buffer with the correct prefix for the current platform.               */
+#ifdef XLY_ARCH_ARM64
+static const char *xly_sym_a64(char *buf, size_t bufsz, const char *name) {
+#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
+    snprintf(buf, bufsz, "_%s", name);
+#else
+    snprintf(buf, bufsz, "%s", name);
+#endif
+    return buf;
+}
+#define XLY_RSYM(buf, name)  xly_sym_a64((buf), sizeof(buf), (name))
+#endif /* XLY_ARCH_ARM64 */
+static void emit_expr_a64(CG *cg, ASTNode *node);
+static void emit_stmt_a64(CG *cg, ASTNode *node);
+
+/* ── load a 64-bit double constant into d0 ──────────────────────────────
+ * Strategy: materialise the bit pattern in x9 via movz/movk, then
+ * fmov d0, x9.  Works for any bit pattern without a .rodata entry.        */
+static void emit_load_double_a64(CG *cg, double d) {
+    union { double d; uint64_t u; } uu; uu.d = d;
+    uint64_t u = uu.u;
+    /* Build u in x9 with up to 4 movz/movk instructions */
+    int first = 1;
+    for (int shift = 0; shift <= 48; shift += 16) {
+        uint64_t chunk = (u >> shift) & 0xFFFF;
+        if (chunk == 0 && !first) continue;
+        if (first) {
+            emit(cg, "    movz    x9, #0x%llx, lsl #%d", (unsigned long long)chunk, shift);
+            first = 0;
+        } else {
+            emit(cg, "    movk    x9, #0x%llx, lsl #%d", (unsigned long long)chunk, shift);
+        }
+    }
+    if (first) emit(cg, "    movz    x9, #0");  /* d == 0.0 */
+    emit(cg, "    fmov    d0, x9");
+}
+
+/* ── spill/reload helpers ───────────────────────────────────────────────
+ * AArch64 has no push/pop.  We maintain a software spill stack that grows
+ * DOWN below sp.  Before the first spill in a function we keep sp as-is;
+ * each spill_push adjusts sp by -16 (must stay 16-aligned) and stores x0.
+ * spill_pop loads back into x0 and restores sp.
+ *
+ * NOTE: This means each push/pop pair must be balanced; nested spills work
+ * because each push claims a fresh 16-byte slot.                           */
+static void spill_push_a64(CG *cg, const char *reg) {
+    emit(cg, "    str     %s, [sp, #-16]!", reg);   /* pre-decrement sp by 16 */
+}
+static void spill_pop_a64(CG *cg, const char *reg) {
+    emit(cg, "    ldr     %s, [sp], #16", reg);     /* post-increment sp by 16 */
+}
+
+/* ── emit a PC-relative symbol address into a register ─────────────────
+ * Two-instruction sequence required on AArch64:
+ *   adrp  xN, sym@PAGE
+ *   add   xN, xN, sym@PAGEOFF                                             */
+static void emit_adrp_a64(CG *cg, const char *reg, const char *sym) {
+    emit(cg, "    adrp    %s, %s@PAGE", reg, sym);
+    emit(cg, "    add     %s, %s, %s@PAGEOFF", reg, reg, sym);
+}
+
+/* ── expression compiler (ARM64) ────────────────────────────────────────
+ * Post-condition: result XlyVal* is in x0.  sp is unchanged.             */
+static void emit_expr_a64(CG *cg, ASTNode *node) {
+    if (!node) { emit(cg, "    bl      " XLY_SYM("xly_null")); return; }
+
+    switch (node->type) {
+
+    /* ── literals ──────────────────────────────────────────────────── */
+    case NODE_NUMBER:
+        emit_load_double_a64(cg, node->num_value);
+        emit(cg, "    bl      " XLY_SYM("xly_num"));
+        break;
+
+    case NODE_STRING: {
+        const char *lbl = intern_string(cg, node->str_value ? node->str_value : "");
+        emit_adrp_a64(cg, "x0", lbl);
+        emit(cg, "    bl      " XLY_SYM("xly_str"));
+        break;
+    }
+
+    case NODE_BOOL:
+        emit(cg, "    mov     w0, #%d", node->bool_value ? 1 : 0);
+        emit(cg, "    bl      " XLY_SYM("xly_bool"));
+        break;
+
+    case NODE_NULL:
+        emit(cg, "    bl      " XLY_SYM("xly_null"));
+        break;
+
+    /* ── identifier ─────────────────────────────────────────────────── */
+    case NODE_IDENTIFIER: {
+        int off = var_offset(cg, node->str_value);
+        if (off != 0)
+            emit(cg, "    ldr     x0, [x29, #%d]", off);
+        else
+            emit(cg, "    bl      " XLY_SYM("xly_null"));
+        break;
+    }
+
+    /* ── binary ─────────────────────────────────────────────────────── */
+    case NODE_BINARY: {
+        const char *op = node->str_value;
+
+        /* short-circuit: and */
+        if (strcmp(op, "and") == 0) {
+            char lbl_end[64], lbl_done[64];
+            int seq = cg->label_seq++;
+            snprintf(lbl_end,  sizeof(lbl_end),  ".Lxly_%d_and_end",  seq);
+            snprintf(lbl_done, sizeof(lbl_done), ".Lxly_%d_and_done", seq);
+
+            emit_expr_a64(cg, node->children[0]);   /* x0 = left */
+            spill_push_a64(cg, "x0");               /* save left */
+            emit(cg, "    bl      " XLY_SYM("xly_truthy"));
+            emit(cg, "    cbz     w0, %s", lbl_end);
+            spill_pop_a64(cg, "x9");                /* discard left */
+            emit_expr_a64(cg, node->children[1]);
+            emit(cg, "    b       %s", lbl_done);
+            emit(cg, "%s:", lbl_end);
+            spill_pop_a64(cg, "x0");                /* left → x0 */
+            emit(cg, "%s:", lbl_done);
+            break;
+        }
+
+        /* short-circuit: or */
+        if (strcmp(op, "or") == 0) {
+            char lbl_end[64], lbl_done[64];
+            int seq = cg->label_seq++;
+            snprintf(lbl_end,  sizeof(lbl_end),  ".Lxly_%d_or_end",  seq);
+            snprintf(lbl_done, sizeof(lbl_done), ".Lxly_%d_or_done", seq);
+
+            emit_expr_a64(cg, node->children[0]);
+            spill_push_a64(cg, "x0");
+            emit(cg, "    bl      " XLY_SYM("xly_truthy"));
+            emit(cg, "    cbnz    w0, %s", lbl_end);
+            spill_pop_a64(cg, "x9");
+            emit_expr_a64(cg, node->children[1]);
+            emit(cg, "    b       %s", lbl_done);
+            emit(cg, "%s:", lbl_end);
+            spill_pop_a64(cg, "x0");
+            emit(cg, "%s:", lbl_done);
+            break;
+        }
+
+        /* arithmetic */
+        int is_arith = (strcmp(op,"+") == 0 || strcmp(op,"-") == 0 ||
+                        strcmp(op,"*") == 0 || strcmp(op,"/") == 0);
+        if (is_arith) {
+            int is_plus = (strcmp(op,"+") == 0);
+
+            /* constant folding */
+            if (node->children[0]->type == NODE_NUMBER &&
+                node->children[1]->type == NODE_NUMBER) {
+                double lv = node->children[0]->num_value;
+                double rv = node->children[1]->num_value;
+                double res = (strcmp(op,"+")==0) ? lv+rv :
+                             (strcmp(op,"-")==0) ? lv-rv :
+                             (strcmp(op,"*")==0) ? lv*rv : lv/rv;
+                emit_load_double_a64(cg, res);
+                emit(cg, "    bl      " XLY_SYM("xly_num"));
+                break;
+            }
+
+            if (is_plus) {
+                /* + needs type check: could be string concat */
+                char lbl_slow[64], lbl_end2[64];
+                fresh_label(cg, lbl_slow, sizeof(lbl_slow));
+                fresh_label(cg, lbl_end2, sizeof(lbl_end2));
+
+                emit_expr_a64(cg, node->children[0]);   /* x0 = left */
+                spill_push_a64(cg, "x0");
+                emit_expr_a64(cg, node->children[1]);   /* x0 = right */
+                emit(cg, "    mov     x1, x0");         /* x1 = right */
+                spill_pop_a64(cg, "x0");                /* x0 = left  */
+
+                /* check left.type == VAL_STRING (1) */
+                emit(cg, "    ldr     w9, [x0]");
+                emit(cg, "    cmp     w9, #1");
+                emit(cg, "    b.eq    %s", lbl_slow);
+                /* check right.type */
+                emit(cg, "    ldr     w9, [x1]");
+                emit(cg, "    cmp     w9, #1");
+                emit(cg, "    b.eq    %s", lbl_slow);
+
+                /* fast numeric path */
+                emit(cg, "    ldr     d0, [x0, #8]");
+                emit(cg, "    ldr     d1, [x1, #8]");
+                emit(cg, "    fadd    d0, d0, d1");
+                emit(cg, "    bl      " XLY_SYM("xly_num"));
+                emit(cg, "    b       %s", lbl_end2);
+
+                emit(cg, "%s:", lbl_slow);
+                emit(cg, "    bl      " XLY_SYM("xly_add"));
+                emit(cg, "%s:", lbl_end2);
+            } else {
+                /* -, *, / — always numeric */
+                emit_expr_a64(cg, node->children[0]);
+                spill_push_a64(cg, "x0");
+                emit_expr_a64(cg, node->children[1]);
+                emit(cg, "    mov     x1, x0");
+                spill_pop_a64(cg, "x0");
+
+                emit(cg, "    ldr     d0, [x0, #8]");
+                emit(cg, "    ldr     d1, [x1, #8]");
+                if      (strcmp(op,"-") == 0) emit(cg, "    fsub    d0, d0, d1");
+                else if (strcmp(op,"*") == 0) emit(cg, "    fmul    d0, d0, d1");
+                else if (strcmp(op,"/") == 0) emit(cg, "    fdiv    d0, d0, d1");
+                emit(cg, "    bl      " XLY_SYM("xly_num"));
+            }
+            break;
+        }
+
+        /* comparisons */
+        int is_cmp = (strcmp(op,"<")  == 0 || strcmp(op,">")  == 0 ||
+                      strcmp(op,"<=") == 0 || strcmp(op,">=") == 0 ||
+                      strcmp(op,"==") == 0 || strcmp(op,"!=") == 0);
+        if (is_cmp) {
+            /* constant folding */
+            if (node->children[0]->type == NODE_NUMBER &&
+                node->children[1]->type == NODE_NUMBER) {
+                double lv = node->children[0]->num_value;
+                double rv = node->children[1]->num_value;
+                int res = (strcmp(op,"<" )==0) ? lv <  rv :
+                          (strcmp(op,">" )==0) ? lv >  rv :
+                          (strcmp(op,"<=")==0) ? lv <= rv :
+                          (strcmp(op,">=")==0) ? lv >= rv :
+                          (strcmp(op,"==")==0) ? lv == rv : lv != rv;
+                emit(cg, "    mov     w0, #%d", res);
+                emit(cg, "    bl      " XLY_SYM("xly_bool"));
+                break;
+            }
+
+            char lbl_slow[64], lbl_end2[64];
+            fresh_label(cg, lbl_slow, sizeof(lbl_slow));
+            fresh_label(cg, lbl_end2, sizeof(lbl_end2));
+
+            emit_expr_a64(cg, node->children[0]);
+            spill_push_a64(cg, "x0");
+            emit_expr_a64(cg, node->children[1]);
+            emit(cg, "    mov     x1, x0");
+            spill_pop_a64(cg, "x0");
+
+            /* check both are numbers (type == 0) */
+            emit(cg, "    ldr     w9, [x0]");
+            emit(cg, "    cbnz    w9, %s", lbl_slow);
+            emit(cg, "    ldr     w9, [x1]");
+            emit(cg, "    cbnz    w9, %s", lbl_slow);
+
+            /* fast FP compare */
+            emit(cg, "    ldr     d0, [x0, #8]");
+            emit(cg, "    ldr     d1, [x1, #8]");
+            emit(cg, "    fcmp    d0, d1");
+            /* cset maps condition → 0/1 in w0 */
+            if      (strcmp(op,"<" )==0) emit(cg, "    cset    w0, lt");
+            else if (strcmp(op,">" )==0) emit(cg, "    cset    w0, gt");
+            else if (strcmp(op,"<=")==0) emit(cg, "    cset    w0, le");
+            else if (strcmp(op,">=")==0) emit(cg, "    cset    w0, ge");
+            else if (strcmp(op,"==")==0) emit(cg, "    cset    w0, eq");
+            else                         emit(cg, "    cset    w0, ne");
+            emit(cg, "    bl      " XLY_SYM("xly_bool"));
+            emit(cg, "    b       %s", lbl_end2);
+
+            emit(cg, "%s:", lbl_slow);
+            const char *fn = NULL;
+            if      (strcmp(op,"==") == 0) fn = "xly_eq";
+            else if (strcmp(op,"!=") == 0) fn = "xly_neq";
+            else if (strcmp(op,"<")  == 0) fn = "xly_lt";
+            else if (strcmp(op,">")  == 0) fn = "xly_gt";
+            else if (strcmp(op,"<=") == 0) fn = "xly_lte";
+            else if (strcmp(op,">=") == 0) fn = "xly_gte";
+            if (fn) {
+                char sym[64];
+                emit(cg, "    bl      %s", XLY_RSYM(sym, fn));
+            }
+            emit(cg, "%s:", lbl_end2);
+            break;
+        }
+
+        /* other binary ops (%) */
+        emit_expr_a64(cg, node->children[0]);
+        spill_push_a64(cg, "x0");
+        emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x1, x0");
+        spill_pop_a64(cg, "x0");
+        if (strcmp(op, "%") == 0)
+            emit(cg, "    bl      " XLY_SYM("xly_mod"));
+        break;
+    }
+
+    /* ── unary ──────────────────────────────────────────────────────── */
+    case NODE_UNARY: {
+        emit_expr_a64(cg, node->children[0]);
+        const char *unfn = strcmp(node->str_value, "-") == 0 ? "xly_neg" : "xly_not";
+        char unsym[64];
+        emit(cg, "    bl      %s", XLY_RSYM(unsym, unfn));
+        break;
+    }
+
+    /* ── user function call ─────────────────────────────────────────── */
+    case NODE_FN_CALL: {
+        int nargs = (int)node->child_count;
+        if (nargs > 8) {
+            fprintf(stderr,
+                "[xenlyc] warning: '%s' called with %d args; max 8 on ARM64 — extra ignored.\n",
+                node->str_value, nargs);
+            cg->had_error = 1;
+            nargs = 8;
+        }
+        /* AArch64: args go in x0–x7.  We eval left-to-right, spill each,
+         * then reload in reverse order into the correct registers.         */
+        static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
+        for (int i = 0; i < nargs; i++) {
+            emit_expr_a64(cg, node->children[i]);
+            spill_push_a64(cg, "x0");
+        }
+        /* Reload: top of spill stack is arg[nargs-1] → last reg */
+        for (int i = nargs - 1; i >= 0; i--)
+            spill_pop_a64(cg, (char*)aregs[i]);
+        emit(cg, "    bl      .Lxly_fn_%s", node->str_value);
+        break;
+    }
+
+    /* ── module method call ─────────────────────────────────────────── */
+    case NODE_METHOD_CALL: {
+        const char *mod_name = node->children[0]->str_value;
+        const char *fn_name  = node->str_value;
+        int argc = (int)node->child_count - 1;
+
+        /*
+         * xly_call_module(mod, fn, args, argc)
+         *   x0=mod  x1=fn  x2=args_ptr  x3=argc
+         *
+         * We reserve space for the args array on the stack (16-aligned),
+         * eval each arg and store, then pass sp as the array pointer.
+         */
+        int slot_bytes  = argc * 8;
+        int alloc_bytes = argc > 0 ? ((slot_bytes + 15) & ~15) : 0;
+
+        if (alloc_bytes > 0)
+            emit(cg, "    sub     sp, sp, #%d", alloc_bytes);
+
+        for (int i = 0; i < argc; i++) {
+            emit_expr_a64(cg, node->children[i + 1]);
+            emit(cg, "    str     x0, [sp, #%d]", i * 8);
+        }
+
+        /* x0 = mod string ptr */
+        const char *ml = intern_string(cg, mod_name);
+        emit_adrp_a64(cg, "x0", ml);
+        /* x1 = fn string ptr */
+        const char *fl = intern_string(cg, fn_name);
+        emit_adrp_a64(cg, "x1", fl);
+        /* x2 = args array pointer */
+        if (argc > 0)
+            emit(cg, "    mov     x2, sp");
+        else
+            emit(cg, "    mov     x2, xzr");
+        /* x3 = argc */
+        emit(cg, "    mov     x3, #%d", argc);
+        emit(cg, "    bl      " XLY_SYM("xly_call_module"));
+
+        if (alloc_bytes > 0)
+            emit(cg, "    add     sp, sp, #%d", alloc_bytes);
+        break;
+    }
+
+    /* ── typeof ─────────────────────────────────────────────────────── */
+    case NODE_TYPEOF:
+        emit_expr_a64(cg, node->children[0]);
+        /* x0 already holds the value pointer */
+        emit(cg, "    bl      " XLY_SYM("xly_typeof"));
+        break;
+
+    /* ── increment / decrement as expression ────────────────────────── */
+    case NODE_INCREMENT:
+    case NODE_DECREMENT: {
+        int off = var_offset(cg, node->str_value);
+        emit(cg, "    ldr     x0, [x29, #%d]", off);  /* current value */
+        spill_push_a64(cg, "x0");
+        emit_load_double_a64(cg, 1.0);
+        emit(cg, "    bl      " XLY_SYM("xly_num"));   /* x0 = num(1) */
+        emit(cg, "    mov     x1, x0");
+        spill_pop_a64(cg, "x0");
+        { char isym[64]; emit(cg, "    bl      %s",
+              XLY_RSYM(isym, node->type == NODE_INCREMENT ? "xly_add" : "xly_sub")); }
+        emit(cg, "    str     x0, [x29, #%d]", off);
+        break;
+    }
+
+    /* ── array literal ─────────────────────────────────────────────── */
+    case NODE_ARRAY_LITERAL: {
+        int nelems = (int)node->child_count;
+        int alloc_bytes = nelems > 0 ? (((nelems * 8) + 15) & ~15) : 0;
+
+        if (alloc_bytes > 0)
+            emit(cg, "    sub     sp, sp, #%d", alloc_bytes);
+
+        for (int i = 0; i < nelems; i++) {
+            emit_expr_a64(cg, node->children[i]);
+            emit(cg, "    str     x0, [sp, #%d]", i * 8);
+        }
+
+        if (nelems > 0)
+            emit(cg, "    mov     x0, sp");
+        else
+            emit(cg, "    mov     x0, xzr");
+        emit(cg, "    mov     x1, #%d", nelems);
+        emit(cg, "    bl      " XLY_SYM("xly_array_create"));
+
+        if (alloc_bytes > 0)
+            emit(cg, "    add     sp, sp, #%d", alloc_bytes);
+        break;
+    }
+
+    /* ── index ──────────────────────────────────────────────────────── */
+    case NODE_INDEX:
+        emit_expr_a64(cg, node->children[0]);
+        spill_push_a64(cg, "x0");
+        emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x1, x0");
+        spill_pop_a64(cg, "x0");
+        emit(cg, "    bl      " XLY_SYM("xly_index"));
+        break;
+
+    default:
+        emit(cg, "    bl      " XLY_SYM("xly_null"));
+        break;
+    }
+}
+
+/* ── statement compiler (ARM64) ─────────────────────────────────────────
+ * Post-condition: sp unchanged from entry.                               */
+static void emit_stmt_a64(CG *cg, ASTNode *node) {
+    if (!node) return;
+
+    switch (node->type) {
+
+    case NODE_VAR_DECL:
+    case NODE_CONST_DECL: {
+        int off = var_declare(cg, node->str_value);
+        if (node->child_count > 0)
+            emit_expr_a64(cg, node->children[0]);
+        else
+            emit(cg, "    bl      " XLY_SYM("xly_null"));
+        emit(cg, "    str     x0, [x29, #%d]", off);
+        break;
+    }
+
+    case NODE_ASSIGN: {
+        emit_expr_a64(cg, node->children[0]);
+        int off = var_offset(cg, node->str_value);
+        emit(cg, "    str     x0, [x29, #%d]", off);
+        break;
+    }
+
+    case NODE_COMPOUND_ASSIGN: {
+        const char *varname = node->children[0]->str_value;
+        int off = var_offset(cg, varname);
+        emit(cg, "    ldr     x0, [x29, #%d]", off);
+        spill_push_a64(cg, "x0");
+        emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x1, x0");
+        spill_pop_a64(cg, "x0");
+        const char *op = node->str_value;
+        const char *fn = "xly_add";
+        if      (strcmp(op,"+=") == 0) fn = "xly_add";
+        else if (strcmp(op,"-=") == 0) fn = "xly_sub";
+        else if (strcmp(op,"*=") == 0) fn = "xly_mul";
+        else if (strcmp(op,"/=") == 0) fn = "xly_div";
+        { char csym[64]; emit(cg, "    bl      %s", XLY_RSYM(csym, fn)); }
+        emit(cg, "    str     x0, [x29, #%d]", off);
+        break;
+    }
+
+    case NODE_INCREMENT:
+    case NODE_DECREMENT: {
+        int off = var_offset(cg, node->str_value);
+        emit(cg, "    ldr     x0, [x29, #%d]", off);
+        spill_push_a64(cg, "x0");
+        emit_load_double_a64(cg, 1.0);
+        emit(cg, "    bl      " XLY_SYM("xly_num"));
+        emit(cg, "    mov     x1, x0");
+        spill_pop_a64(cg, "x0");
+        { char isym2[64]; emit(cg, "    bl      %s",
+              XLY_RSYM(isym2, node->type == NODE_INCREMENT ? "xly_add" : "xly_sub")); }
+        emit(cg, "    str     x0, [x29, #%d]", off);
+        break;
+    }
+
+    case NODE_PRINT: {
+        /*
+         * xly_print(XlyVal **vals, size_t n)   x0=vals, x1=n
+         * Reserve stack space for the val pointer array.
+         */
+        int n = (int)node->child_count;
+        int alloc_bytes = n > 0 ? (((n * 8) + 15) & ~15) : 0;
+        if (alloc_bytes > 0)
+            emit(cg, "    sub     sp, sp, #%d", alloc_bytes);
+
+        for (int i = 0; i < n; i++) {
+            emit_expr_a64(cg, node->children[i]);
+            emit(cg, "    str     x0, [sp, #%d]", i * 8);
+        }
+
+        emit(cg, "    mov     x0, sp");
+        emit(cg, "    mov     x1, #%d", n);
+        emit(cg, "    bl      " XLY_SYM("xly_print"));
+
+        if (alloc_bytes > 0)
+            emit(cg, "    add     sp, sp, #%d", alloc_bytes);
+        break;
+    }
+
+    case NODE_EXPR_STMT:
+        if (node->child_count > 0)
+            emit_expr_a64(cg, node->children[0]);
+        break;
+
+    case NODE_IF: {
+        char lbl_else[64], lbl_end[64];
+        fresh_label(cg, lbl_else, sizeof(lbl_else));
+        fresh_label(cg, lbl_end,  sizeof(lbl_end));
+
+        emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    bl      " XLY_SYM("xly_truthy"));
+        emit(cg, "    cbz     w0, %s", lbl_else);
+
+        emit_stmt_a64(cg, node->children[1]);
+        emit(cg, "    b       %s", lbl_end);
+
+        emit(cg, "%s:", lbl_else);
+        if (node->child_count > 2)
+            emit_stmt_a64(cg, node->children[2]);
+
+        emit(cg, "%s:", lbl_end);
+        break;
+    }
+
+    case NODE_WHILE: {
+        char lbl_cond[64], lbl_end[64];
+        fresh_label(cg, lbl_cond, sizeof(lbl_cond));
+        fresh_label(cg, lbl_end,  sizeof(lbl_end));
+
+        push_brk(cg, lbl_end);
+        push_cnt(cg, lbl_cond);
+
+        emit(cg, "%s:", lbl_cond);
+        emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    bl      " XLY_SYM("xly_truthy"));
+        emit(cg, "    cbz     w0, %s", lbl_end);
+
+        emit_stmt_a64(cg, node->children[1]);
+        emit(cg, "    b       %s", lbl_cond);
+
+        emit(cg, "%s:", lbl_end);
+        pop_cnt(cg);
+        pop_brk(cg);
+        break;
+    }
+
+    case NODE_FOR: {
+        char lbl_cond[64], lbl_upd[64], lbl_end[64];
+        fresh_label(cg, lbl_cond, sizeof(lbl_cond));
+        fresh_label(cg, lbl_upd,  sizeof(lbl_upd));
+        fresh_label(cg, lbl_end,  sizeof(lbl_end));
+
+        scope_enter(cg);
+        push_brk(cg, lbl_end);
+        push_cnt(cg, lbl_upd);
+
+        emit_stmt_a64(cg, node->children[0]);   /* init */
+
+        emit(cg, "%s:", lbl_cond);
+        if (!(node->children[1]->type == NODE_BOOL && node->children[1]->bool_value)) {
+            emit_expr_a64(cg, node->children[1]);
+            emit(cg, "    bl      " XLY_SYM("xly_truthy"));
+            emit(cg, "    cbz     w0, %s", lbl_end);
+        }
+
+        emit_stmt_a64(cg, node->children[3]);   /* body */
+
+        emit(cg, "%s:", lbl_upd);
+        if (node->children[2]->type != NODE_NULL)
+            emit_stmt_a64(cg, node->children[2]);
+
+        emit(cg, "    b       %s", lbl_cond);
+        emit(cg, "%s:", lbl_end);
+
+        pop_cnt(cg);
+        pop_brk(cg);
+        scope_leave(cg);
+        break;
+    }
+
+    case NODE_FOR_IN: {
+        char lbl_cond[64], lbl_end[64];
+        fresh_label(cg, lbl_cond, sizeof(lbl_cond));
+        fresh_label(cg, lbl_end,  sizeof(lbl_end));
+
+        scope_enter(cg);
+
+        int off_iter = var_declare(cg, node->str_value);
+        char tmp[80];
+        snprintf(tmp, sizeof(tmp), "__fi_a_%d", cg->label_seq);
+        int off_arr = var_declare(cg, tmp);
+        snprintf(tmp, sizeof(tmp), "__fi_i_%d", cg->label_seq);
+        int off_idx = var_declare(cg, tmp);
+        snprintf(tmp, sizeof(tmp), "__fi_l_%d", cg->label_seq++);
+        int off_len = var_declare(cg, tmp);
+
+        emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    str     x0, [x29, #%d]", off_arr);
+        emit(cg, "    bl      " XLY_SYM("xly_array_len"));
+        emit(cg, "    str     x0, [x29, #%d]", off_len);
+        /* idx = 0 (store integer 0, not a boxed value — matches x86 backend) */
+        emit(cg, "    str     xzr, [x29, #%d]", off_idx);
+
+        push_brk(cg, lbl_end);
+        push_cnt(cg, lbl_cond);
+
+        emit(cg, "%s:", lbl_cond);
+        emit(cg, "    ldr     x9, [x29, #%d]", off_idx);
+        emit(cg, "    ldr     x10, [x29, #%d]", off_len);
+        emit(cg, "    cmp     x9, x10");
+        emit(cg, "    b.hs    %s", lbl_end);   /* idx >= len → done */
+
+        emit(cg, "    ldr     x0, [x29, #%d]", off_arr);
+        emit(cg, "    ldr     x1, [x29, #%d]", off_idx);
+        emit(cg, "    bl      " XLY_SYM("xly_array_get"));
+        emit(cg, "    str     x0, [x29, #%d]", off_iter);
+
+        emit_stmt_a64(cg, node->children[1]);
+
+        emit(cg, "    ldr     x9, [x29, #%d]", off_idx);
+        emit(cg, "    add     x9, x9, #1");
+        emit(cg, "    str     x9, [x29, #%d]", off_idx);
+        emit(cg, "    b       %s", lbl_cond);
+        emit(cg, "%s:", lbl_end);
+
+        pop_cnt(cg);
+        pop_brk(cg);
+        scope_leave(cg);
+        break;
+    }
+
+    case NODE_BREAK:
+        if (cg->brk_top > 0)
+            emit(cg, "    b       %s", cg->brk_labels[cg->brk_top-1]);
+        break;
+    case NODE_CONTINUE:
+        if (cg->cnt_top > 0)
+            emit(cg, "    b       %s", cg->cnt_labels[cg->cnt_top-1]);
+        break;
+
+    case NODE_BLOCK:
+        scope_enter(cg);
+        for (size_t i = 0; i < node->child_count; i++)
+            emit_stmt_a64(cg, node->children[i]);
+        scope_leave(cg);
+        break;
+
+    case NODE_FN_DECL:
+        if (cg->func_count >= cg->func_cap) {
+            cg->func_cap = cg->func_cap ? cg->func_cap * 2 : 16;
+            cg->funcs    = realloc(cg->funcs, sizeof(cg->funcs[0]) * (size_t)cg->func_cap);
+        }
+        cg->funcs[cg->func_count++].node = node;
+        break;
+
+    case NODE_RETURN:
+        if (node->child_count > 0)
+            emit_expr_a64(cg, node->children[0]);
+        else
+            emit(cg, "    bl      " XLY_SYM("xly_null"));
+        /* Epilogue: unwind frame by restoring sp from x29, then reload
+         * the saved x29/x30 pair.  The frame size is unknown here because
+         * emit_stmt_a64 is called recursively, so we use the invariant:
+         * x29 always points to the bottom of the saved-register pair.
+         * mov sp, x29  sets sp to where stp stored x29/x30 (frame base).
+         * ldp with post-increment of the correct frame size restores both.
+         * We use #16 here because the stp used !-framesz and x29=sp, so
+         * the saved pair is always at [x29+0] regardless of locals.       */
+        emit(cg, "    mov     sp, x29");
+        emit(cg, "    ldp     x29, x30, [sp], #16");
+        emit(cg, "    ret");
+        break;
+
+    case NODE_IMPORT:
+        break;
+
+    default:
+        emit_expr_a64(cg, node);
+        break;
+    }
+}
+
+/* ── emit a user function (ARM64) ────────────────────────────────────────── */
+static void emit_function_a64(CG *cg, ASTNode *fn) {
+    const char *name    = fn->str_value;
+    size_t      nparams = fn->param_count;
+    ASTNode    *body    = fn->children[0];
+
+    int sv_vc = cg->var_count, sv_fo = cg->frame_offset, sv_sd = cg->scope_depth;
+    cg->scope_depth  = 0;
+    cg->frame_offset = 0;
+
+    /* Frame: x29+x30 (16 bytes) + local slots, 16-aligned */
+    int n = (int)nparams + count_locals(body) + 8;
+    int locals_bytes = (n * 8 + 15) & ~15;
+    int frame = locals_bytes + 16;  /* +16 for x29/x30 pair */
+    frame = (frame + 15) & ~15;
+
+    emit(cg, "");
+    emit(cg, ".Lxly_fn_%s:", name);
+    /* Prologue: save frame+link, set up frame pointer, allocate locals */
+    emit(cg, "    stp     x29, x30, [sp, #-%d]!", frame);
+    emit(cg, "    mov     x29, sp");
+    /* locals live at [x29, #-8], [x29, #-16], ... */
+    /* But var_declare uses negative offsets from frame_offset starting at 0,
+     * so we bias by +16 to skip the saved x29/x30 at [sp+0..sp+15].
+     * Actually: x29 = sp (after prologue), so [x29, #-8] is valid for locals.
+     * var_declare gives offsets -8, -16, ... from frame_offset=0 which is x29. */
+
+    /* Spill incoming args (x0–x7) into their stack slots */
+    static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
+    for (size_t i = 0; i < nparams && i < 8; i++) {
+        int off = var_declare(cg, fn->params[i].name);
+        emit(cg, "    str     %s, [x29, #%d]", aregs[i], off);
+
+        if (fn->params[i].is_optional || fn->params[i].default_value) {
+            char lbl_has_arg[64];
+            fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
+            emit(cg, "    ldr     x9, [x29, #%d]", off);
+            emit(cg, "    cbnz    x9, %s", lbl_has_arg);
+            if (fn->params[i].default_value) {
+                emit_expr_a64(cg, fn->params[i].default_value);
+                emit(cg, "    str     x0, [x29, #%d]", off);
+            }
+            emit(cg, "%s:", lbl_has_arg);
+        }
+    }
+
+    scope_enter(cg);
+    for (size_t i = 0; i < body->child_count; i++)
+        emit_stmt_a64(cg, body->children[i]);
+    scope_leave(cg);
+
+    /* Implicit return null + epilogue */
+    emit(cg, "    bl      " XLY_SYM("xly_null"));
+    emit(cg, "    mov     sp, x29");
+    emit(cg, "    ldp     x29, x30, [sp], #%d", frame);
+    emit(cg, "    ret");
+
+    while (cg->var_count > sv_vc) { cg->var_count--; free(cg->vars[cg->var_count].name); }
+    cg->frame_offset = sv_fo;
+    cg->scope_depth  = sv_sd;
+}
+
+#endif /* XLY_ARCH_ARM64 */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * PUBLIC ENTRY POINT  —  dispatches to x86-64 or ARM64 backend
+ * ═══════════════════════════════════════════════════════════════════════════ */
+int codegen(ASTNode *program, const char *outpath) {
+#ifdef XLY_ARCH_ARM64
+    /* ── ARM64 code generation ────────────────────────────────────────── */
+    CG cg;
+    memset(&cg, 0, sizeof(cg));
+    cg.out = fopen(outpath, "w");
+    if (!cg.out) { perror("codegen: fopen"); return 1; }
+
+    int n_top  = count_locals(program) + 16;
+    /* main frame: locals + x29/x30 slot, 16-aligned */
+    int locals  = (n_top * 8 + 15) & ~15;
+    int mframe  = locals + 16;
+    mframe = (mframe + 15) & ~15;
+
+    emit(&cg, XLY_TEXT_SECTION);
+    emit(&cg, ".globl  " XLY_SYM("main"));
+    emit(&cg, XLY_SYM("main") ":");
+    emit(&cg, "    stp     x29, x30, [sp, #-%d]!", mframe);
+    emit(&cg, "    mov     x29, sp");
+
+    for (size_t i = 0; i < program->child_count; i++)
+        emit_stmt_a64(&cg, program->children[i]);
+
+    /* call xly_exit(0) */
+    emit(&cg, "    mov     w0, #0");
+    emit(&cg, "    bl      " XLY_SYM("xly_exit"));
+    /* fallthrough epilogue (xly_exit does _exit so this is unreachable) */
+    emit(&cg, "    mov     sp, x29");
+    emit(&cg, "    ldp     x29, x30, [sp], #%d", mframe);
+    emit(&cg, "    ret");
+
+    /* user-defined functions */
+    for (int i = 0; i < cg.func_count; i++)
+        emit_function_a64(&cg, cg.funcs[i].node);
+
+    /* string literals section */
+    emit(&cg, "");
+    emit(&cg, XLY_DATA_SECTION);
+    for (int i = 0; i < cg.str_count; i++) {
+        emit(&cg, "%s:", cg.strings[i].label);
+        fprintf(cg.out, "    .asciz  \"");
+        for (const char *s = cg.strings[i].text; *s; s++) {
+            unsigned char ch = (unsigned char)*s;
+            switch (ch) {
+                case '\n': fputs("\\n",  cg.out); break;
+                case '\t': fputs("\\t",  cg.out); break;
+                case '\r': fputs("\\r",  cg.out); break;
+                case '\\': fputs("\\\\", cg.out); break;
+                case '"':  fputs("\\\"", cg.out); break;
+                default:
+                    if (ch >= 0x80 || ch < 0x20)
+                        fprintf(cg.out, "\\%03o", ch);
+                    else
+                        fputc(ch, cg.out);
+                    break;
+            }
+        }
+        fputs("\"\n", cg.out);
+    }
+
+    fclose(cg.out);
+
+    for (int i = 0; i < cg.var_count; i++) free(cg.vars[i].name);
+    free(cg.vars);
+    for (int i = 0; i < cg.str_count; i++) { free(cg.strings[i].text); free(cg.strings[i].label); }
+    free(cg.strings);
+    free(cg.funcs);
+    for (int i = 0; i < cg.brk_top; i++) free(cg.brk_labels[i]);
+    free(cg.brk_labels);
+    for (int i = 0; i < cg.cnt_top; i++) free(cg.cnt_labels[i]);
+    free(cg.cnt_labels);
+
+    return cg.had_error;
+
+#else
+    /* ── x86-64 code generation (original) ───────────────────────────── */
+    return codegen_x86_64(program, outpath);
+#endif
