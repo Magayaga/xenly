@@ -186,17 +186,11 @@ static Value *math_complex(Value **args, size_t argc) {
     double real = (argc >= 1) ? args[0]->num : 0.0;
     double imag = (argc >= 2) ? args[1]->num : 0.0;
     
-    // Return as array [real, imag]
+    // Return as array [real, imag] — use value_array() so it's registered correctly
     Value **elems = (Value **)malloc(sizeof(Value *) * 2);
     elems[0] = value_number(real);
     elems[1] = value_number(imag);
-    
-    Value *result = (Value *)calloc(1, sizeof(Value));
-    result->type = VAL_ARRAY;
-    result->array_len = 2;
-    result->array_cap = 2;
-    result->array = elems;
-    return result;
+    return value_array(elems, 2);
 }
 
 static Value *math_complexAdd(Value **args, size_t argc) {
@@ -212,13 +206,7 @@ static Value *math_complexAdd(Value **args, size_t argc) {
     Value **elems = (Value **)malloc(sizeof(Value *) * 2);
     elems[0] = value_number(r1 + r2);
     elems[1] = value_number(i1 + i2);
-    
-    Value *result = (Value *)calloc(1, sizeof(Value));
-    result->type = VAL_ARRAY;
-    result->array_len = 2;
-    result->array_cap = 2;
-    result->array = elems;
-    return result;
+    return value_array(elems, 2);
 }
 
 static Value *math_complexMul(Value **args, size_t argc) {
@@ -235,13 +223,7 @@ static Value *math_complexMul(Value **args, size_t argc) {
     Value **elems = (Value **)malloc(sizeof(Value *) * 2);
     elems[0] = value_number(r1 * r2 - i1 * i2);
     elems[1] = value_number(r1 * i2 + i1 * r2);
-    
-    Value *result = (Value *)calloc(1, sizeof(Value));
-    result->type = VAL_ARRAY;
-    result->array_len = 2;
-    result->array_cap = 2;
-    result->array = elems;
-    return result;
+    return value_array(elems, 2);
 }
 
 static Value *math_complexAbs(Value **args, size_t argc) {
@@ -263,13 +245,7 @@ static Value *math_complexConj(Value **args, size_t argc) {
     Value **elems = (Value **)malloc(sizeof(Value *) * 2);
     elems[0] = value_number(real);
     elems[1] = value_number(-imag);
-    
-    Value *result = (Value *)calloc(1, sizeof(Value));
-    result->type = VAL_ARRAY;
-    result->array_len = 2;
-    result->array_cap = 2;
-    result->array = elems;
-    return result;
+    return value_array(elems, 2);
 }
 
 static Value *math_complexPhase(Value **args, size_t argc) {

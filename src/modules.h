@@ -19,5 +19,3 @@ Module module_multiproc(void);
 Module module_path(void);
 
 #endif // MODULES_H
-// XDMML Module
-Module module_xdmml(void);

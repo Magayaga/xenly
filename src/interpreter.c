@@ -915,13 +915,18 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         // Handle built-in functions
         if (fnval->type == VAL_BUILTIN_FN) {
             // Evaluate all arguments
-            Value **args = (Value **)malloc(sizeof(Value *) * node->child_count);
+            Value **args = (Value **)malloc(sizeof(Value *) * (node->child_count ? node->child_count : 1));
             for (size_t i = 0; i < node->child_count; i++) {
                 args[i] = eval(interp, node->children[i], env);
             }
-            
+
             // Call the builtin
             Value *result = fnval->builtin_fn(args, node->child_count);
+
+            // Free eval'd arg Values (value_destroy is a no-op for arrays/instances/
+            // functions/classes, so this is safe even for shared-reference types)
+            for (size_t i = 0; i < node->child_count; i++)
+                value_destroy(args[i]);
             free(args);
             return result;
         }
@@ -1661,6 +1666,8 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
             fnval->fn->param_count = method_node->param_count;
             fnval->fn->body        = method_node->children[0]; // the block
             fnval->fn->closure     = env;                      // capture defining env
+            fnval->fn->is_async    = 0;
+            env_retain(env);                                   // method holds a ref to closure
 
             env_set(cls->methods, method_node->str_value, fnval);
         }
@@ -2056,15 +2063,32 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
                 // Variant pattern: check if tags match
                 if (strcmp(match_val->variant.tag, pattern->str_value) == 0) {
                     matched = 1;
-                    // Bind variant fields to pattern parameters
+                    // Bind COPIES of variant fields to pattern parameters so that
+                    // env_destroy(match_env) doesn't free data still owned by the variant.
                     for (size_t j = 0; j < pattern->param_count && j < match_val->variant.field_count; j++) {
-                        env_set(match_env, pattern->params[j].name, match_val->variant.fields[j]);
+                        Value *fld = match_val->variant.fields[j];
+                        Value *copy;
+                        if (!fld)                          copy = value_null();
+                        else if (fld->type == VAL_NUMBER)  copy = value_number(fld->num);
+                        else if (fld->type == VAL_STRING)  copy = value_string(fld->str);
+                        else if (fld->type == VAL_BOOL)    copy = value_bool(fld->boolean);
+                        else if (fld->type == VAL_NULL)    copy = value_null();
+                        else                               copy = fld;  // shared for complex types
+                        env_set(match_env, pattern->params[j].name, copy);
                     }
                 }
             } else if (pattern->param_count == 0) {
-                // Simple binding pattern (just an identifier)
+                // Simple binding pattern (just an identifier) — store a copy so that
+                // env_destroy(match_env) and value_destroy(match_val) don't double-free.
                 matched = 1;
-                env_set(match_env, pattern->str_value, match_val);
+                Value *copy;
+                if (!match_val)                              copy = value_null();
+                else if (match_val->type == VAL_NUMBER)      copy = value_number(match_val->num);
+                else if (match_val->type == VAL_STRING)      copy = value_string(match_val->str);
+                else if (match_val->type == VAL_BOOL)        copy = value_bool(match_val->boolean);
+                else if (match_val->type == VAL_NULL)        copy = value_null();
+                else                                         copy = match_val;  // shared for complex types
+                env_set(match_env, pattern->str_value, copy);
             }
             
             if (matched) {

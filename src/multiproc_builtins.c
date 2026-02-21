@@ -9,9 +9,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-// Global pools (initialized on first use)
-static ThreadPool *g_thread_pool = NULL;
-static ProcessPool *g_process_pool = NULL;
+// Global pools (initialized on first use via the built-in functions)
 
 // ─── Thread Pool Functions ────────────────────────────────────────────────────
 Value *builtin_thread_pool_create(Value **args, size_t argc) {
