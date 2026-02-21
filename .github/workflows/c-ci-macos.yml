@@ -16,5 +16,9 @@ jobs:
     
     - name: make installing test
       run: make
+    - name: xenly test
+      run: time ./xenly examples/hello.xe
+    - name: xenlyc test
+      run: time ./xenlyc examples/hello.xe -o hello
     - name: make clean test
       run: make clean
