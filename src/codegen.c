@@ -22,11 +22,28 @@
  */
 
 #include "codegen.h"
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdint.h>
+
+/*
+ * macOS/Mach-O requires a leading underscore on C symbol names in assembly.
+ * Linux/ELF does not.  XLY_SYM() wraps a literal symbol name appropriately.
+ */
+#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
+#  define XLY_SYM(s)  "_" s
+#  define XLY_TEXT_SECTION   ".section __TEXT,__text,regular,pure_instructions"
+#  define XLY_DATA_SECTION   ".section __TEXT,__cstring,cstring_literals"
+#  define XLY_GNU_STACK_SECTION  /* omitted on macOS — Mach-O has no such section */
+#else
+#  define XLY_SYM(s)  s
+#  define XLY_TEXT_SECTION   ".section .text"
+#  define XLY_DATA_SECTION   ".section .rodata"
+#  define XLY_GNU_STACK_SECTION ".section .note.GNU-stack,\"\",@progbits"
+#endif
 
 /* ── codegen state ──────────────────────────────────────────────────────── */
 typedef struct {
@@ -162,30 +179,30 @@ static void emit_load_double(CG *cg, double d) {
 /* ── expression compiler ────────────────────────────────────────────────
  * Post-condition: result XlyVal* is in %rax.  %rsp is unchanged.         */
 static void emit_expr(CG *cg, ASTNode *node) {
-    if (!node) { emit(cg, "    call    xly_null"); return; }
+    if (!node) { emit(cg, "    call    " XLY_SYM("xly_null")); return; }
 
     switch (node->type) {
 
     /* ── literals ────────────────────────────────────────────────────── */
     case NODE_NUMBER:
         emit_load_double(cg, node->num_value);
-        emit(cg, "    call    xly_num");
+        emit(cg, "    call    " XLY_SYM("xly_num"));
         break;
 
     case NODE_STRING: {
         const char *lbl = intern_string(cg, node->str_value ? node->str_value : "");
         emit(cg, "    leaq    %s(%%rip), %%rdi", lbl);
-        emit(cg, "    call    xly_str");
+        emit(cg, "    call    " XLY_SYM("xly_str"));
         break;
     }
 
     case NODE_BOOL:
         emit(cg, "    movl    $%d, %%edi", node->bool_value ? 1 : 0);
-        emit(cg, "    call    xly_bool");
+        emit(cg, "    call    " XLY_SYM("xly_bool"));
         break;
 
     case NODE_NULL:
-        emit(cg, "    call    xly_null");
+        emit(cg, "    call    " XLY_SYM("xly_null"));
         break;
 
     /* ── identifier ──────────────────────────────────────────────────── */
@@ -194,7 +211,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
         if (off != 0)
             emit(cg, "    movq    %d(%%rbp), %%rax", off);
         else
-            emit(cg, "    call    xly_null");   /* undefined → null */
+            emit(cg, "    call    " XLY_SYM("xly_null"));   /* undefined → null */
         break;
     }
 
@@ -214,7 +231,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
             emit_expr(cg, node->children[0]);          /* left → %rax */
             emit(cg, "    pushq   %%rax");             /* [left] on stack */
             emit(cg, "    movq    %%rax, %%rdi");
-            emit(cg, "    call    xly_truthy");        /* eax = 0|1 */
+            emit(cg, "    call    " XLY_SYM("xly_truthy"));        /* eax = 0|1 */
             emit(cg, "    testl   %%eax, %%eax");
             emit(cg, "    jz      %s", lbl_end);       /* falsy → keep left */
             /* truthy: discard left, eval right */
@@ -239,7 +256,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
             emit_expr(cg, node->children[0]);
             emit(cg, "    pushq   %%rax");
             emit(cg, "    movq    %%rax, %%rdi");
-            emit(cg, "    call    xly_truthy");
+            emit(cg, "    call    " XLY_SYM("xly_truthy"));
             emit(cg, "    testl   %%eax, %%eax");
             emit(cg, "    jnz     %s", lbl_end);       /* truthy → keep left */
             emit(cg, "    addq    $8, %%rsp");
@@ -283,7 +300,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 emit(cg, "    movq    %%rax, (%%rsp)");
                 emit(cg, "    movsd   (%%rsp), %%xmm0");
                 emit(cg, "    addq    $8, %%rsp");
-                emit(cg, "    call    xly_num");
+                emit(cg, "    call    " XLY_SYM("xly_num"));
             } else if (is_plus) {
                 /* For +, check types at runtime and fall back to xly_add if needed */
                 char lbl_slow[64], lbl_end[64];
@@ -309,12 +326,12 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 emit(cg, "    movsd   8(%%rdi), %%xmm0");
                 emit(cg, "    movsd   8(%%rsi), %%xmm1");
                 emit(cg, "    addsd   %%xmm1, %%xmm0");
-                emit(cg, "    call    xly_num");
+                emit(cg, "    call    " XLY_SYM("xly_num"));
                 emit(cg, "    jmp     %s", lbl_end);
                 
                 /* Slow path: call xly_add for string concat or mixed types */
                 emit(cg, "%s:", lbl_slow);
-                emit(cg, "    call    xly_add");
+                emit(cg, "    call    " XLY_SYM("xly_add"));
                 
                 emit(cg, "%s:", lbl_end);
             } else {
@@ -339,7 +356,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 else if (strcmp(op,"/") == 0) emit(cg, "    divsd   %%xmm1, %%xmm0");
                 
                 /* Box result */
-                emit(cg, "    call    xly_num");
+                emit(cg, "    call    " XLY_SYM("xly_num"));
             }
         } else {
             /* ── Comparisons and other ops ─────────────────────────────────── */
@@ -363,7 +380,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
                     else                           result = left_val != right_val;
                     
                     emit(cg, "    movl    $%d, %%edi", result);
-                    emit(cg, "    call    xly_bool");
+                    emit(cg, "    call    " XLY_SYM("xly_bool"));
                 } else {
                     /* Runtime unboxed comparison */
                     char lbl_slow[64], lbl_end[64];
@@ -395,7 +412,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
                     else                           emit(cg, "    setne   %%al");
                     
                     emit(cg, "    movzbl  %%al, %%edi");
-                    emit(cg, "    call    xly_bool");
+                    emit(cg, "    call    " XLY_SYM("xly_bool"));
                     emit(cg, "    jmp     %s", lbl_end);
                     
                     /* Slow path */
@@ -503,7 +520,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
         emit(cg, "    leaq    %s(%%rip), %%rdi", ml);
         emit(cg, "    leaq    %s(%%rip), %%rsi", fl);
         emit(cg, "    movl    $%d, %%ecx", argc);
-        emit(cg, "    call    xly_call_module");
+        emit(cg, "    call    " XLY_SYM("xly_call_module"));
 
         if (alloc_bytes > 0)
             emit(cg, "    addq    $%d, %%rsp", alloc_bytes);
@@ -514,7 +531,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
     case NODE_TYPEOF:
         emit_expr(cg, node->children[0]);
         emit(cg, "    movq    %%rax, %%rdi");
-        emit(cg, "    call    xly_typeof");
+        emit(cg, "    call    " XLY_SYM("xly_typeof"));
         break;
 
     /* ── increment / decrement as expression ───────────────────────── */
@@ -527,7 +544,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
         emit(cg, "    pushq   %%rdi");
         /* build xly_num(1.0) */
         emit_load_double(cg, 1.0);
-        emit(cg, "    call    xly_num");          /* rax = num(1) */
+        emit(cg, "    call    " XLY_SYM("xly_num"));          /* rax = num(1) */
         emit(cg, "    movq    %%rax, %%rsi");     /* rsi = num(1) */
         emit(cg, "    popq    %%rdi");            /* rdi = original value */
         emit(cg, "    call    %s",
@@ -558,7 +575,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
         else
             emit(cg, "    xorq    %%rdi, %%rdi");  /* NULL for empty */
         emit(cg, "    movq    $%d, %%rsi", nelems);
-        emit(cg, "    call    xly_array_create");
+        emit(cg, "    call    " XLY_SYM("xly_array_create"));
 
         if (alloc_bytes > 0)
             emit(cg, "    addq    $%d, %%rsp", alloc_bytes);
@@ -573,13 +590,13 @@ static void emit_expr(CG *cg, ASTNode *node) {
         emit_expr(cg, node->children[1]);  /* index in rax */
         emit(cg, "    movq    %%rax, %%rsi");  /* index to rsi */
         emit(cg, "    popq    %%rdi");         /* array to rdi */
-        emit(cg, "    call    xly_index");
+        emit(cg, "    call    " XLY_SYM("xly_index"));
         break;
     }
 
     /* ── fallback ──────────────────────────────────────────────────── */
     default:
-        emit(cg, "    call    xly_null");
+        emit(cg, "    call    " XLY_SYM("xly_null"));
         break;
     }
 }
@@ -598,7 +615,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         if (node->child_count > 0)
             emit_expr(cg, node->children[0]);
         else
-            emit(cg, "    call    xly_null");
+            emit(cg, "    call    " XLY_SYM("xly_null"));
         emit(cg, "    movq    %%rax, %d(%%rbp)", off);
         break;
     }
@@ -644,7 +661,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         emit(cg, "    movq    %d(%%rbp), %%rdi", off);
         emit(cg, "    pushq   %%rdi");
         emit_load_double(cg, 1.0);
-        emit(cg, "    call    xly_num");
+        emit(cg, "    call    " XLY_SYM("xly_num"));
         emit(cg, "    movq    %%rax, %%rsi");
         emit(cg, "    popq    %%rdi");
         emit(cg, "    call    %s",
@@ -675,7 +692,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
 
         emit(cg, "    movq    %%rsp, %%rdi");
         emit(cg, "    movl    $%d, %%esi", n);
-        emit(cg, "    call    xly_print");
+        emit(cg, "    call    " XLY_SYM("xly_print"));
 
         if (alloc_bytes > 0)
             emit(cg, "    addq    $%d, %%rsp", alloc_bytes);
@@ -696,7 +713,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
 
         emit_expr(cg, node->children[0]);
         emit(cg, "    movq    %%rax, %%rdi");
-        emit(cg, "    call    xly_truthy");
+        emit(cg, "    call    " XLY_SYM("xly_truthy"));
         emit(cg, "    testl   %%eax, %%eax");
         emit(cg, "    jz      %s", lbl_else);
 
@@ -723,7 +740,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         emit(cg, "%s:", lbl_cond);
         emit_expr(cg, node->children[0]);
         emit(cg, "    movq    %%rax, %%rdi");
-        emit(cg, "    call    xly_truthy");
+        emit(cg, "    call    " XLY_SYM("xly_truthy"));
         emit(cg, "    testl   %%eax, %%eax");
         emit(cg, "    jz      %s", lbl_end);
 
@@ -754,7 +771,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         if (!(node->children[1]->type == NODE_BOOL && node->children[1]->bool_value)) {
             emit_expr(cg, node->children[1]);
             emit(cg, "    movq    %%rax, %%rdi");
-            emit(cg, "    call    xly_truthy");
+            emit(cg, "    call    " XLY_SYM("xly_truthy"));
             emit(cg, "    testl   %%eax, %%eax");
             emit(cg, "    jz      %s", lbl_end);
         }
@@ -797,7 +814,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         emit(cg, "    movq    %%rax, %d(%%rbp)", off_arr);
         /* len = xly_array_len(arr) */
         emit(cg, "    movq    %%rax, %%rdi");
-        emit(cg, "    call    xly_array_len");
+        emit(cg, "    call    " XLY_SYM("xly_array_len"));
         emit(cg, "    movq    %%rax, %d(%%rbp)", off_len);
         /* idx = 0 */
         emit(cg, "    movq    $0, %d(%%rbp)", off_idx);
@@ -813,7 +830,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         /* itervar = array_get(arr, idx) */
         emit(cg, "    movq    %d(%%rbp), %%rdi", off_arr);
         emit(cg, "    movq    %d(%%rbp), %%rsi", off_idx);
-        emit(cg, "    call    xly_array_get");
+        emit(cg, "    call    " XLY_SYM("xly_array_get"));
         emit(cg, "    movq    %%rax, %d(%%rbp)", off_iter);
 
         emit_stmt(cg, node->children[1]);          /* body */
@@ -863,7 +880,7 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         if (node->child_count > 0)
             emit_expr(cg, node->children[0]);
         else
-            emit(cg, "    call    xly_null");
+            emit(cg, "    call    " XLY_SYM("xly_null"));
         emit(cg, "    movq    %%rbp, %%rsp");
         emit(cg, "    popq    %%rbp");
         emit(cg, "    ret");
@@ -937,7 +954,7 @@ static void emit_function(CG *cg, ASTNode *fn) {
     scope_leave(cg);
 
     /* implicit return null */
-    emit(cg, "    call    xly_null");
+    emit(cg, "    call    " XLY_SYM("xly_null"));
     emit(cg, "    movq    %%rbp, %%rsp");
     emit(cg, "    popq    %%rbp");
     emit(cg, "    ret");
@@ -959,9 +976,9 @@ int codegen(ASTNode *program, const char *outpath) {
     int n_top = count_locals(program) + 16;
     int mframe = (n_top * 8 + 15) & ~15;
 
-    emit(&cg, ".section .text");
-    emit(&cg, ".globl  main");
-    emit(&cg, "main:");
+    emit(&cg, XLY_TEXT_SECTION);
+    emit(&cg, ".globl  " XLY_SYM("main"));
+    emit(&cg, XLY_SYM("main") ":");
     emit(&cg, "    pushq   %%rbp");
     emit(&cg, "    movq    %%rsp, %%rbp");
     emit(&cg, "    subq    $%d, %%rsp", mframe);
@@ -970,7 +987,7 @@ int codegen(ASTNode *program, const char *outpath) {
         emit_stmt(&cg, program->children[i]);
 
     emit(&cg, "    movl    $0, %%edi");
-    emit(&cg, "    call    xly_exit");
+    emit(&cg, "    call    " XLY_SYM("xly_exit"));
     emit(&cg, "    movq    %%rbp, %%rsp");
     emit(&cg, "    popq    %%rbp");
     emit(&cg, "    ret");
@@ -981,7 +998,7 @@ int codegen(ASTNode *program, const char *outpath) {
 
     /* .rodata */
     emit(&cg, "");
-    emit(&cg, ".section .rodata");
+    emit(&cg, XLY_DATA_SECTION);
     for (int i = 0; i < cg.str_count; i++) {
         emit(&cg, "%s:", cg.strings[i].label);
         fprintf(cg.out, "    .asciz  \"");
@@ -1009,7 +1026,9 @@ int codegen(ASTNode *program, const char *outpath) {
 
     /* .note.GNU-stack — tell the linker the stack is NOT executable */
     emit(&cg, "");
-    emit(&cg, ".section .note.GNU-stack,\"\",@progbits");
+#ifdef XLY_GNU_STACK_SECTION
+    emit(&cg, XLY_GNU_STACK_SECTION);
+#endif
 
     fclose(cg.out);
 
