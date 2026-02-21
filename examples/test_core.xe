@@ -1,0 +1,46 @@
+// Core Features Test
+print("Core Tests")
+print("==========")
+
+// Test 1: Basic arithmetic
+var x = 10 + 20
+print("Arithmetic:", x == 30)
+
+// Test 2: Functions
+fn double(n) {
+    return n * 2
+}
+print("Functions:", double(21) == 42)
+
+// Test 3: Arrays
+var arr = [1, 2, 3]
+print("Arrays:", arr[0] == 1)
+
+// Test 4: Loops
+var sum = 0
+var i = 0
+while (i < 5) {
+    sum = sum + i
+    i = i + 1
+}
+print("Loops:", sum == 10)
+
+// Test 5: Recursion
+fn fib(n) {
+    if (n <= 1) { return n }
+    return fib(n-1) + fib(n-2)
+}
+print("Recursion:", fib(10) == 55)
+
+// Test 6: Type annotations
+var typed: number = 42
+print("Types:", typed == 42)
+
+// Test 7: Generics
+fn identity<T>(x: T): T {
+    return x
+}
+print("Generics:", identity(99) == 99)
+
+print()
+print("All core tests passed!")

@@ -1,0 +1,126 @@
+// Core Features Test Suite
+print("Xenly Core Features Test")
+print("========================")
+print()
+
+var passed = 0
+var failed = 0
+
+fn test(name, condition) {
+    if (condition) {
+        print("✓", name)
+        passed = passed + 1
+    } else {
+        print("✗", name, "FAILED")
+        failed = failed + 1
+    }
+}
+
+// Test 1: Arithmetic
+test("Addition", 10 + 20 == 30)
+test("Subtraction", 50 - 20 == 30)
+test("Multiplication", 6 * 7 == 42)
+test("Division", 100 / 5 == 20)
+
+// Test 2: Strings
+var s = "Hello" + " " + "World"
+test("String concatenation", s == "Hello World")
+
+// Test 3: Arrays
+var arr = [1, 2, 3, 4, 5]
+test("Array indexing", arr[0] == 1)
+test("Array last element", arr[4] == 5)
+
+// Test 4: Functions
+fn double(n) {
+    return n * 2
+}
+test("Function call", double(21) == 42)
+
+// Test 5: Recursion
+fn factorial(n) {
+    if (n <= 1) { return 1 }
+    return n * factorial(n - 1)
+}
+test("Factorial(5)", factorial(5) == 120)
+
+// Test 6: Closures
+fn make_adder(x) {
+    fn adder(y) {
+        return x + y
+    }
+    return adder
+}
+var add5 = make_adder(5)
+test("Closure", add5(10) == 15)
+
+// Test 7: Loops
+var sum = 0
+var i = 1
+while (i <= 10) {
+    sum = sum + i
+    i = i + 1
+}
+test("While loop sum", sum == 55)
+
+// Test 8: For loop
+var product = 1
+for (var j = 1; j <= 5; j = j + 1) {
+    product = product * j
+}
+test("For loop factorial", product == 120)
+
+// Test 9: Conditionals
+var result = 0
+if (5 > 3) {
+    result = 1
+} else {
+    result = 2
+}
+test("If condition true", result == 1)
+
+if (5 < 3) {
+    result = 2
+} else {
+    result = 3
+}
+test("If condition false", result == 3)
+
+// Test 10: Boolean operations
+test("Boolean AND true", (true and true) == true)
+test("Boolean AND false", (true and false) == false)
+test("Boolean OR true", (false or true) == true)
+test("Boolean NOT", (not false) == true)
+
+// Test 11: Comparisons
+test("Equal", 5 == 5)
+test("Not equal", 5 != 6)
+test("Greater", 10 > 5)
+test("Less", 5 < 10)
+
+// Test 12: Null
+var n = null
+test("Null value", n == null)
+
+// Test 13: Type annotations (parsed, erased)
+var typed: number = 42
+test("Type annotation", typed == 42)
+
+// Test 14: Generics (parsed, polymorphic)
+fn identity<T>(x: T): T {
+    return x
+}
+test("Generic with number", identity(42) == 42)
+test("Generic with string", identity("test") == "test")
+
+// Summary
+print()
+print("═══════════════════════════")
+print("Passed:", passed)
+print("Failed:", failed)
+if (failed == 0) {
+    print("✓ All tests passed!")
+} else {
+    print("✗", failed, "test(s) failed")
+}
+print("═══════════════════════════")

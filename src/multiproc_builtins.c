@@ -4,6 +4,7 @@
 
 #include "interpreter.h"
 #include "multiproc.h"
+#include "platform.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -185,7 +186,7 @@ Value *builtin_future_destroy(Value **args, size_t argc) {
 // ─── CPU-bound computation helpers ────────────────────────────────────────────
 Value *builtin_cpu_count(Value **args, size_t argc) {
     (void)args; (void)argc;
-    long nproc = sysconf(_SC_NPROCESSORS_ONLN);
+    long nproc = xly_cpu_count();
     return value_number((double)nproc);
 }
 

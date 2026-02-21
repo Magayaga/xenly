@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "modules.h"
 #include "unicode.h"
+#include "platform.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1581,17 +1582,7 @@ static Value *os_sleep(Value **args, size_t argc) {
 
 static Value *os_platform(Value **args, size_t argc) {
     (void)args; (void)argc;
-#ifdef __linux__
-    return value_string("linux");
-#elif defined(__APPLE__)
-    return value_string("darwin");
-#elif defined(_WIN32)
-    return value_string("windows");
-#elif defined(__unix__)
-    return value_string("unix");
-#else
-    return value_string("unknown");
-#endif
+    return value_string(XLY_PLATFORM_NAME);
 }
 
 static NativeFunc os_fns[] = {
@@ -2090,9 +2081,12 @@ Module module_type(void) {
 
 static Value *mp_cpu_count(Value **args, size_t argc) {
     (void)args; (void)argc;
-    long nproc = sysconf(_SC_NPROCESSORS_ONLN);
+    long nproc = xly_cpu_count();
     return value_number((double)nproc);
 }
+
+#ifndef XENLY_NO_MULTIPROC
+// ─── Multiprocessing Functions (require interpreter, not in compiled code) ───
 
 static Value *mp_channel_create(Value **args, size_t argc) {
     size_t capacity = 0;
@@ -2200,8 +2194,11 @@ static Value *mp_future_destroy(Value **args, size_t argc) {
     return value_null();
 }
 
+#endif // XENLY_NO_MULTIPROC
+
 static NativeFunc multiproc_fns[] = {
     { "cpu_count",          mp_cpu_count },
+#ifndef XENLY_NO_MULTIPROC
     { "channel_create",     mp_channel_create },
     { "channel_send",       mp_channel_send },
     { "channel_recv",       mp_channel_recv },
@@ -2214,6 +2211,7 @@ static NativeFunc multiproc_fns[] = {
     { "future_get",         mp_future_get },
     { "future_is_ready",    mp_future_is_ready },
     { "future_destroy",     mp_future_destroy },
+#endif // XENLY_NO_MULTIPROC
     { NULL, NULL }
 };
 
