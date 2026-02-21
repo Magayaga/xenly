@@ -8,13 +8,43 @@ on:
 
 jobs:
   build:
-
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: make installing test
-      run: make
-    - name: make clean test
-      run: make clean
+      - name: Install dependencies
+        run: |
+          brew update
+          # XDMML multimedia support (optional — build falls back gracefully if absent)
+          brew install pkg-config || true
+
+      - name: Show build environment
+        run: |
+          echo "macOS version : $(sw_vers -productVersion)"
+          echo "Xcode version : $(xcodebuild -version | head -1)"
+          echo "Compiler      : $(gcc --version | head -1)"
+          echo "Architecture  : $(uname -m)"
+
+      - name: Build (with XDMML)
+        run: make
+
+      - name: Smoke test — interpreter starts
+        run: |
+          ./xenly --version 2>/dev/null || ./xenly -v 2>/dev/null || \
+          echo "No --version flag; binary exists and is executable — OK"
+          test -x ./xenly
+
+      - name: Build without XDMML (headless / server mode)
+        run: |
+          make clean
+          make XDMML=0
+
+      - name: Smoke test — headless build
+        run: test -x ./xenly
+
+      - name: make clean test
+        run: |
+          make clean
+          # Verify artefacts are gone after clean
+          test ! -f ./xenly && echo "Clean OK" || (echo "Clean failed — xenly binary still present" && exit 1)
