@@ -295,7 +295,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
          * OPTIMIZATION: For arithmetic ops (+,-,*,/), emit unboxed floating-point
          * ops to avoid boxing overhead. BUT: + is also string concat, so we need
          * a runtime type check before unboxing. */
-        int is_arith = (strcmp(op,"+") == 0 || strcmp(op,"-") == 0 ||
+        int is_arith = (strcmp(op,"+") == 0 || strcmp(op,"-") == 0 || 
                         strcmp(op,"*") == 0 || strcmp(op,"/") == 0);
 
         if (is_arith) {
@@ -303,9 +303,9 @@ static void emit_expr(CG *cg, ASTNode *node) {
              * Strategy: check if left operand is a string at runtime.
              * If yes, fall back to xly_add. Otherwise, use unboxed path. */
             int is_plus = (strcmp(op,"+") == 0);
-
+            
             /* Handle special case: both operands are number literals */
-            if (node->children[0]->type == NODE_NUMBER &&
+            if (node->children[0]->type == NODE_NUMBER && 
                 node->children[1]->type == NODE_NUMBER) {
                 /* Ultra-fast path: compile-time constant folding */
                 double left_val = node->children[0]->num_value;
@@ -315,7 +315,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 else if (strcmp(op,"-") == 0) result = left_val - right_val;
                 else if (strcmp(op,"*") == 0) result = left_val * right_val;
                 else                          result = left_val / right_val;
-
+                
                 uint64_t bits;
                 memcpy(&bits, &result, sizeof(double));
                 emit(cg, "    subq    $8, %%rsp");
@@ -329,67 +329,67 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 char lbl_slow[64], lbl_end[64];
                 fresh_label(cg, lbl_slow, sizeof(lbl_slow));
                 fresh_label(cg, lbl_end, sizeof(lbl_end));
-
+                
                 /* Eval both operands */
                 emit_expr(cg, node->children[0]);
                 emit(cg, "    pushq   %%rax");  /* save left */
                 emit_expr(cg, node->children[1]);
                 emit(cg, "    movq    %%rax, %%rsi");  /* rsi = right */
                 emit(cg, "    popq    %%rdi");          /* rdi = left */
-
+                
                 /* Check if left is VAL_STRING (type == 1) */
                 emit(cg, "    cmpl    $1, (%%rdi)");    /* check left.type == VAL_STRING */
                 emit(cg, "    je      %s", lbl_slow);   /* if string, use slow path */
-
+                
                 /* Check if right is VAL_STRING */
                 emit(cg, "    cmpl    $1, (%%rsi)");    /* check right.type == VAL_STRING */
                 emit(cg, "    je      %s", lbl_slow);   /* if string, use slow path */
-
+                
                 /* Fast path: both are numbers, unbox and add */
                 emit(cg, "    movsd   8(%%rdi), %%xmm0");
                 emit(cg, "    movsd   8(%%rsi), %%xmm1");
                 emit(cg, "    addsd   %%xmm1, %%xmm0");
                 emit(cg, "    call    " XLY_SYM("xly_num"));
                 emit(cg, "    jmp     %s", lbl_end);
-
+                
                 /* Slow path: call xly_add for string concat or mixed types */
                 emit(cg, "%s:", lbl_slow);
                 emit(cg, "    call    " XLY_SYM("xly_add"));
-
+                
                 emit(cg, "%s:", lbl_end);
             } else {
                 /* For -, *, /: always use unboxed path (no string operations) */
-
+                
                 /* Eval left operand → %rax (XlyVal*) */
                 emit_expr(cg, node->children[0]);
                 emit(cg, "    pushq   %%rax");  /* save left boxed value */
-
+                
                 /* Eval right operand → %rax (XlyVal*) */
                 emit_expr(cg, node->children[1]);
                 emit(cg, "    movq    %%rax, %%rsi");  /* rsi = right boxed */
                 emit(cg, "    popq    %%rdi");          /* rdi = left boxed */
-
+                
                 /* Unbox both */
                 emit(cg, "    movsd   8(%%rdi), %%xmm0");
                 emit(cg, "    movsd   8(%%rsi), %%xmm1");
-
+                
                 /* Perform arithmetic */
                 if      (strcmp(op,"-") == 0) emit(cg, "    subsd   %%xmm1, %%xmm0");
                 else if (strcmp(op,"*") == 0) emit(cg, "    mulsd   %%xmm1, %%xmm0");
                 else if (strcmp(op,"/") == 0) emit(cg, "    divsd   %%xmm1, %%xmm0");
-
+                
                 /* Box result */
                 emit(cg, "    call    " XLY_SYM("xly_num"));
             }
         } else {
             /* ── Comparisons and other ops ─────────────────────────────────── */
-            int is_comparison = (strcmp(op,"<") == 0 || strcmp(op,">") == 0 ||
+            int is_comparison = (strcmp(op,"<") == 0 || strcmp(op,">") == 0 || 
                                 strcmp(op,"<=") == 0 || strcmp(op,">=") == 0 ||
                                 strcmp(op,"==") == 0 || strcmp(op,"!=") == 0);
-
+            
             if (is_comparison) {
                 /* OPTIMIZATION: Unboxed comparisons for numbers */
-                if (node->children[0]->type == NODE_NUMBER &&
+                if (node->children[0]->type == NODE_NUMBER && 
                     node->children[1]->type == NODE_NUMBER) {
                     /* Compile-time constant folding */
                     double left_val = node->children[0]->num_value;
@@ -401,7 +401,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
                     else if (strcmp(op,">=") == 0) result = left_val >= right_val;
                     else if (strcmp(op,"==") == 0) result = left_val == right_val;
                     else                           result = left_val != right_val;
-
+                    
                     emit(cg, "    movl    $%d, %%edi", result);
                     emit(cg, "    call    " XLY_SYM("xly_bool"));
                 } else {
@@ -409,35 +409,35 @@ static void emit_expr(CG *cg, ASTNode *node) {
                     char lbl_slow[64], lbl_end[64];
                     fresh_label(cg, lbl_slow, sizeof(lbl_slow));
                     fresh_label(cg, lbl_end, sizeof(lbl_end));
-
+                    
                     emit_expr(cg, node->children[0]);
                     emit(cg, "    pushq   %%rax");
                     emit_expr(cg, node->children[1]);
                     emit(cg, "    movq    %%rax, %%rsi");
                     emit(cg, "    popq    %%rdi");
-
+                    
                     /* Check if both are numbers */
                     emit(cg, "    cmpl    $0, (%%rdi)");
                     emit(cg, "    jne     %s", lbl_slow);
                     emit(cg, "    cmpl    $0, (%%rsi)");
                     emit(cg, "    jne     %s", lbl_slow);
-
+                    
                     /* Fast path: unbox and compare */
                     emit(cg, "    movsd   8(%%rdi), %%xmm0");
                     emit(cg, "    movsd   8(%%rsi), %%xmm1");
                     emit(cg, "    ucomisd %%xmm1, %%xmm0");
-
+                    
                     if (strcmp(op,"<") == 0)       emit(cg, "    setb    %%al");
                     else if (strcmp(op,">") == 0)  emit(cg, "    seta    %%al");
                     else if (strcmp(op,"<=") == 0) emit(cg, "    setbe   %%al");
                     else if (strcmp(op,">=") == 0) emit(cg, "    setae   %%al");
                     else if (strcmp(op,"==") == 0) emit(cg, "    sete    %%al");
                     else                           emit(cg, "    setne   %%al");
-
+                    
                     emit(cg, "    movzbl  %%al, %%edi");
                     emit(cg, "    call    " XLY_SYM("xly_bool"));
                     emit(cg, "    jmp     %s", lbl_end);
-
+                    
                     /* Slow path */
                     emit(cg, "%s:", lbl_slow);
                     const char *fn = NULL;
@@ -946,17 +946,17 @@ static void emit_function(CG *cg, ASTNode *fn) {
     for (size_t i = 0; i < nparams && i < 6; i++) {
         int off = var_declare(cg, fn->params[i].name);
         emit(cg, "    movq    %%%s, %d(%%rbp)", pregs[i], off);
-
+        
         /* Handle optional/default parameters */
         if (fn->params[i].is_optional || fn->params[i].default_value) {
             char lbl_has_arg[64];
             fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
-
+            
             /* Check if argument is null (not provided) */
             emit(cg, "    movq    %d(%%rbp), %%rax", off);
             emit(cg, "    testq   %%rax, %%rax");
             emit(cg, "    jnz     %s", lbl_has_arg);
-
+            
             /* Argument not provided - use default */
             if (fn->params[i].default_value) {
                 /* Evaluate default value expression */
@@ -965,7 +965,7 @@ static void emit_function(CG *cg, ASTNode *fn) {
             } else {
                 /* Optional without default - already null */
             }
-
+            
             emit(cg, "%s:", lbl_has_arg);
         }
     }
@@ -1944,3 +1944,4 @@ int codegen(ASTNode *program, const char *outpath) {
     /* ── x86-64 code generation (original) ───────────────────────────── */
     return codegen_x86_64(program, outpath);
 #endif
+}
