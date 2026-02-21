@@ -37,11 +37,12 @@
 #  define XLY_SYM(s)  "_" s
 #  define XLY_TEXT_SECTION   ".section __TEXT,__text,regular,pure_instructions"
 #  define XLY_DATA_SECTION   ".section __TEXT,__cstring,cstring_literals"
-#  define XLY_GNU_STACK_SECTION  /* omitted on macOS — Mach-O has no such section */
+#  define XLY_EMIT_GNU_STACK 0
 #else
 #  define XLY_SYM(s)  s
 #  define XLY_TEXT_SECTION   ".section .text"
 #  define XLY_DATA_SECTION   ".section .rodata"
+#  define XLY_EMIT_GNU_STACK 1
 #  define XLY_GNU_STACK_SECTION ".section .note.GNU-stack,\"\",@progbits"
 #endif
 
@@ -1026,7 +1027,7 @@ int codegen(ASTNode *program, const char *outpath) {
 
     /* .note.GNU-stack — tell the linker the stack is NOT executable */
     emit(&cg, "");
-#ifdef XLY_GNU_STACK_SECTION
+#if XLY_EMIT_GNU_STACK
     emit(&cg, XLY_GNU_STACK_SECTION);
 #endif
 
