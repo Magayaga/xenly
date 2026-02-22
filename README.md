@@ -33,7 +33,7 @@ A **Xenly** variable is created the moment you first assign a value to it.
 
 ```javascript
 // "var" variable to print()
-var hi = "Hello, World!"
+const hi = "Hello, World!"
 print(hi)
 ```
 
@@ -101,6 +101,7 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
 
