@@ -5,17 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python for Xenly programming language with Clang",
+            "name": "Python for Xenly programming language with C",
             "type": "debugpy",
             "request": "launch",
-            "program": "install-clang.py",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "Python for Xenly programming language with GCC",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "install-gcc.py",
+            "program": "install-c.py",
             "console": "integratedTerminal"
         },
         {
