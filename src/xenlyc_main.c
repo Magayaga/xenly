@@ -1,4 +1,13 @@
 /*
+ * XENLY - high-level and general-purpose programming language
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in C programming language.
+ * 
+ * It is available for the Linux and macOS operating systems.
+ *
+ */
+/*
  * xenlyc_main.c  —  Xenly native compiler driver
  *
  * Pipeline:
@@ -52,16 +61,6 @@ static char *swap_ext(const char *path, const char *ext) {
 
 /* ── banner ─────────────────────────────────────────────────────────────── */
 static void print_usage(const char *prog) {
-    printf("\n");
-    printf("  \033[1;36m╔══════════════════════════════════════════╗\033[0m\n");
-    printf("  \033[1;36m║   ██╗  ██╗ ███╗   ██╗ ███████╗ ██╗      ║\033[0m\n");
-    printf("  \033[1;36m║   ██║  ██║ ████╗  ██║ ██╔════╝ ██║      ║\033[0m\n");
-    printf("  \033[1;36m║   ███████║ ██╔██╗ ██║ █████╗   ██║  ██╗ ║\033[0m\n");
-    printf("  \033[1;36m║   ██╔══██║ ██║╚██╗██║ ██╔══╝   ██║  ██║ ║\033[0m\n");
-    printf("  \033[1;36m║   ██║  ██║ ██║ ╚████║ ███████╗ ███████║ ║\033[0m\n");
-    printf("  \033[1;36m║   ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚══════╝ ╚═════╝  ║\033[0m\n");
-    printf("  \033[1;36m║          native compiler                  ║\033[0m\n");
-    printf("  \033[1;36m╚══════════════════════════════════════════╝\033[0m\n");
     printf("\n");
     printf("  \033[1;33mUsage:\033[0m   %s [options] <file.xe>\n", prog);
     printf("\n");
