@@ -44,7 +44,7 @@ print(hi)
 You can download the git clone of the `xenly` programming language project. It is available for the **macOS**, **WSL** (Windows Subsystem for Linux), and **Linux** operating systems.
 
 > [!WARNING]
-> The `xenlyc` native compiler for the **macOS** operating system is not available because because it is being fixed for errors and bugs.
+> The `xenlyc` native compiler for the **FreeBSD** operating system is not available because it is being fixed for errors and bugs.
 
 ```bash
 # Download the Xenly's source code
@@ -101,6 +101,7 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
 
