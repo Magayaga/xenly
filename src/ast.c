@@ -1,3 +1,12 @@
+/*
+ * XENLY - high-level and general-purpose programming language
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in C programming language.
+ * 
+ * It is available for the Linux and macOS operating systems.
+ *
+ */
 #include "ast.h"
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +48,21 @@ void ast_node_destroy(ASTNode *node) {
             free(node->params[i].type_annotation);
         }
         free(node->params);
+    }
+    // Free type params
+    if (node->type_params) {
+        for (size_t i = 0; i < node->type_param_count; i++) {
+            free(node->type_params[i].name);
+            free(node->type_params[i].constraint);
+        }
+        free(node->type_params);
+    }
+    // Free type args
+    if (node->type_args) {
+        for (size_t i = 0; i < node->type_arg_count; i++) {
+            free(node->type_args[i]);
+        }
+        free(node->type_args);
     }
     free(node->str_value);
     free(node->type_annotation);

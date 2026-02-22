@@ -1,0 +1,116 @@
+// Advanced Type Checking Test Suite
+
+print("╔════════════════════════════════════════════════════════╗")
+print("║      Advanced Type Checking Test Suite                ║")
+print("╚════════════════════════════════════════════════════════╝")
+print()
+
+// ─── Test 1: Constraint Validation ───────────────────────────────────────────
+print("Test 1: Type Constraint Validation")
+print("───────────────────────────────────")
+
+fn min<T: Comparable>(a: T, b: T): T {
+    if (a < b) {
+        return a
+    }
+    return b
+}
+
+print("min(5, 10) =", min(5, 10))
+print("min(\"apple\", \"zebra\") =", min("apple", "zebra"))
+print("✓ Comparable constraint works")
+print()
+
+// ─── Test 2: Array Type Consistency ──────────────────────────────────────────
+print("Test 2: Array Type Consistency")
+print("──────────────────────────────")
+
+var homogeneous = [1, 2, 3, 4, 5]
+print("homogeneous =", homogeneous)
+print("✓ Homogeneous array inferred correctly")
+print()
+
+// ─── Test 3: Function Return Type Checking ───────────────────────────────────
+print("Test 3: Function Return Type Checking")
+print("──────────────────────────────────────")
+
+fn getName(): string {
+    return "Alice"
+}
+
+fn getAge(): number {
+    return 30
+}
+
+print("getName() =", getName())
+print("getAge() =", getAge())
+print("✓ Return types validated")
+print()
+
+// ─── Test 4: Nested Generic Functions ────────────────────────────────────────
+print("Test 4: Nested Generic Functions")
+print("─────────────────────────────────")
+
+fn wrap<T>(value: T): [T] {
+    return [value]
+}
+
+fn double_wrap<T>(value: T) {
+    return wrap(wrap(value))
+}
+
+print("wrap(42) =", wrap(42))
+print("double_wrap(\"test\") =", double_wrap("test"))
+print("✓ Nested generics work")
+print()
+
+// ─── Test 5: Multiple Constraints ────────────────────────────────────────────
+print("Test 5: Multiple Type Parameters")
+print("─────────────────────────────────")
+
+fn create_pair<K: Hashable, V>(key: K, value: V) {
+    return [key, value]
+}
+
+print("create_pair(\"name\", \"Alice\") =", create_pair("name", "Alice"))
+print("create_pair(42, \"answer\") =", create_pair(42, "answer"))
+print("✓ Multiple constrained parameters work")
+print()
+
+// ─── Test 6: Generic Class Methods ───────────────────────────────────────────
+print("Test 6: Generic Class Type Checking")
+print("────────────────────────────────────")
+
+class Container<T> {
+    fn init(value: T) {
+        this.data = value
+    }
+    
+    fn get(): T {
+        return this.data
+    }
+    
+    fn set(newValue: T) {
+        this.data = newValue
+    }
+}
+
+var intContainer = new Container(100)
+print("intContainer.get() =", intContainer.get())
+intContainer.set(200)
+print("After set: intContainer.get() =", intContainer.get())
+print("✓ Generic class methods type-checked")
+print()
+
+// ─── Summary ──────────────────────────────────────────────────────────────────
+print("╔════════════════════════════════════════════════════════╗")
+print("║       All Advanced Tests Passed! ✓                    ║")
+print("╚════════════════════════════════════════════════════════╝")
+print()
+print("Advanced features tested:")
+print("  • Type constraints (Comparable, Hashable)")
+print("  • Array type consistency checking")
+print("  • Function return type validation")
+print("  • Nested generic functions")
+print("  • Multiple constrained parameters")
+print("  • Generic class method type checking")

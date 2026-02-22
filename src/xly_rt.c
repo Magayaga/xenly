@@ -1,4 +1,13 @@
 /*
+ * XENLY - high-level and general-purpose programming language
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in C programming language.
+ * 
+ * It is available for the Linux and macOS operating systems.
+ *
+ */
+/*
  * xly_rt.c  —  Xenly native-compiler runtime library
  *
  * Compiled Xenly binaries call into this.  It is compiled once into

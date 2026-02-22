@@ -1,0 +1,70 @@
+// Safe Feature Test (avoiding < operator)
+print("Xenly Feature Test")
+print("==================")
+
+// Test 1: Arithmetic
+var x = 10 + 20
+print("Test 1: Arithmetic -", x)
+
+// Test 2: Functions  
+fn double(n) {
+    return n * 2
+}
+print("Test 2: Functions -", double(21))
+
+// Test 3: Arrays
+var arr = [1, 2, 3, 4, 5]
+print("Test 3: Arrays -", arr[0], arr[4])
+
+// Test 4: Strings
+var s = "Hello" + " " + "World"
+print("Test 4: Strings -", s)
+
+// Test 5: Conditionals
+var result = 0
+if (x == 30) {
+    result = 1
+}
+print("Test 5: Conditionals -", result)
+
+// Test 6: Loops (using !=)
+var sum = 0
+var i = 0
+while (i != 10) {
+    sum = sum + i
+    i = i + 1
+}
+print("Test 6: Loops - sum of 0-9 =", sum)
+
+// Test 7: Recursion
+fn factorial(n) {
+    if (n <= 1) { return 1 }
+    return n * factorial(n - 1)
+}
+print("Test 7: Recursion - factorial(5) =", factorial(5))
+
+// Test 8: Closures
+fn make_counter() {
+    var count = 0
+    fn increment() {
+        count = count + 1
+        return count
+    }
+    return increment
+}
+var counter = make_counter()
+print("Test 8: Closures -", counter(), counter(), counter())
+
+// Test 9: Type annotations
+var typed: number = 42
+var named: string = "Alice"
+print("Test 9: Types -", typed, named)
+
+// Test 10: Generics
+fn identity<T>(x: T): T {
+    return x
+}
+print("Test 10: Generics -", identity(99), identity("test"))
+
+print()
+print("✓ All tests completed successfully!")

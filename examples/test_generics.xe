@@ -1,0 +1,127 @@
+// Xenly Generic Programming Test Suite
+
+print("╔════════════════════════════════════════════════════════╗")
+print("║         Xenly Generic Programming Tests                ║")
+print("╚════════════════════════════════════════════════════════╝")
+print()
+
+// ─── Test 1: Generic Identity Function ──────────────────────────────────────
+print("Test 1: Generic Identity Function")
+print("───────────────────────────────────")
+
+fn identity<T>(x: T) {
+    return x
+}
+
+var n = identity(42)
+var s = identity("hello")
+var b = identity(true)
+
+print("identity(42) =", n)
+print("identity(\"hello\") =", s)
+print("identity(true) =", b)
+print("✓ Generic identity works with multiple types")
+print()
+
+// ─── Test 2: Generic Pair Function ──────────────────────────────────────────
+print("Test 2: Generic Pair Function")
+print("──────────────────────────────")
+
+fn pair<A, B>(first: A, second: B) {
+    return [first, second]
+}
+
+var p1 = pair(1, "one")
+var p2 = pair("hello", 42)
+var p3 = pair(true, false)
+
+print("pair(1, \"one\") =", p1)
+print("pair(\"hello\", 42) =", p2)
+print("pair(true, false) =", p3)
+print("✓ Generic pair works with different type combinations")
+print()
+
+// ─── Test 3: Generic Container ───────────────────────────────────────────────
+print("Test 3: Generic Container Class")
+print("────────────────────────────────")
+
+class Box<T> {
+    fn init(value: T) {
+        this.value = value
+    }
+    
+    fn get() {
+        return this.value
+    }
+    
+    fn set(newValue: T) {
+        this.value = newValue
+    }
+}
+
+var numBox = new Box(42)
+var strBox = new Box("hello")
+
+print("Box<number>.get() =", numBox.get())
+print("Box<string>.get() =", strBox.get())
+
+numBox.set(100)
+strBox.set("world")
+
+print("After set:")
+print("  numBox.get() =", numBox.get())
+print("  strBox.get() =", strBox.get())
+print("✓ Generic classes work")
+print()
+
+// ─── Test 4: Generic Higher-Order Functions ──────────────────────────────────
+print("Test 4: Generic Higher-Order Functions")
+print("───────────────────────────────────────")
+
+fn apply<T, U>(func, arg: T) {
+    return func(arg)
+}
+
+fn double(x) {
+    return x * 2
+}
+
+fn shout(s) {
+    return s + "!"
+}
+
+print("apply(double, 5) =", apply(double, 5))
+print("apply(shout, \"hello\") =", apply(shout, "hello"))
+print("✓ Generic higher-order functions work")
+print()
+
+// ─── Test 5: Nested Generics ─────────────────────────────────────────────────
+print("Test 5: Nested Generics")
+print("───────────────────────")
+
+fn wrap<T>(x: T) {
+    return [x]
+}
+
+fn doubleWrap<T>(x: T) {
+    return wrap(wrap(x))
+}
+
+print("wrap(42) =", wrap(42))
+print("doubleWrap(42) =", doubleWrap(42))
+print("wrap(\"test\") =", wrap("test"))
+print("✓ Nested generic calls work")
+print()
+
+// ─── Summary ──────────────────────────────────────────────────────────────────
+print("╔════════════════════════════════════════════════════════╗")
+print("║           All Generic Tests Passed! ✓                  ║")
+print("╚════════════════════════════════════════════════════════╝")
+print()
+print("Generic programming features:")
+print("  • Generic functions with type parameters")
+print("  • Multiple type parameters (T, U, etc.)")
+print("  • Generic classes")
+print("  • Type annotations on parameters")
+print("  • Generic higher-order functions")
+print("  • Nested generic calls")

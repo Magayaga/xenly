@@ -1,0 +1,86 @@
+// Xenly Generic Programming - Working Examples
+// Note: Generic syntax is fully supported for documentation
+// Runtime behavior is polymorphic (duck typing)
+
+print("╔════════════════════════════════════════════════════════╗")
+print("║    Xenly Generic Programming - Documentation Mode      ║")
+print("╚════════════════════════════════════════════════════════╝")
+print()
+
+// ─── Generic Identity ─────────────────────────────────────────────────────────
+print("Generic Identity Function:")
+
+fn identity<T>(x: T) {
+    return x
+}
+
+print("  identity(42) =", identity(42))
+print("  identity(\"hello\") =", identity("hello"))
+print("  identity(true) =", identity(true))
+print("✓ Works with any type")
+print()
+
+// ─── Generic Pair ─────────────────────────────────────────────────────────────
+print("Generic Pair Function:")
+
+fn pair<A, B>(first: A, second: B) {
+    return [first, second]
+}
+
+print("  pair(1, \"one\") =", pair(1, "one"))
+print("  pair(\"hello\", 42) =", pair("hello", 42))
+print("✓ Multiple type parameters work")
+print()
+
+// ─── Generic Swap ─────────────────────────────────────────────────────────────
+print("Generic Swap Function:")
+
+fn swap<T, U>(a: T, b: U) {
+    return [b, a]
+}
+
+var result = swap(100, "hundred")
+print("  swap(100, \"hundred\") =", result)
+print("✓ Type parameters document intent")
+print()
+
+// ─── Generic Higher-Order ─────────────────────────────────────────────────────
+print("Generic Higher-Order Function:")
+
+fn apply<T, U>(func, arg: T) {
+    return func(arg)
+}
+
+fn double(x) { return x * 2 }
+fn exclaim(s) { return s + "!" }
+
+print("  apply(double, 21) =", apply(double, 21))
+print("  apply(exclaim, \"hello\") =", apply(exclaim, "hello"))
+print("✓ Generic callbacks work")
+print()
+
+// ─── Multiple Parameters ──────────────────────────────────────────────────────
+print("Generic Function with 3 Type Parameters:")
+
+fn triple<X, Y, Z>(a: X, b: Y, c: Z) {
+    return [a, b, c]
+}
+
+print("  triple(1, \"two\", true) =", triple(1, "two", true))
+print("✓ Multiple type parameters supported")
+print()
+
+// ─── Summary ──────────────────────────────────────────────────────────────────
+print("╔════════════════════════════════════════════════════════╗")
+print("║        Generic Syntax Fully Working! ✓                 ║")
+print("╚════════════════════════════════════════════════════════╝")
+print()
+print("Features demonstrated:")
+print("  • Generic functions with type parameters <T>")
+print("  • Multiple type parameters <A, B, C>")
+print("  • Type annotations on parameters (x: T)")
+print("  • Self-documenting code")
+print("  • Polymorphic behavior (duck typing)")
+print()
+print("Note: Type parameters are for documentation.")
+print("Runtime uses duck typing - no type checking.")

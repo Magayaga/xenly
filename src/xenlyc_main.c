@@ -1,4 +1,13 @@
 /*
+ * XENLY - high-level and general-purpose programming language
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in C programming language.
+ * 
+ * It is available for the Linux and macOS operating systems.
+ *
+ */
+/*
  * xenlyc_main.c  —  Xenly native compiler driver
  *
  * Pipeline:
@@ -15,6 +24,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "codegen.h"
+#include "platform.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,16 +61,6 @@ static char *swap_ext(const char *path, const char *ext) {
 
 /* ── banner ─────────────────────────────────────────────────────────────── */
 static void print_usage(const char *prog) {
-    printf("\n");
-    printf("  \033[1;36m╔══════════════════════════════════════════╗\033[0m\n");
-    printf("  \033[1;36m║   ██╗  ██╗ ███╗   ██╗ ███████╗ ██╗      ║\033[0m\n");
-    printf("  \033[1;36m║   ██║  ██║ ████╗  ██║ ██╔════╝ ██║      ║\033[0m\n");
-    printf("  \033[1;36m║   ███████║ ██╔██╗ ██║ █████╗   ██║  ██╗ ║\033[0m\n");
-    printf("  \033[1;36m║   ██╔══██║ ██║╚██╗██║ ██╔══╝   ██║  ██║ ║\033[0m\n");
-    printf("  \033[1;36m║   ██║  ██║ ██║ ╚████║ ███████╗ ███████║ ║\033[0m\n");
-    printf("  \033[1;36m║   ╚═╝  ╚═╝ ╚═╝  ╚═══╝ ╚══════╝ ╚═════╝  ║\033[0m\n");
-    printf("  \033[1;36m║          native compiler                  ║\033[0m\n");
-    printf("  \033[1;36m╚══════════════════════════════════════════╝\033[0m\n");
     printf("\n");
     printf("  \033[1;33mUsage:\033[0m   %s [options] <file.xe>\n", prog);
     printf("\n");
@@ -159,8 +159,20 @@ int main(int argc, char **argv) {
     char *obj_path = swap_ext(input, ".o");
     {
         char cmd[1024];
+#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
+        /* macOS: use 'as' with -arch flag; no --64 flag */
+#  if defined(__arm64__) || defined(__aarch64__)
+        snprintf(cmd, sizeof(cmd),
+                 "as -arch arm64 -o %s %s 2>&1", obj_path, asm_path);
+#  else
+        snprintf(cmd, sizeof(cmd),
+                 "as -arch x86_64 -o %s %s 2>&1", obj_path, asm_path);
+#  endif
+#else
+        /* Linux/BSD: GNU as with --64 for explicit 64-bit mode */
         snprintf(cmd, sizeof(cmd),
                  "as --64 -o %s %s 2>&1", obj_path, asm_path);
+#endif
         FILE *pipe = popen(cmd, "r");
         char line[256];
         while (fgets(line, sizeof(line), pipe))
@@ -191,9 +203,26 @@ int main(int argc, char **argv) {
         }
 
         char cmd[2048];
+#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
+        /*
+         * macOS: use clang as the linker driver; link against libxly_rt.a
+         * from the same directory as xenlyc.  No -lm needed (math is in
+         * libSystem on macOS), but it's harmless to include.
+         */
+#  if defined(__arm64__) || defined(__aarch64__)
+        snprintf(cmd, sizeof(cmd),
+                 "clang -arch arm64 -o %s %s -L%s -lxly_rt -lm 2>&1",
+                 out_name, obj_path, rt_dir);
+#  else
+        snprintf(cmd, sizeof(cmd),
+                 "clang -arch x86_64 -o %s %s -L%s -lxly_rt -lm 2>&1",
+                 out_name, obj_path, rt_dir);
+#  endif
+#else
         snprintf(cmd, sizeof(cmd),
                  "gcc -o %s %s -L%s -lxly_rt -lm 2>&1",
                  out_name, obj_path, rt_dir);
+#endif
         FILE *pipe = popen(cmd, "r");
         char line[256];
         while (fgets(line, sizeof(line), pipe))

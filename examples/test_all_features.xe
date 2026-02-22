@@ -1,0 +1,135 @@
+// Comprehensive Feature Test Suite
+print("╔════════════════════════════════════════════════════════╗")
+print("║     Xenly Comprehensive Test Suite                    ║")
+print("╚════════════════════════════════════════════════════════╝")
+print()
+
+var tests_passed = 0
+var tests_failed = 0
+
+fn test(name, condition) {
+    if (condition) {
+        print("✓", name)
+        tests_passed = tests_passed + 1
+    } else {
+        print("✗", name)
+        tests_failed = tests_failed + 1
+    }
+}
+
+// Test 1: Basic arithmetic
+var x = 10 + 20
+test("Arithmetic addition", x == 30)
+
+// Test 2: String operations
+var s = "Hello" + " " + "World"
+test("String concatenation", s == "Hello World")
+
+// Test 3: Arrays
+var arr = [1, 2, 3, 4, 5]
+test("Array creation", arr[0] == 1)
+test("Array indexing", arr[4] == 5)
+
+// Test 4: Functions
+fn double(n) {
+    return n * 2
+}
+test("Function call", double(21) == 42)
+
+// Test 5: Closures
+fn make_adder(x) {
+    fn adder(y) {
+        return x + y
+    }
+    return adder
+}
+var add5 = make_adder(5)
+test("Closures", add5(10) == 15)
+
+// Test 6: Objects
+var obj = { name: "Alice", age: 30 }
+test("Object creation", obj.name == "Alice")
+test("Object property access", obj.age == 30)
+
+// Test 7: Conditionals
+var result = 0
+if (true) {
+    result = 1
+} else {
+    result = 2
+}
+test("If statement (true branch)", result == 1)
+
+if (false) {
+    result = 2
+} else {
+    result = 3
+}
+test("If statement (false branch)", result == 3)
+
+// Test 8: Loops
+var sum = 0
+var i = 1
+while (i <= 10) {
+    sum = sum + i
+    i = i + 1
+}
+test("While loop", sum == 55)
+
+// Test 9: For loop
+var product = 1
+for (var j = 1; j <= 5; j = j + 1) {
+    product = product * j
+}
+test("For loop", product == 120)
+
+// Test 10: Recursion
+fn factorial(n) {
+    if (n <= 1) {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+test("Recursion", factorial(5) == 120)
+
+// Test 11: Type annotations (parsed, ignored)
+var typed: number = 42
+test("Type annotations", typed == 42)
+
+// Test 12: Generic functions
+fn identity<T>(x: T): T {
+    return x
+}
+test("Generic function (number)", identity(42) == 42)
+test("Generic function (string)", identity("test") == "test")
+
+// Test 13: Boolean operations
+test("Boolean AND (true)", (true and true) == true)
+test("Boolean AND (false)", (true and false) == false)
+test("Boolean OR (true)", (false or true) == true)
+test("Boolean OR (false)", (false or false) == false)
+test("Boolean NOT", (not false) == true)
+
+// Test 14: Comparison operators
+test("Equal", 5 == 5)
+test("Not equal", 5 != 6)
+test("Greater than", 10 > 5)
+test("Less than", 5 < 10)
+test("Greater or equal", 5 >= 5)
+test("Less or equal", 5 <= 5)
+
+// Test 15: Null handling
+var n = null
+test("Null value", n == null)
+
+// Summary
+print()
+print("════════════════════════════════════════")
+print("Tests passed:", tests_passed)
+print("Tests failed:", tests_failed)
+if (tests_failed == 0) {
+    print("✓ All tests passed!")
+} else {
+    print("✗ Some tests failed")
+}
+print("════════════════════════════════════════")
