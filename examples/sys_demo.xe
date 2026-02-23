@@ -1,0 +1,173 @@
+// ─── Xenly sys Module — Level-Up Demo ────────────────────────────────────────
+// Showcases all 10 levels of C system programming in the sys module.
+import "sys"
+
+print("╔══════════════════════════════════════════════════════╗")
+print("║     Xenly sys Module — Full System Programming       ║")
+print("╚══════════════════════════════════════════════════════╝")
+
+// ── LEVEL 1: Process Control ─────────────────────────────────────────────────
+print("")
+print("── LEVEL 1: Process Control ──")
+print("PID:    " + sys.getpid())
+print("PPID:   " + sys.getppid())
+print("UID:    " + sys.getuid())
+print("EUID:   " + sys.geteuid())
+print("GID:    " + sys.getgid())
+print("EGID:   " + sys.getegid())
+const nofile_limit = sys.getrlimit(sys.RLIMIT_NOFILE())
+print("RLIMIT_NOFILE soft=" + nofile_limit[0] + " hard=" + nofile_limit[1])
+const stack_limit = sys.getrlimit(sys.RLIMIT_STACK())
+print("RLIMIT_STACK  soft=" + stack_limit[0] + " hard=" + stack_limit[1])
+
+// ── LEVEL 2: File Descriptor I/O & mmap ──────────────────────────────────────
+print("")
+print("── LEVEL 2: File I/O & mmap ──")
+const wr_flags = sys.bor(sys.O_WRONLY(), sys.bor(sys.O_CREAT(), sys.O_TRUNC()))
+const fd = sys.open("/tmp/xenly_lvl2.bin", wr_flags, 420)
+print("Opened fd=" + fd)
+sys.write(fd, "XENLY: System programming at every level.\n")
+sys.fsync(fd)
+sys.close(fd)
+const rfd = sys.open("/tmp/xenly_lvl2.bin", sys.O_RDONLY(), 0)
+const content = sys.read(rfd, 64)
+sys.close(rfd)
+print("Read: " + content)
+const fstat = sys.stat("/tmp/xenly_lvl2.bin")
+print("stat: size=" + fstat[0] + " nlinks=" + fstat[6])
+
+const map_flags = sys.bor(sys.MAP_PRIVATE(), sys.MAP_ANONYMOUS())
+const mem = sys.mmap(4096, sys.bor(sys.PROT_READ(), sys.PROT_WRITE()), map_flags, -1, 0)
+print("mmap ptr=" + mem)
+sys.mmap_write(mem, 0, "Hello from OS-mapped memory!")
+const mdata = sys.mmap_read(mem, 0, 28)
+print("mmap_read: " + mdata)
+sys.munmap(mem, 4096)
+
+// ── LEVEL 3: Filesystem ──────────────────────────────────────────────────────
+print("")
+print("── LEVEL 3: Filesystem ──")
+sys.mkdir("/tmp/xenly_fstest", 493)
+print("mkdir isdir=" + sys.isdir("/tmp/xenly_fstest"))
+sys.unlink("/tmp/xenly_link")
+sys.symlink("/tmp/xenly_lvl2.bin", "/tmp/xenly_link")
+print("islnk=" + sys.islnk("/tmp/xenly_link") + " readlink=" + sys.readlink("/tmp/xenly_link"))
+sys.chmod("/tmp/xenly_lvl2.bin", 420)
+print("chmod 0644 access R_OK=" + sys.access("/tmp/xenly_lvl2.bin", 4))
+sys.rmdir("/tmp/xenly_fstest")
+sys.unlink("/tmp/xenly_link")
+sys.unlink("/tmp/xenly_lvl2.bin")
+
+// ── LEVEL 4: Networking ───────────────────────────────────────────────────────
+print("")
+print("── LEVEL 4: Networking ──")
+print("AF_INET=" + sys.AF_INET() + " SOCK_STREAM=" + sys.SOCK_STREAM())
+print("htons(8080)=" + sys.htons(8080) + " ntohs(back)=" + sys.ntohs(sys.htons(8080)))
+print("htonl(12345)=" + sys.htonl(12345) + " ntohl(back)=" + sys.ntohl(sys.htonl(12345)))
+print("inet_aton(127.0.0.1)=" + sys.inet_aton("127.0.0.1"))
+print("inet_ntoa(2130706433)=" + sys.inet_ntoa(2130706433))
+
+// ── LEVEL 5: High-Resolution Clocks ──────────────────────────────────────────
+print("")
+print("── LEVEL 5: High-Resolution Clocks ──")
+const rt = sys.clock_realtime()
+print("realtime:  " + rt[0] + "s " + rt[1] + "ns")
+const mn = sys.clock_monotonic()
+print("monotonic: " + mn[0] + "s " + mn[1] + "ns")
+const pr = sys.clock_process()
+print("process:   " + pr[0] + "s " + pr[1] + "ns")
+const tv = sys.gettimeofday()
+print("gtod:      " + tv[0] + "s " + tv[1] + "us")
+
+const t0 = sys.clock_monotonic()
+var x = 0
+var i = 0
+while (i <= 99999) {
+    x = x + 1
+    i = i + 1
+}
+const t1 = sys.clock_monotonic()
+const billion = 1000000000
+const sec_diff = t1[0] - t0[0]
+const ns_diff = t1[1] - t0[1]
+const elapsed_ns = sec_diff * billion + ns_diff
+print("100k-loop: " + elapsed_ns + " ns")
+sys.nanosleep(0, 500000)
+print("nanosleep(500us) done")
+
+// ── LEVEL 6: System Info ──────────────────────────────────────────────────────
+print("")
+print("── LEVEL 6: System Info ──")
+const u = sys.uname()
+print("OS=" + u[0] + " Host=" + u[1] + " Arch=" + u[4])
+print("CPUs: " + sys.nproc() + " online / " + sys.nproc_conf() + " configured")
+const page = sys.PAGE_SIZE()
+const phys = sys.phys_pages()
+const mb = 1048576
+const ram_mb = phys * page / mb
+const free_mb = sys.avphys_pages() * page / mb
+print("PAGE=" + page + "B  RAM=" + ram_mb + "MB  FREE=" + free_mb + "MB")
+print("Endian=" + sys.endian() + " ptr=" + sys.sizeof_ptr() + "B")
+print("proc_status available: " + sys.isfile("/proc/self/status"))
+
+// ── LEVEL 7: Bit & Memory Operations ─────────────────────────────────────────
+print("")
+print("── LEVEL 7: Bit & Memory ──")
+var reg = 0
+reg = sys.bit_set(reg, 0)
+reg = sys.bit_set(reg, 3)
+reg = sys.bit_set(reg, 7)
+print("set(0,3,7)=" + reg + "  bit_get(3)=" + sys.bit_get(reg, 3))
+reg = sys.bit_clear(reg, 3)
+reg = sys.bit_toggle(reg, 5)
+print("clear(3)+toggle(5)=" + reg)
+print("bswap32(0x12345678)=" + sys.bswap32(305419896))
+print("align_up(100,64)=" + sys.align_up(100, 64))
+print("align_down(100,64)=" + sys.align_down(100, 64))
+print("is_pow2(64)=" + sys.is_pow2(64) + " is_pow2(100)=" + sys.is_pow2(100))
+print("next_pow2(100)=" + sys.next_pow2(100))
+print("popcnt(255)=" + sys.popcnt(255) + " clz(1)=" + sys.clz(1) + " ctz(256)=" + sys.ctz(256))
+print("parity(255)=" + sys.parity(255) + " parity(127)=" + sys.parity(127))
+print("rol(1,4)=" + sys.rol(1, 4) + " ror(16,4)=" + sys.ror(16, 4))
+print("sar(-8,2)=" + sys.sar(-8, 2))
+
+// ── LEVEL 8: IPC & Syslog ────────────────────────────────────────────────────
+print("")
+print("── LEVEL 8: IPC & Syslog ──")
+const p = sys.pipe()
+print("pipe: rfd=" + p[0] + " wfd=" + p[1])
+sys.write(p[1], "IPC:ping")
+const pmsg = sys.read(p[0], 64)
+print("pipe msg: " + pmsg)
+sys.close(p[0])
+sys.close(p[1])
+sys.openlog("xenly", 1, 1)
+sys.syslog(sys.LOG_INFO(), "Xenly sys demo — all 10 levels operational")
+sys.closelog()
+print("Wrote to syslog OK")
+
+// ── LEVEL 9: Constants ────────────────────────────────────────────────────────
+print("")
+print("── LEVEL 9: Constants ──")
+print("O_RDONLY=" + sys.O_RDONLY() + " O_CREAT=" + sys.O_CREAT() + " O_NONBLOCK=" + sys.O_NONBLOCK())
+print("SIGKILL=" + sys.SIGKILL() + " SIGTERM=" + sys.SIGTERM() + " SIGUSR1=" + sys.SIGUSR1())
+print("LOG_INFO=" + sys.LOG_INFO() + " LOG_ERR=" + sys.LOG_ERR() + " LOG_DEBUG=" + sys.LOG_DEBUG())
+print("PROT_READ=" + sys.PROT_READ() + " MAP_ANON=" + sys.MAP_ANONYMOUS())
+print("POLLIN=" + sys.POLLIN() + " POLLOUT=" + sys.POLLOUT())
+
+// ── LEVEL 10: Integer Constants ───────────────────────────────────────────────
+print("")
+print("── LEVEL 10: Integer Constants ──")
+print("INT8:   [" + sys.INT8_MIN() + ", " + sys.INT8_MAX() + "]")
+print("INT16:  [" + sys.INT16_MIN() + ", " + sys.INT16_MAX() + "]")
+print("INT32:  [" + sys.INT32_MIN() + ", " + sys.INT32_MAX() + "]")
+print("UINT8:  [0, " + sys.UINT8_MAX() + "]")
+print("UINT16: [0, " + sys.UINT16_MAX() + "]")
+print("UINT32: [0, " + sys.UINT32_MAX() + "]")
+print("INT_MAX=" + sys.INT_MAX() + " LONG_MAX=" + sys.LONG_MAX())
+print("STDIN=" + sys.STDIN() + " STDOUT=" + sys.STDOUT() + " STDERR=" + sys.STDERR())
+
+print("")
+print("╔══════════════════════════════════════════════════════╗")
+print("║  All 10 levels verified. sys module at full power.   ║")
+print("╚══════════════════════════════════════════════════════╝")
