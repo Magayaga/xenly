@@ -24,7 +24,7 @@ Xenly programming language should be command-line interfaces, web servers, and d
 ### Hello, World! program
 The following shows how a **"Hello, World!"** program is written in Xenly programming language:
 
-```swift
+```rust
 // “Hello, World!” program
 print("Hello, World!")
 ```
@@ -101,6 +101,7 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
 
