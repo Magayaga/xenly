@@ -37,6 +37,28 @@ const hi = "Hello, World!"
 print(hi)
 ```
 
+### Xenly's standard library
+```typescript
+// import modules
+import "math"
+import "string"
+import "array"
+
+// math
+print(math.PI())
+print(math.E()))
+print(math.sqrt(144))
+
+// string
+print(string.len("hello"))
+print(string.upper("hello"))
+print(string.lower("WORLD"))
+
+// array
+print(array.create(5, 0))
+print(array.of(10, 20, 30, 40, 50))
+```
+
 ## Getting Started
 
 ### 1. Download Xenly's source code
@@ -101,13 +123,3 @@ If you are new to the **Xenly**, you should check out these additional resources
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
-
-
-
-
-
-
-
-
-
-
