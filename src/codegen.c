@@ -206,6 +206,12 @@ static int count_locals(ASTNode *node) {
     return n;
 }
 
+/* ── Global opt/verbose settings — shared by both backends ─────────────────
+ * Set by codegen_set_opts() (called from xenlyc_main before codegen()).
+ * Declared here (outside any arch #ifdef) so both x86-64 and ARM64 see them. */
+static int g_opt_level   = 2;   /* default: -O2 */
+static int g_verbose_asm = 0;   /* default: no annotation */
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * x86-64 BACKEND  (Linux/BSD + macOS Intel)
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -1113,10 +1119,7 @@ static void emit_function(CG *cg, ASTNode *fn) {
 }
 
 /* ── x86-64 public entry (called by the dispatch codegen() below) ───────── */
-/* opt_level / verbose_asm are set by the driver via the public entry point */
-static int g_opt_level  = 2;   /* default: -O2 */
-static int g_verbose_asm = 0;  /* default: no annotation */
-
+/* g_opt_level / g_verbose_asm are declared above, outside all arch #ifdefs */
 static int codegen_x86_64(ASTNode *program, const char *outpath) {
     CG cg;
     memset(&cg, 0, sizeof(cg));
