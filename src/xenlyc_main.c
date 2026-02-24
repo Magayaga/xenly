@@ -3,9 +3,8 @@
  * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
  *
  * It is initially written in C programming language.
- * 
- * It is available for the Linux and macOS operating systems.
  *
+ * It is available for the Linux and macOS operating systems.
  */
 /*
  * xenlyc_main.c  —  Xenly native compiler driver  (v0.1.0)
@@ -41,7 +40,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <time.h>
 
 /* ══════════════════════════════════════════════════════════════════════════════
  * COLOUR HELPERS
@@ -85,11 +83,19 @@ static char *swap_ext(const char *path, const char *ext) {
 
 /* ══════════════════════════════════════════════════════════════════════════════
  * TIMING
+ *
+ * platform.h provides xly_nanotime() for all supported platforms:
+ *   - macOS:  mach_absolute_time() — no POSIX clock_gettime dependency
+ *   - Linux:  clock_gettime(CLOCK_MONOTONIC, ...)
+ *   - Other:  time(NULL) fallback
+ *
+ * We deliberately avoid calling clock_gettime(CLOCK_MONOTONIC) directly here:
+ * CLOCK_MONOTONIC is not guaranteed to be defined under strict _POSIX_C_SOURCE
+ * on older Apple SDK headers, and mach_absolute_time() is the correct and
+ * preferred high-resolution timer on macOS.
  * ══════════════════════════════════════════════════════════════════════════════ */
 static double now_ms(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1e6;
+    return (double)xly_nanotime() / 1e6;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -140,7 +146,36 @@ static void dump_ast(ASTNode *node, int depth) {
  * ══════════════════════════════════════════════════════════════════════════════ */
 static void print_usage(const char *prog) {
     printf("\n");
-    printf("  \033[1;33mUsage:\033[0m   %s [options] <file.xe>\n", prog);
+    printf("  %s%s%s  Xenly Native Compiler  %sv0.1.0%s\n",
+           COL("1;36"), "xenlyc", RESET, COL("1;33"), RESET);
+    printf("\n");
+    printf("  %sUsage:%s   %s [options] <file.xe>\n", COL("1;33"), RESET, prog);
+    printf("\n");
+    printf("  %sOptions:%s\n", COL("1;33"), RESET);
+    printf("    %s-o <file>%s          Output binary name  %s(default: a.out)%s\n",
+           COL("1"), RESET, COL("2"), RESET);
+    printf("    %s--opt <0-3>%s        Optimisation level  %s(default: 2)%s\n",
+           COL("1"), RESET, COL("2"), RESET);
+    printf("    %s--emit-asm%s         Emit assembly only (.s), then stop\n",
+           COL("1"), RESET);
+    printf("    %s--emit-ir%s          Dump AST to stdout, then stop\n",
+           COL("1"), RESET);
+    printf("    %s--keep-asm%s         Keep the .s file after linking\n",
+           COL("1"), RESET);
+    printf("    %s--verbose%s          Annotate asm + show codegen stats\n",
+           COL("1"), RESET);
+    printf("    %s--static%s           Link a static binary\n",
+           COL("1"), RESET);
+    printf("    %s--time%s             Print phase timings to stderr\n",
+           COL("1"), RESET);
+    printf("    %s--no-color%s         Disable ANSI colour in output\n",
+           COL("1"), RESET);
+    printf("    %s-D<name>[=val]%s     Define a compile-time constant\n",
+           COL("1"), RESET);
+    printf("    %s--target <triple>%s  Target triple %s(informational, native only)%s\n",
+           COL("1"), RESET, COL("2"), RESET);
+    printf("    %s--version%s          Show version\n", COL("1"), RESET);
+    printf("    %s--help%s             Show this help\n",  COL("1"), RESET);
     printf("\n");
     printf("  %sOptimisation levels:%s\n", COL("1;33"), RESET);
     printf("    0  No opts     — readable asm, good for debugging\n");
@@ -159,7 +194,15 @@ static void print_usage(const char *prog) {
     printf("%s\n", RESET);
 }
 
-/* ── main ───────────────────────────────────────────────────────────────── */
+static void print_version(void) {
+    printf("\n  %sxenlyc%s v0.1.0  (Xenly native compiler)\n", COL("1;36"), RESET);
+    printf("  Systems programming tier — O2 with sys constant inlining\n");
+    printf("  Targets: x86-64 (Linux/BSD), AArch64 (macOS Apple Silicon)\n\n");
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * MAIN
+ * ══════════════════════════════════════════════════════════════════════════════ */
 int main(int argc, char **argv) {
     const char *input     = NULL;
     const char *output    = NULL;
@@ -181,8 +224,7 @@ int main(int argc, char **argv) {
             print_usage(argv[0]); return 0;
         }
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
-            printf("\n  \033[1;36mxenlyc\033[0m v0.1.0  (native compiler)\n\n");
-            return 0;
+            print_version(); return 0;
         }
         if (strcmp(argv[i], "--no-color") == 0) { g_color = 0; continue; }
         if (strcmp(argv[i], "--emit-asm") == 0 || strcmp(argv[i], "-S") == 0) {
@@ -320,19 +362,25 @@ int main(int argc, char **argv) {
         char cmd[1024];
 #if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
 #  if defined(__arm64__) || defined(__aarch64__)
-        snprintf(cmd, sizeof(cmd), "as -arch arm64 -o %s %s 2>&1",
+        snprintf(cmd, sizeof(cmd), "as -arch arm64 -o '%s' '%s' 2>&1",
                  obj_path, asm_path);
 #  else
-        snprintf(cmd, sizeof(cmd), "as -arch x86_64 -o %s %s 2>&1",
+        snprintf(cmd, sizeof(cmd), "as -arch x86_64 -o '%s' '%s' 2>&1",
                  obj_path, asm_path);
 #  endif
 #else
-        snprintf(cmd, sizeof(cmd), "as --64 -o %s %s 2>&1",
+        snprintf(cmd, sizeof(cmd), "as --64 -o '%s' '%s' 2>&1",
                  obj_path, asm_path);
 #endif
         if (verbose) fprintf(stderr, "%s[xenlyc]%s assemble: %s\n",
                              COL("2"), RESET, cmd);
         FILE *pipe = popen(cmd, "r");
+        if (!pipe) {
+            fprintf(stderr, "%s[xenlyc]%s popen failed: cannot launch assembler\n",
+                    COL("1;31"), RESET);
+            free(asm_path); free(obj_path);
+            return 1;
+        }
         char line[256];
         while (fgets(line, sizeof(line), pipe))
             fputs(line, stderr);
@@ -370,21 +418,29 @@ int main(int argc, char **argv) {
 #if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
 #  if defined(__arm64__) || defined(__aarch64__)
         snprintf(cmd, sizeof(cmd),
-                 "clang -arch arm64 %s -o %s %s -L%s -lxly_rt -lm 2>&1",
+                 "clang -arch arm64 %s -o '%s' '%s' -L'%s' -lxly_rt -lm -lpthread 2>&1",
                  static_flag, out_name, obj_path, rt_dir);
 #  else
         snprintf(cmd, sizeof(cmd),
-                 "clang -arch x86_64 %s -o %s %s -L%s -lxly_rt -lm 2>&1",
+                 "clang -arch x86_64 %s -o '%s' '%s' -L'%s' -lxly_rt -lm -lpthread 2>&1",
                  static_flag, out_name, obj_path, rt_dir);
 #  endif
 #else
+        /* Linux: -lpthread for multiproc_rt.o, -lresolv for inet_pton/inet_ntop
+         * in modules_rt.o, -ldl for dlopen used by the dynamic module loader.  */
         snprintf(cmd, sizeof(cmd),
-                 "gcc %s -o %s %s -L%s -lxly_rt -lm 2>&1",
+                 "gcc %s -o '%s' '%s' -L'%s' -lxly_rt -lm -lpthread -lresolv -ldl 2>&1",
                  static_flag, out_name, obj_path, rt_dir);
 #endif
         if (verbose) fprintf(stderr, "%s[xenlyc]%s link: %s\n",
                              COL("2"), RESET, cmd);
         FILE *pipe = popen(cmd, "r");
+        if (!pipe) {
+            fprintf(stderr, "%s[xenlyc]%s popen failed: cannot launch linker\n",
+                    COL("1;31"), RESET);
+            free(asm_path); free(obj_path);
+            return 1;
+        }
         char line[256];
         while (fgets(line, sizeof(line), pipe))
             fputs(line, stderr);

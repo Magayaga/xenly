@@ -561,7 +561,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
      *                            XlyVal **args, size_t argc)
      *            rdi             rsi             rdx              rcx
      *
-     * SYSTEMS PROGRAMMING OPTIMIZATIONS (xenlyc v0.2.0):
+     * SYSTEMS PROGRAMMING OPTIMIZATIONS (xenlyc v0.1.0):
      *   O2: sys.CONSTANT() zero-arg calls → inlined immediate (no call)
      *   O1: sys.exit/abort detected → noreturn_mode set for dead-code elim
      */
@@ -1134,7 +1134,7 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
     cg.verbose   = g_verbose_asm;
 
     if (cg.verbose)
-        emit(&cg, "    # xenlyc v0.2.0  opt=%d  arch=x86-64  abi=sysv", cg.opt_level);
+        emit(&cg, "    # xenlyc v0.1.0  opt=%d  arch=x86-64  abi=sysv", cg.opt_level);
 
     /* main frame: generous */
     /* Frame = locals × 8 + 512 bytes of spill headroom.
