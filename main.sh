@@ -5,7 +5,6 @@
 # It is initially written in Bash Script.
 #
 #!/usr/bin/env bash
-set -euo pipefail
 
 # ─── Platform Detection ───────────────────────────────────────────────────────
 UNAME_S=$(uname -s)
