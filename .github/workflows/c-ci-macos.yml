@@ -19,7 +19,7 @@ jobs:
     - name: xenly test
       run: time ./xenly examples/hello.xe
     - name: xenlyc test
-      run: time ./xenlyc examples/sys_demo.xe -o hello
+      run: time ./xenlyc examples/hello.xe -o hello
     - name: hello test
       run: time ./hello
     - name: make clean test
