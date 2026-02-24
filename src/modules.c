@@ -2259,57 +2259,119 @@ Module module_multiproc(void) {
 #include <time.h>
 
 /* ── macOS portability shims ─────────────────────────────────────────────────
- * macOS uses MAP_ANON instead of MAP_ANONYMOUS (Linux name).
- * macOS hides _SC_NPROCESSORS_ONLN/_CONF behind its own sysctl API when
- * _POSIX_C_SOURCE is strict; we use sysctlbyname() instead.
- * _SC_PHYS_PAGES / _SC_AVPHYS_PAGES do not exist on macOS at all — we use
- * sysctlbyname("hw.memsize") and vm_statistics64 via host_statistics64().
+ * Problems under -D_POSIX_C_SOURCE=200809L on macOS (Xcode clang):
+ *
+ *  1. MAP_ANON / MAP_ANONYMOUS:
+ *     <sys/mman.h> only exposes MAP_ANON under _DARWIN_C_SOURCE, which our
+ *     strict POSIX flag suppresses.  Hard-code the well-known value 0x1000.
+ *
+ *  2. sys/sysctl.h conflict:
+ *     Including <sys/sysctl.h> under strict _POSIX_C_SOURCE pulls in
+ *     <sys/ucred.h> and <sys/proc.h>, which use BSD-only typedefs (u_int,
+ *     u_char, u_short) that are also stripped by the strict mode → cascade
+ *     of "unknown type name" errors.  Solution: do NOT include <sys/sysctl.h>;
+ *     instead forward-declare only the one function we need (sysctlbyname)
+ *     with plain C types — this matches its actual ABI on all macOS versions.
+ *
+ *  3. _SC_NPROCESSORS_ONLN / _CONF, _SC_PHYS_PAGES, _SC_AVPHYS_PAGES:
+ *     These GNU/Linux sysconf constants don't exist on macOS.  We replace
+ *     them with sysctlbyname("hw.logicalcpu") for CPU counts, and
+ *     sysctlbyname("hw.memsize") + sysconf(_SC_PAGE_SIZE) for RAM pages.
+ *     Free pages come from /usr/lib/libSystem (host_statistics64 via the
+ *     forward-declared Mach call — no <mach/mach.h> needed).
  * ─────────────────────────────────────────────────────────────────────────── */
 #if defined(PLATFORM_MACOS)
-#  include <sys/sysctl.h>
-#  include <mach/mach.h>
-   /* MAP_ANONYMOUS → MAP_ANON on macOS */
+
+   /* ── MAP_ANONYMOUS ─────────────────────────────────────────────────────── */
+   /* Hard-code 0x1000 — MAP_ANON has had this value on every macOS / Darwin
+    * release since 10.0.  We avoid referencing MAP_ANON by name because it
+    * isn't visible under strict _POSIX_C_SOURCE. */
 #  ifndef MAP_ANONYMOUS
-#    define MAP_ANONYMOUS MAP_ANON
+#    define MAP_ANONYMOUS 0x1000
 #  endif
-   /* _SC_NPROCESSORS_ONLN / _SC_NPROCESSORS_CONF — use sysctlbyname */
+
+   /* ── sysctlbyname forward declaration ──────────────────────────────────── */
+   /* We declare it ourselves instead of including <sys/sysctl.h> to dodge the
+    * BSD-typedef cascade.  The prototype matches the real libSystem symbol. */
+   extern int sysctlbyname(const char *name,
+                           void *oldp, size_t *oldlenp,
+                           void *newp, size_t newlen);
+
+   /* ── host_statistics64 forward declaration ─────────────────────────────── */
+   /* Sufficient to call it without pulling in all of <mach/mach.h>. */
+   typedef unsigned int  xly_mach_port_t;
+   typedef int           xly_kern_return_t;
+   typedef unsigned int  xly_mach_msg_type_number_t;
+   typedef int *         xly_host_info64_t;
+#  define XLY_HOST_VM_INFO64       ((int)4)
+#  define XLY_HOST_VM_INFO64_COUNT ((xly_mach_msg_type_number_t)(sizeof(struct xly_vm_statistics64) / sizeof(int)))
+#  define XLY_KERN_SUCCESS         0
+   struct xly_vm_statistics64 {
+       unsigned int free_count;
+       unsigned int active_count;
+       unsigned int inactive_count;
+       unsigned int wire_count;
+       /* remaining fields unused — we only read free/inactive */
+       unsigned int zero_fill_count;
+       unsigned int reactivations;
+       unsigned int pageins;
+       unsigned int pageouts;
+       unsigned int faults;
+       unsigned int cow_faults;
+       unsigned int lookups;
+       unsigned int hits;
+       unsigned int purges;
+       unsigned int purgeable_count;
+       unsigned int speculative_count;
+       unsigned int decompressions;
+       unsigned int compressions;
+       unsigned int swapins;
+       unsigned int swapouts;
+       unsigned int compressor_page_count;
+       unsigned int throttled_count;
+       unsigned int external_page_count;
+       unsigned int internal_page_count;
+       unsigned long long total_uncompressed_pages_in_compressor;
+   };
+   extern xly_kern_return_t host_statistics64(xly_mach_port_t host,
+                                              int flavor,
+                                              xly_host_info64_t info,
+                                              xly_mach_msg_type_number_t *count);
+   extern xly_mach_port_t   mach_host_self(void);
+
+   /* ── helper implementations ────────────────────────────────────────────── */
    static inline long xly_nprocessors_onln(void) {
        int n = 0; size_t sz = sizeof(n);
-       extern int sysctlbyname(const char *, void *, size_t *, void *, size_t);
        return (sysctlbyname("hw.logicalcpu", &n, &sz, NULL, 0) == 0 && n > 0)
               ? (long)n : 1L;
    }
    static inline long xly_nprocessors_conf(void) {
        int n = 0; size_t sz = sizeof(n);
-       extern int sysctlbyname(const char *, void *, size_t *, void *, size_t);
        return (sysctlbyname("hw.logicalcpu_max", &n, &sz, NULL, 0) == 0 && n > 0)
               ? (long)n : 1L;
    }
-   /* _SC_PAGE_SIZE — available on macOS via sysconf, but guard anyway */
 #  ifndef _SC_PAGE_SIZE
 #    define _SC_PAGE_SIZE 29
 #  endif
-   /* _SC_PHYS_PAGES — total RAM pages via hw.memsize / page_size */
    static inline long xly_phys_pages(void) {
-       uint64_t mem = 0; size_t sz = sizeof(mem);
-       extern int sysctlbyname(const char *, void *, size_t *, void *, size_t);
+       unsigned long long mem = 0; size_t sz = sizeof(mem);
        if (sysctlbyname("hw.memsize", &mem, &sz, NULL, 0) != 0) return 0;
        long ps = sysconf(_SC_PAGE_SIZE);
        if (ps <= 0) ps = 4096;
-       return (long)(mem / (uint64_t)ps);
+       return (long)(mem / (unsigned long long)ps);
    }
-   /* _SC_AVPHYS_PAGES — free pages via mach vm_statistics64 */
    static inline long xly_avphys_pages(void) {
-       mach_port_t host = mach_host_self();
-       vm_statistics64_data_t vms;
-       mach_msg_type_number_t cnt = HOST_VM_INFO64_COUNT;
-       if (host_statistics64(host, HOST_VM_INFO64,
-                             (host_info64_t)&vms, &cnt) != KERN_SUCCESS)
+       xly_mach_port_t host = mach_host_self();
+       struct xly_vm_statistics64 vms;
+       xly_mach_msg_type_number_t cnt = XLY_HOST_VM_INFO64_COUNT;
+       if (host_statistics64(host, XLY_HOST_VM_INFO64,
+                             (xly_host_info64_t)&vms, &cnt) != XLY_KERN_SUCCESS)
            return 0;
        return (long)(vms.free_count + vms.inactive_count);
    }
-#else
-   /* Linux / BSD: use sysconf directly */
+
+#else  /* Linux / BSD */
+
    static inline long xly_nprocessors_onln(void) {
        long n = sysconf(_SC_NPROCESSORS_ONLN); return n > 0 ? n : 1;
    }
@@ -2322,6 +2384,7 @@ Module module_multiproc(void) {
    static inline long xly_avphys_pages(void) {
        long p = sysconf(_SC_AVPHYS_PAGES); return p > 0 ? p : 0;
    }
+
 #endif /* PLATFORM_MACOS */
 
 // ═════════════════════════════════════════════════════════════════════════════
