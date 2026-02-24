@@ -1313,15 +1313,41 @@ static void emit_load_double_a64(CG *cg, double d) {
  * for print/method-call arg arrays).  This ensures spill slots always land
  * strictly below sp (i.e., in unused frame space), never in the arg arrays
  * that occupy [sp, #0 .. alloc_bytes-8].                                  */
+/* ── safe_str_a64 / safe_ldr_a64 ────────────────────────────────────────
+ * AArch64 unscaled load/store (STUR/LDUR) only encodes offsets in [-256,255].
+ * For offsets outside that range, materialise the address in x9.
+ * x9 is a caller-saved scratch register safe to clobber here.           */
+static void safe_str_a64(CG *cg, const char *reg, int off) {
+    if (off >= -256 && off <= 255) {
+        emit(cg, "    str     %s, [x29, #%d]", reg, off);
+    } else if (off < 0) {
+        emit(cg, "    sub     x9, x29, #%d", -off);
+        emit(cg, "    str     %s, [x9]", reg);
+    } else {
+        emit(cg, "    add     x9, x29, #%d", off);
+        emit(cg, "    str     %s, [x9]", reg);
+    }
+}
+static void safe_ldr_a64(CG *cg, const char *reg, int off) {
+    if (off >= -256 && off <= 255) {
+        emit(cg, "    ldr     %s, [x29, #%d]", reg, off);
+    } else if (off < 0) {
+        emit(cg, "    sub     x9, x29, #%d", -off);
+        emit(cg, "    ldr     %s, [x9]", reg);
+    } else {
+        emit(cg, "    add     x9, x29, #%d", off);
+        emit(cg, "    ldr     %s, [x9]", reg);
+    }
+}
 static void spill_push_a64(CG *cg, const char *reg) {
     int slot = cg->frame_offset - cg->a64_sp_adj - (cg->a64_spill_depth + 1) * 8;
-    emit(cg, "    str     %s, [x29, #%d]", reg, slot);
+    safe_str_a64(cg, reg, slot);
     cg->a64_spill_depth++;
 }
 static void spill_pop_a64(CG *cg, const char *reg) {
     cg->a64_spill_depth--;
     int slot = cg->frame_offset - cg->a64_sp_adj - (cg->a64_spill_depth + 1) * 8;
-    emit(cg, "    ldr     %s, [x29, #%d]", reg, slot);
+    safe_ldr_a64(cg, reg, slot);
 }
 /* Emit sub/add sp and keep a64_sp_adj in sync */
 static void sp_sub_a64(CG *cg, int bytes) {
@@ -1375,7 +1401,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
     case NODE_IDENTIFIER: {
         int off = var_offset(cg, node->str_value);
         if (off != 0)
-            emit(cg, "    ldr     x0, [x29, #%d]", off);
+            safe_ldr_a64(cg, "x0", off);
         else
             emit(cg, "    bl      " XLY_SYM("xly_null"));
         break;
@@ -1658,7 +1684,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    ldr     x0, [x29, #%d]", off);  /* current value */
+        safe_ldr_a64(cg, "x0", off);                   /* current value */
         spill_push_a64(cg, "x0");
         emit_load_double_a64(cg, 1.0);
         emit(cg, "    bl      " XLY_SYM("xly_num"));   /* x0 = num(1) */
@@ -1666,7 +1692,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         spill_pop_a64(cg, "x0");
         { char isym[64]; emit(cg, "    bl      %s",
               XLY_RSYM(isym, node->type == NODE_INCREMENT ? "xly_add" : "xly_sub")); }
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
@@ -1725,21 +1751,21 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
             emit_expr_a64(cg, node->children[0]);
         else
             emit(cg, "    bl      " XLY_SYM("xly_null"));
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
     case NODE_ASSIGN: {
         emit_expr_a64(cg, node->children[0]);
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
     case NODE_COMPOUND_ASSIGN: {
         const char *varname = node->children[0]->str_value;
         int off = var_offset(cg, varname);
-        emit(cg, "    ldr     x0, [x29, #%d]", off);
+        safe_ldr_a64(cg, "x0", off);
         spill_push_a64(cg, "x0");
         emit_expr_a64(cg, node->children[1]);
         emit(cg, "    mov     x1, x0");
@@ -1751,14 +1777,14 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         else if (strcmp(op,"*=") == 0) fn = "xly_mul";
         else if (strcmp(op,"/=") == 0) fn = "xly_div";
         { char csym[64]; emit(cg, "    bl      %s", XLY_RSYM(csym, fn)); }
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    ldr     x0, [x29, #%d]", off);
+        safe_ldr_a64(cg, "x0", off);
         spill_push_a64(cg, "x0");
         emit_load_double_a64(cg, 1.0);
         emit(cg, "    bl      " XLY_SYM("xly_num"));
@@ -1766,7 +1792,7 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         spill_pop_a64(cg, "x0");
         { char isym2[64]; emit(cg, "    bl      %s",
               XLY_RSYM(isym2, node->type == NODE_INCREMENT ? "xly_add" : "xly_sub")); }
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
@@ -1894,31 +1920,31 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         int off_len = var_declare(cg, tmp);
 
         emit_expr_a64(cg, node->children[0]);
-        emit(cg, "    str     x0, [x29, #%d]", off_arr);
+        safe_str_a64(cg, "x0", off_arr);
         emit(cg, "    bl      " XLY_SYM("xly_array_len"));
-        emit(cg, "    str     x0, [x29, #%d]", off_len);
-        /* idx = 0 (store integer 0, not a boxed value — matches x86 backend) */
-        emit(cg, "    str     xzr, [x29, #%d]", off_idx);
+        safe_str_a64(cg, "x0", off_len);
+        /* idx = 0 (store integer 0 — raw, not a boxed XlyVal) */
+        safe_str_a64(cg, "xzr", off_idx);
 
         push_brk(cg, lbl_end);
         push_cnt(cg, lbl_cond);
 
         emit(cg, "%s:", lbl_cond);
-        emit(cg, "    ldr     x9, [x29, #%d]", off_idx);
-        emit(cg, "    ldr     x10, [x29, #%d]", off_len);
+        safe_ldr_a64(cg, "x9", off_idx);
+        safe_ldr_a64(cg, "x10", off_len);
         emit(cg, "    cmp     x9, x10");
         emit(cg, "    b.hs    %s", lbl_end);   /* idx >= len → done */
 
-        emit(cg, "    ldr     x0, [x29, #%d]", off_arr);
-        emit(cg, "    ldr     x1, [x29, #%d]", off_idx);
+        safe_ldr_a64(cg, "x0", off_arr);
+        safe_ldr_a64(cg, "x1", off_idx);
         emit(cg, "    bl      " XLY_SYM("xly_array_get"));
-        emit(cg, "    str     x0, [x29, #%d]", off_iter);
+        safe_str_a64(cg, "x0", off_iter);
 
         emit_stmt_a64(cg, node->children[1]);
 
-        emit(cg, "    ldr     x9, [x29, #%d]", off_idx);
+        safe_ldr_a64(cg, "x9", off_idx);
         emit(cg, "    add     x9, x9, #1");
-        emit(cg, "    str     x9, [x29, #%d]", off_idx);
+        safe_str_a64(cg, "x9", off_idx);
         emit(cg, "    b       %s", lbl_cond);
         emit(cg, "%s:", lbl_end);
 
@@ -1966,7 +1992,12 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
          * We use #16 here because the stp used !-framesz and x29=sp, so
          * the saved pair is always at [x29+0] regardless of locals.       */
         emit(cg, "    mov     sp, x29");
-        emit(cg, "    ldp     x29, x30, [sp], #%d", cg->a64_frame_size);
+        if (cg->a64_frame_size <= 504) {
+            emit(cg, "    ldp     x29, x30, [sp], #%d", cg->a64_frame_size);
+        } else {
+            emit(cg, "    ldp     x29, x30, [sp]");
+            emit(cg, "    add     sp, sp, #%d", cg->a64_frame_size);
+        }
         emit(cg, "    ret");
         break;
 
@@ -1992,10 +2023,10 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
     cg->a64_spill_depth = 0;
     cg->a64_sp_adj      = 0;
 
-    /* Frame: x29+x30 (16 bytes) + locals + 32 spill slots, 16-aligned.
-     * The +32 extra slots are the spill area; spill_push_a64 uses them
-     * via [x29, #(frame_offset - depth*8)] without moving sp.           */
-    int n = (int)nparams + count_locals(body) + 32;
+    /* Frame: x29+x30 (16 bytes) + locals + 16 spill slots, 16-aligned.
+     * The +16 headroom is the spill area; spill_push_a64 addresses them
+     * via safe_str_a64 which handles any [x29,#off] encoding.              */
+    int n = (int)nparams + count_locals(body) + 16;
     int locals_bytes = (n * 8 + 15) & ~15;
     int frame = locals_bytes + 16;  /* +16 for saved x29/x30 pair */
     frame = (frame + 15) & ~15;
@@ -2004,8 +2035,16 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
     emit(cg, "");
     emit(cg, ".Lxly_fn_%s:", name);
     /* Prologue: save fp+lr, set frame pointer, allocate locals */
-    emit(cg, "    stp     x29, x30, [sp, #-%d]!", frame);
-    emit(cg, "    mov     x29, sp");
+    /* AArch64 stp pre-indexed only allows offsets in [-512, 504] step 8.
+     * For larger frames split into sub + stp [sp]. */
+    if (frame <= 512) {
+        emit(cg, "    stp     x29, x30, [sp, #-%d]!", frame);
+        emit(cg, "    mov     x29, sp");
+    } else {
+        emit(cg, "    sub     sp, sp, #%d", frame);
+        emit(cg, "    stp     x29, x30, [sp]");
+        emit(cg, "    mov     x29, sp");
+    }
     /* Locals: var_declare assigns [x29,#-8], [x29,#-16], ...
      * Spill slots go below those, tracked by a64_spill_depth. */
 
@@ -2013,16 +2052,16 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
     static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
     for (size_t i = 0; i < nparams && i < 8; i++) {
         int off = var_declare(cg, fn->params[i].name);
-        emit(cg, "    str     %s, [x29, #%d]", aregs[i], off);
+        safe_str_a64(cg, aregs[i], off);
 
         if (fn->params[i].is_optional || fn->params[i].default_value) {
             char lbl_has_arg[64];
             fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
-            emit(cg, "    ldr     x9, [x29, #%d]", off);
+            safe_ldr_a64(cg, "x9", off);
             emit(cg, "    cbnz    x9, %s", lbl_has_arg);
             if (fn->params[i].default_value) {
                 emit_expr_a64(cg, fn->params[i].default_value);
-                emit(cg, "    str     x0, [x29, #%d]", off);
+                safe_str_a64(cg, "x0", off);
             }
             emit(cg, "%s:", lbl_has_arg);
         }
@@ -2036,7 +2075,12 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
     /* Implicit return null + epilogue */
     emit(cg, "    bl      " XLY_SYM("xly_null"));
     emit(cg, "    mov     sp, x29");
-    emit(cg, "    ldp     x29, x30, [sp], #%d", frame);
+    if (frame <= 504) {
+        emit(cg, "    ldp     x29, x30, [sp], #%d", frame);
+    } else {
+        emit(cg, "    ldp     x29, x30, [sp]");
+        emit(cg, "    add     sp, sp, #%d", frame);
+    }
     emit(cg, "    ret");
 
     while (cg->var_count > sv_vc) { cg->var_count--; free(cg->vars[cg->var_count].name); }
@@ -2070,9 +2114,10 @@ int codegen(ASTNode *program, const char *outpath) {
 
     cg.a64_spill_depth = 0;
     cg.a64_sp_adj      = 0;
-    int n_top  = count_locals(program) + 64;
-    /* main frame: locals + spill area (64 slots) + x29/x30, 16-aligned.
-     * spill_push_a64 uses [x29, #(frame_offset - depth*8)] — no sp move. */
+    int n_top  = count_locals(program) + 16;
+    /* main frame: locals + spill headroom (16 slots) + x29/x30, 16-aligned.
+     * The +16 gives enough room for simultaneous spills at any expression depth.
+     * safe_str_a64/safe_ldr_a64 handle encoding for any offset within the frame. */
     int locals  = (n_top * 8 + 15) & ~15;
     int mframe  = locals + 16;
     mframe = (mframe + 15) & ~15;
@@ -2081,8 +2126,16 @@ int codegen(ASTNode *program, const char *outpath) {
     emit(&cg, XLY_TEXT_SECTION);
     emit(&cg, ".globl  " XLY_SYM("main"));
     emit(&cg, XLY_SYM("main") ":");
-    emit(&cg, "    stp     x29, x30, [sp, #-%d]!", mframe);
-    emit(&cg, "    mov     x29, sp");
+    /* AArch64 stp pre-indexed only allows offsets in [-512, 504].
+     * For larger frames use: sub sp + stp [sp] (offset 0) + mov x29,sp */
+    if (mframe <= 512) {
+        emit(&cg, "    stp     x29, x30, [sp, #-%d]!", mframe);
+        emit(&cg, "    mov     x29, sp");
+    } else {
+        emit(&cg, "    sub     sp, sp, #%d", mframe);
+        emit(&cg, "    stp     x29, x30, [sp]");
+        emit(&cg, "    mov     x29, sp");
+    }
 
     for (size_t i = 0; i < program->child_count; i++)
         emit_stmt_a64(&cg, program->children[i]);
@@ -2092,7 +2145,12 @@ int codegen(ASTNode *program, const char *outpath) {
     emit(&cg, "    bl      " XLY_SYM("xly_exit"));
     /* fallthrough epilogue (xly_exit does _exit so this is unreachable) */
     emit(&cg, "    mov     sp, x29");
-    emit(&cg, "    ldp     x29, x30, [sp], #%d", mframe);
+    if (mframe <= 504) {
+        emit(&cg, "    ldp     x29, x30, [sp], #%d", mframe);
+    } else {
+        emit(&cg, "    ldp     x29, x30, [sp]");
+        emit(&cg, "    add     sp, sp, #%d", mframe);
+    }
     emit(&cg, "    ret");
 
     /* user-defined functions */
