@@ -6,4 +6,4 @@ https://github.com/Magayaga/xenly/assets/93117076/dd924975-eea3-4bc6-8b0d-c322bc
 
 ## Copyright
 
-Copyright (c) 2024 Cyril John Magayaga.
+Copyright (c) 2024-2026 Cyril John Magayaga.

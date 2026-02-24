@@ -1,0 +1,24 @@
+name: C CI for Xenly programming language (python)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: python installing test
+      run: time python3 install-c.py
+    - name: xenly test
+      run: time ./xenly examples/hello.xe
+    - name: xenlyc test
+      run: time ./xenlyc examples/hello.xe -o hello
+    - name: hello test
+      run: time ./hello

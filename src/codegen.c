@@ -71,16 +71,25 @@
  * SHARED: codegen state (same layout for both backends)
  * ═══════════════════════════════════════════════════════════════════════════ */
 /* ── codegen state ──────────────────────────────────────────────────────── */
+/* ── Optimization levels ────────────────────────────────────────────────────
+ *   0 = -O0: no opts (debug output, most readable asm)
+ *   1 = -O1: constant folding + noreturn elision
+ *   2 = -O2: + unboxed numeric fast-paths, sys constant inlining  (default)
+ *   3 = -O3: + aggressive inlining of single-arg sys calls
+ * ─────────────────────────────────────────────────────────────────────────── */
 typedef struct {
     FILE   *out;
-    int     label_seq;          /* monotonic label counter */
+    int     label_seq;          /* monotonic label counter                 */
+    int     opt_level;          /* optimization level: 0-3                 */
+    int     verbose;            /* emit source-level comments in asm       */
+    int     noreturn_mode;      /* 1 = we are dead after sys.exit/abort    */
 
     /* variable table: name + rbp-offset + scope-depth */
     struct { char *name; int offset; int depth; } *vars;
     int     var_count, var_cap;
 
     int     scope_depth;
-    int     frame_offset;       /* next free slot (negative, grows down) */
+    int     frame_offset;       /* next free slot (negative, grows down)   */
 
     /* interned string literals → .rodata labels */
     struct { char *text; char *label; } *strings;
@@ -95,6 +104,17 @@ typedef struct {
     int     func_count, func_cap;
 
     int     had_error;
+
+    /* ARM64-specific: frame-relative spill tracking (no sp movement) */
+    int     a64_spill_depth;    /* current spill nesting level             */
+    int     a64_frame_size;     /* total frame in bytes (set per function) */
+    int     a64_sp_adj;         /* bytes sp has been moved below x29 by sub/add */
+
+    /* stats (emitted with --verbose) */
+    int     stat_const_fold;    /* number of compile-time constant folds   */
+    int     stat_noreturn_elim; /* statements skipped after noreturn call  */
+    int     stat_sys_inline;    /* sys.CONSTANT() calls inlined            */
+    int     stat_unboxed_ops;   /* unboxed arithmetic/compare ops emitted  */
 } CG;
 
 /* ── emit helpers ───────────────────────────────────────────────────────── */
@@ -183,13 +203,19 @@ static void emit_stmt(CG *cg, ASTNode *node);
 /* ── pre-pass: count VAR_DECLs recursively ─────────────────────────────── */
 static int count_locals(ASTNode *node) {
     if (!node) return 0;
-    int n = (node->type == NODE_VAR_DECL) ? 1 : 0;
+    int n = (node->type == NODE_VAR_DECL || node->type == NODE_CONST_DECL) ? 1 : 0;
     /* for-in declares 4 hidden slots per loop; count conservatively */
     if (node->type == NODE_FOR_IN) n += 4;
     for (size_t i = 0; i < node->child_count; i++)
         n += count_locals(node->children[i]);
     return n;
 }
+
+/* ── Global opt/verbose settings — shared by both backends ─────────────────
+ * Set by codegen_set_opts() (called from xenlyc_main before codegen()).
+ * Declared here (outside any arch #ifdef) so both x86-64 and ARM64 see them. */
+static int g_opt_level   = 2;   /* default: -O2 */
+static int g_verbose_asm = 0;   /* default: no annotation */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * x86-64 BACKEND  (Linux/BSD + macOS Intel)
@@ -261,17 +287,19 @@ static void emit_expr(CG *cg, ASTNode *node) {
             snprintf(lbl_done, sizeof(lbl_done), ".Lxly_%d_and_done", seq);
 
             emit_expr(cg, node->children[0]);          /* left → %rax */
-            emit(cg, "    pushq   %%rax");             /* [left] on stack */
+            emit(cg, "    subq    $16, %%rsp");        /* aligned spill slot */
+            emit(cg, "    movq    %%rax, (%%rsp)");    /* save left */
             emit(cg, "    movq    %%rax, %%rdi");
             emit(cg, "    call    " XLY_SYM("xly_truthy"));        /* eax = 0|1 */
             emit(cg, "    testl   %%eax, %%eax");
             emit(cg, "    jz      %s", lbl_end);       /* falsy → keep left */
             /* truthy: discard left, eval right */
-            emit(cg, "    addq    $8, %%rsp");         /* pop left (discard) */
+            emit(cg, "    addq    $16, %%rsp");        /* free spill slot */
             emit_expr(cg, node->children[1]);          /* right → %rax */
             emit(cg, "    jmp     %s", lbl_done);
-            emit(cg, "%s:", lbl_end);                  /* falsy exit: left still on stack */
-            emit(cg, "    popq    %%rax");             /* restore left into %rax */
+            emit(cg, "%s:", lbl_end);                  /* falsy exit: left in spill slot */
+            emit(cg, "    movq    (%%rsp), %%rax");    /* restore left */
+            emit(cg, "    addq    $16, %%rsp");
             emit(cg, "%s:", lbl_done);
             break;
         }
@@ -286,16 +314,18 @@ static void emit_expr(CG *cg, ASTNode *node) {
             snprintf(lbl_done, sizeof(lbl_done), ".Lxly_%d_or_done", seq);
 
             emit_expr(cg, node->children[0]);
-            emit(cg, "    pushq   %%rax");
+            emit(cg, "    subq    $16, %%rsp");        /* aligned spill slot */
+            emit(cg, "    movq    %%rax, (%%rsp)");    /* save left */
             emit(cg, "    movq    %%rax, %%rdi");
             emit(cg, "    call    " XLY_SYM("xly_truthy"));
             emit(cg, "    testl   %%eax, %%eax");
             emit(cg, "    jnz     %s", lbl_end);       /* truthy → keep left */
-            emit(cg, "    addq    $8, %%rsp");
+            emit(cg, "    addq    $16, %%rsp");        /* free spill slot */
             emit_expr(cg, node->children[1]);
             emit(cg, "    jmp     %s", lbl_done);
             emit(cg, "%s:", lbl_end);
-            emit(cg, "    popq    %%rax");
+            emit(cg, "    movq    (%%rsp), %%rax");    /* restore left */
+            emit(cg, "    addq    $16, %%rsp");
             emit(cg, "%s:", lbl_done);
             break;
         }
@@ -341,10 +371,12 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 
                 /* Eval both operands */
                 emit_expr(cg, node->children[0]);
-                emit(cg, "    pushq   %%rax");  /* save left */
+                emit(cg, "    subq    $16, %%rsp");     /* aligned spill for left */
+                emit(cg, "    movq    %%rax, (%%rsp)"); /* save left */
                 emit_expr(cg, node->children[1]);
-                emit(cg, "    movq    %%rax, %%rsi");  /* rsi = right */
-                emit(cg, "    popq    %%rdi");          /* rdi = left */
+                emit(cg, "    movq    %%rax, %%rsi");   /* rsi = right */
+                emit(cg, "    movq    (%%rsp), %%rdi"); /* rdi = left */
+                emit(cg, "    addq    $16, %%rsp");     /* free spill slot */
                 
                 /* Check if left is VAL_STRING (type == 1) */
                 emit(cg, "    cmpl    $1, (%%rdi)");    /* check left.type == VAL_STRING */
@@ -371,12 +403,14 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 
                 /* Eval left operand → %rax (XlyVal*) */
                 emit_expr(cg, node->children[0]);
-                emit(cg, "    pushq   %%rax");  /* save left boxed value */
+                emit(cg, "    subq    $16, %%rsp");     /* aligned spill for left */
+                emit(cg, "    movq    %%rax, (%%rsp)"); /* save left boxed */
                 
                 /* Eval right operand → %rax (XlyVal*) */
                 emit_expr(cg, node->children[1]);
-                emit(cg, "    movq    %%rax, %%rsi");  /* rsi = right boxed */
-                emit(cg, "    popq    %%rdi");          /* rdi = left boxed */
+                emit(cg, "    movq    %%rax, %%rsi");   /* rsi = right boxed */
+                emit(cg, "    movq    (%%rsp), %%rdi"); /* rdi = left boxed */
+                emit(cg, "    addq    $16, %%rsp");     /* free spill slot */
                 
                 /* Unbox both */
                 emit(cg, "    movsd   8(%%rdi), %%xmm0");
@@ -420,10 +454,12 @@ static void emit_expr(CG *cg, ASTNode *node) {
                     fresh_label(cg, lbl_end, sizeof(lbl_end));
                     
                     emit_expr(cg, node->children[0]);
-                    emit(cg, "    pushq   %%rax");
+                    emit(cg, "    subq    $16, %%rsp");     /* aligned spill */
+                    emit(cg, "    movq    %%rax, (%%rsp)"); /* save left */
                     emit_expr(cg, node->children[1]);
                     emit(cg, "    movq    %%rax, %%rsi");
-                    emit(cg, "    popq    %%rdi");
+                    emit(cg, "    movq    (%%rsp), %%rdi"); /* restore left */
+                    emit(cg, "    addq    $16, %%rsp");
                     
                     /* Check if both are numbers */
                     emit(cg, "    cmpl    $0, (%%rdi)");
@@ -450,25 +486,27 @@ static void emit_expr(CG *cg, ASTNode *node) {
                     /* Slow path */
                     emit(cg, "%s:", lbl_slow);
                     const char *fn = NULL;
-                    if      (strcmp(op,"==") == 0) fn = "xly_eq";
-                    else if (strcmp(op,"!=") == 0) fn = "xly_neq";
-                    else if (strcmp(op,"<")  == 0) fn = "xly_lt";
-                    else if (strcmp(op,">")  == 0) fn = "xly_gt";
-                    else if (strcmp(op,"<=") == 0) fn = "xly_lte";
-                    else if (strcmp(op,">=") == 0) fn = "xly_gte";
+                    if      (strcmp(op,"==") == 0) fn = XLY_SYM("xly_eq");
+                    else if (strcmp(op,"!=") == 0) fn = XLY_SYM("xly_neq");
+                    else if (strcmp(op,"<")  == 0) fn = XLY_SYM("xly_lt");
+                    else if (strcmp(op,">")  == 0) fn = XLY_SYM("xly_gt");
+                    else if (strcmp(op,"<=") == 0) fn = XLY_SYM("xly_lte");
+                    else if (strcmp(op,">=") == 0) fn = XLY_SYM("xly_gte");
                     if (fn) emit(cg, "    call    %s", fn);
                     emit(cg, "%s:", lbl_end);
                 }
             } else {
                 /* Slow path for other ops */
                 emit_expr(cg, node->children[0]);
-                emit(cg, "    pushq   %%rax");
+                emit(cg, "    subq    $16, %%rsp");     /* aligned spill */
+                emit(cg, "    movq    %%rax, (%%rsp)"); /* save left */
                 emit_expr(cg, node->children[1]);
                 emit(cg, "    movq    %%rax, %%rsi");
-                emit(cg, "    popq    %%rdi");
+                emit(cg, "    movq    (%%rsp), %%rdi"); /* restore left */
+                emit(cg, "    addq    $16, %%rsp");
 
                 const char *fn = NULL;
-                if (strcmp(op,"%") == 0) fn = "xly_mod";
+                if (strcmp(op,"%") == 0) fn = XLY_SYM("xly_mod");
                 if (fn) emit(cg, "    call    %s", fn);
             }
         }
@@ -480,7 +518,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
         emit_expr(cg, node->children[0]);
         emit(cg, "    movq    %%rax, %%rdi");
         emit(cg, "    call    %s",
-             strcmp(node->str_value, "-") == 0 ? "xly_neg" : "xly_not");
+             strcmp(node->str_value, "-") == 0 ? XLY_SYM("xly_neg") : XLY_SYM("xly_not"));
         break;
 
     /* ── user function call ──────────────────────────────────────────
@@ -501,14 +539,19 @@ static void emit_expr(CG *cg, ASTNode *node) {
             nargs = 6;
         }
         static const char *regs[] = {"rdi","rsi","rdx","rcx","r8","r9"};
+        /* Use sub+store so rsp stays 16-byte aligned for any call inside args */
+        int arg_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+        if (arg_bytes > 0)
+            emit(cg, "    subq    $%d, %%rsp", arg_bytes);
         for (int i = 0; i < nargs; i++) {
             emit_expr(cg, node->children[i]);
-            emit(cg, "    pushq   %%rax");
+            emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
         }
-        /* Stack (top→bottom): arg[n-1] … arg[1] arg[0]
-         * Pop in reverse so arg[0] lands in rdi, arg[1] in rsi, etc. */
-        for (int i = nargs - 1; i >= 0; i--)
-            emit(cg, "    popq    %%%s", regs[i]);
+        /* Load args from stack slots into registers in order */
+        for (int i = 0; i < nargs; i++)
+            emit(cg, "    movq    %d(%%rsp), %%%s", i * 8, regs[i]);
+        if (arg_bytes > 0)
+            emit(cg, "    addq    $%d, %%rsp", arg_bytes);
         emit(cg, "    call    .Lxly_fn_%s", node->str_value);
         break;
     }
@@ -518,44 +561,114 @@ static void emit_expr(CG *cg, ASTNode *node) {
      *                            XlyVal **args, size_t argc)
      *            rdi             rsi             rdx              rcx
      *
-     * We allocate space for the arg array on the stack using sub+store
-     * (not push) so alignment is deterministic regardless of call nesting.
-     * Layout: sub N_aligned from rsp, store args[0..argc-1] at rsp[0..n-1].
-     * N_aligned = ((argc*8) + 15) & ~15  ensures 16-byte alignment is kept.  */
+     * SYSTEMS PROGRAMMING OPTIMIZATIONS (xenlyc v0.1.0):
+     *   O2: sys.CONSTANT() zero-arg calls → inlined immediate (no call)
+     *   O1: sys.exit/abort detected → noreturn_mode set for dead-code elim
+     */
     case NODE_METHOD_CALL: {
         const char *mod_name = node->children[0]->str_value;
         const char *fn_name  = node->str_value;
-        int argc = (int)node->child_count - 1;   /* children[1..] are args */
+        int argc = (int)node->child_count - 1;
 
-        /* Round argc*8 up to multiple of 16 to preserve 16-byte alignment */
-        int slot_bytes  = argc * 8;
-        int alloc_bytes = argc > 0 ? ((slot_bytes + 15) & ~15) : 0;
-
-        if (alloc_bytes > 0)
-            emit(cg, "    subq    $%d, %%rsp", alloc_bytes);
-
-        /* Eval each arg left-to-right, store directly into the reserved slots.
-         * Slot 0 (lowest address) = arg[0], slot 1 = arg[1], etc. */
-        for (int i = 0; i < argc; i++) {
-            emit_expr(cg, node->children[i + 1]);
-            emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
+        /* ── O2+: sys constant inlining ────────────────────────────────────
+         * Zero-arg sys functions returning compile-time constants are inlined
+         * as immediate loads — eliminates call overhead in tight sys loops.  */
+        if (cg->opt_level >= 2 && strcmp(mod_name, "sys") == 0 && argc == 0) {
+            static const struct { const char *name; long long val; } SC[] = {
+                /* Standard file descriptors */
+                {"STDIN",0},{"STDOUT",1},{"STDERR",2},
+                /* Open flags (Linux x86-64) */
+                {"O_RDONLY",0},{"O_WRONLY",1},{"O_RDWR",2},
+                {"O_CREAT",64},{"O_TRUNC",512},{"O_APPEND",1024},
+                {"O_NONBLOCK",2048},{"O_SYNC",1052672},{"O_EXCL",128},
+                /* Signals */
+                {"SIGHUP",1},{"SIGINT",2},{"SIGQUIT",3},{"SIGKILL",9},
+                {"SIGTERM",15},{"SIGUSR1",10},{"SIGUSR2",12},
+                {"SIGCHLD",17},{"SIGPIPE",13},{"SIGALRM",14},{"SIGSEGV",11},
+                /* Syslog levels */
+                {"LOG_EMERG",0},{"LOG_ALERT",1},{"LOG_CRIT",2},
+                {"LOG_ERR",3},{"LOG_WARNING",4},{"LOG_NOTICE",5},
+                {"LOG_INFO",6},{"LOG_DEBUG",7},
+                /* mmap prot/map flags */
+                {"PROT_READ",1},{"PROT_WRITE",2},{"PROT_EXEC",4},
+                {"PROT_NONE",0},{"MAP_SHARED",1},{"MAP_PRIVATE",2},
+                {"MAP_ANONYMOUS",32},
+                /* Socket / address family */
+                {"AF_INET",2},{"AF_INET6",10},{"AF_UNIX",1},
+                {"SOCK_STREAM",1},{"SOCK_DGRAM",2},
+                /* Poll events */
+                {"POLLIN",1},{"POLLOUT",4},{"POLLERR",8},{"POLLHUP",16},
+                /* Resource limits */
+                {"RLIMIT_CPU",0},{"RLIMIT_FSIZE",1},
+                {"RLIMIT_STACK",3},{"RLIMIT_NOFILE",7},{"RLIMIT_AS",9},
+                /* Integer limits */
+                {"INT8_MAX",127},{"INT8_MIN",-128},
+                {"INT16_MAX",32767},{"INT16_MIN",-32768},
+                {"INT32_MAX",2147483647LL},{"INT32_MIN",-2147483648LL},
+                {"UINT8_MAX",255},{"UINT16_MAX",65535},
+                {"UINT32_MAX",4294967295LL},
+                {"INT_MAX",2147483647LL},{"INT_MIN",-2147483648LL},
+                {"UINT_MAX",4294967295LL},
+                {NULL,0}
+            };
+            for (int ci = 0; SC[ci].name; ci++) {
+                if (strcmp(fn_name, SC[ci].name) == 0) {
+                    if (cg->verbose)
+                        emit(cg, "    # [xenlyc] inline sys.%s() = %lld",
+                             fn_name, SC[ci].val);
+                    emit_load_double(cg, (double)SC[ci].val);
+                    emit(cg, "    call    " XLY_SYM("xly_num"));
+                    cg->stat_sys_inline++;
+                    goto x86_method_done;
+                }
+            }
         }
 
-        /* rdx = pointer to args array (or NULL if no args) */
-        if (argc > 0)
-            emit(cg, "    movq    %%rsp, %%rdx");
-        else
-            emit(cg, "    xorq    %%rdx, %%rdx");
+        /* ── O1+: noreturn detection ────────────────────────────────────────
+         * sys.exit() and sys.abort() do not return — set noreturn_mode so
+         * the enclosing statement compiler skips subsequent dead code.       */
+        int is_noreturn = (cg->opt_level >= 1 &&
+                           strcmp(mod_name, "sys") == 0 &&
+                           (strcmp(fn_name, "exit") == 0 ||
+                            strcmp(fn_name, "abort") == 0));
 
-        const char *ml = intern_string(cg, mod_name);
-        const char *fl = intern_string(cg, fn_name);
-        emit(cg, "    leaq    %s(%%rip), %%rdi", ml);
-        emit(cg, "    leaq    %s(%%rip), %%rsi", fl);
-        emit(cg, "    movl    $%d, %%ecx", argc);
-        emit(cg, "    call    " XLY_SYM("xly_call_module"));
+        /* ── general dispatch via xly_call_module ───────────────────────── */
+        {
+            int slot_bytes  = argc * 8;
+            int alloc_bytes = argc > 0 ? ((slot_bytes + 15) & ~15) : 0;
 
-        if (alloc_bytes > 0)
-            emit(cg, "    addq    $%d, %%rsp", alloc_bytes);
+            if (alloc_bytes > 0)
+                emit(cg, "    subq    $%d, %%rsp", alloc_bytes);
+
+            for (int i = 0; i < argc; i++) {
+                emit_expr(cg, node->children[i + 1]);
+                emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
+            }
+
+            if (argc > 0)
+                emit(cg, "    movq    %%rsp, %%rdx");
+            else
+                emit(cg, "    xorq    %%rdx, %%rdx");
+
+            const char *ml = intern_string(cg, mod_name);
+            const char *fl = intern_string(cg, fn_name);
+            emit(cg, "    leaq    %s(%%rip), %%rdi", ml);
+            emit(cg, "    leaq    %s(%%rip), %%rsi", fl);
+            emit(cg, "    movl    $%d, %%ecx", argc);
+            emit(cg, "    call    " XLY_SYM("xly_call_module"));
+
+            if (alloc_bytes > 0)
+                emit(cg, "    addq    $%d, %%rsp", alloc_bytes);
+
+            if (is_noreturn) {
+                if (cg->verbose)
+                    emit(cg, "    # [xenlyc] noreturn: dead code elision after this point");
+                cg->noreturn_mode = 1;
+                cg->stat_noreturn_elim++;
+            }
+        }
+
+        x86_method_done:;
         break;
     }
 
@@ -570,17 +683,17 @@ static void emit_expr(CG *cg, ASTNode *node) {
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        /* load current value */
-        emit(cg, "    movq    %d(%%rbp), %%rdi", off);
-        /* push it (spill across the xly_num call) */
-        emit(cg, "    pushq   %%rdi");
-        /* build xly_num(1.0) */
+        /* load current value — aligned spill across xly_num call */
+        emit(cg, "    movq    %d(%%rbp), %%rax", off);
+        emit(cg, "    subq    $16, %%rsp");       /* aligned spill slot */
+        emit(cg, "    movq    %%rax, (%%rsp)");   /* save current */
         emit_load_double(cg, 1.0);
         emit(cg, "    call    " XLY_SYM("xly_num"));          /* rax = num(1) */
         emit(cg, "    movq    %%rax, %%rsi");     /* rsi = num(1) */
-        emit(cg, "    popq    %%rdi");            /* rdi = original value */
+        emit(cg, "    movq    (%%rsp), %%rdi");   /* rdi = current value */
+        emit(cg, "    addq    $16, %%rsp");
         emit(cg, "    call    %s",
-             node->type == NODE_INCREMENT ? "xly_add" : "xly_sub");
+             node->type == NODE_INCREMENT ? XLY_SYM("xly_add") : XLY_SYM("xly_sub"));
         emit(cg, "    movq    %%rax, %d(%%rbp)", off);
         break;
     }
@@ -618,10 +731,12 @@ static void emit_expr(CG *cg, ASTNode *node) {
     case NODE_INDEX: {
         /* children[0] = array/string, children[1] = index */
         emit_expr(cg, node->children[0]);  /* array in rax */
-        emit(cg, "    pushq   %%rax");
+        emit(cg, "    subq    $16, %%rsp");     /* aligned spill */
+        emit(cg, "    movq    %%rax, (%%rsp)"); /* save array */
         emit_expr(cg, node->children[1]);  /* index in rax */
-        emit(cg, "    movq    %%rax, %%rsi");  /* index to rsi */
-        emit(cg, "    popq    %%rdi");         /* array to rdi */
+        emit(cg, "    movq    %%rax, %%rsi");   /* index to rsi */
+        emit(cg, "    movq    (%%rsp), %%rdi"); /* array to rdi */
+        emit(cg, "    addq    $16, %%rsp");
         emit(cg, "    call    " XLY_SYM("xly_index"));
         break;
     }
@@ -634,9 +749,16 @@ static void emit_expr(CG *cg, ASTNode *node) {
 }
 
 /* ── statement compiler ─────────────────────────────────────────────────
- * Post-condition: %rsp unchanged from entry.                             */
+ * Post-condition: %rsp unchanged from entry.
+ * If noreturn_mode is set (after sys.exit/abort), all subsequent statements
+ * are elided — the code is unreachable and emitting it wastes binary space.*/
 static void emit_stmt(CG *cg, ASTNode *node) {
     if (!node) return;
+    /* Dead code elimination after noreturn calls (O1+) */
+    if (cg->noreturn_mode) {
+        cg->stat_noreturn_elim++;
+        return;
+    }
 
     switch (node->type) {
 
@@ -667,19 +789,21 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         const char *varname = node->children[0]->str_value;
         int off = var_offset(cg, varname);
 
-        /* load current value, spill across rhs eval */
+        /* load current value, spill across rhs eval — aligned slot */
         emit(cg, "    movq    %d(%%rbp), %%rax", off);
-        emit(cg, "    pushq   %%rax");             /* [current] */
+        emit(cg, "    subq    $16, %%rsp");        /* aligned spill */
+        emit(cg, "    movq    %%rax, (%%rsp)");    /* save current */
         emit_expr(cg, node->children[1]);          /* rhs → %rax */
         emit(cg, "    movq    %%rax, %%rsi");      /* rsi = rhs */
-        emit(cg, "    popq    %%rdi");             /* rdi = current */
+        emit(cg, "    movq    (%%rsp), %%rdi");    /* rdi = current */
+        emit(cg, "    addq    $16, %%rsp");
 
         const char *op  = node->str_value;         /* "+=", "-=", "*=", "/=" */
-        const char *fn  = "xly_add";
-        if      (strcmp(op, "+=") == 0) fn = "xly_add";
-        else if (strcmp(op, "-=") == 0) fn = "xly_sub";
-        else if (strcmp(op, "*=") == 0) fn = "xly_mul";
-        else if (strcmp(op, "/=") == 0) fn = "xly_div";
+        const char *fn  = XLY_SYM("xly_add");
+        if      (strcmp(op, "+=") == 0) fn = XLY_SYM("xly_add");
+        else if (strcmp(op, "-=") == 0) fn = XLY_SYM("xly_sub");
+        else if (strcmp(op, "*=") == 0) fn = XLY_SYM("xly_mul");
+        else if (strcmp(op, "/=") == 0) fn = XLY_SYM("xly_div");
 
         emit(cg, "    call    %s", fn);
         emit(cg, "    movq    %%rax, %d(%%rbp)", off);
@@ -690,14 +814,16 @@ static void emit_stmt(CG *cg, ASTNode *node) {
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    movq    %d(%%rbp), %%rdi", off);
-        emit(cg, "    pushq   %%rdi");
+        emit(cg, "    movq    %d(%%rbp), %%rax", off);
+        emit(cg, "    subq    $16, %%rsp");        /* aligned spill */
+        emit(cg, "    movq    %%rax, (%%rsp)");    /* save current */
         emit_load_double(cg, 1.0);
         emit(cg, "    call    " XLY_SYM("xly_num"));
-        emit(cg, "    movq    %%rax, %%rsi");
-        emit(cg, "    popq    %%rdi");
+        emit(cg, "    movq    %%rax, %%rsi");      /* rsi = num(1) */
+        emit(cg, "    movq    (%%rsp), %%rdi");    /* rdi = current */
+        emit(cg, "    addq    $16, %%rsp");
         emit(cg, "    call    %s",
-             node->type == NODE_INCREMENT ? "xly_add" : "xly_sub");
+             node->type == NODE_INCREMENT ? XLY_SYM("xly_add") : XLY_SYM("xly_sub"));
         emit(cg, "    movq    %%rax, %d(%%rbp)", off);
         break;
     }
@@ -941,7 +1067,7 @@ static void emit_function(CG *cg, ASTNode *fn) {
     cg->frame_offset = 0;
 
     /* frame size: params + locals + generous padding, 16-aligned */
-    int n = (int)nparams + count_locals(body) + 8;
+    int n = (int)nparams + count_locals(body) + 32;
     int frame = (n * 8 + 15) & ~15;
 
     emit(cg, "");
@@ -998,14 +1124,24 @@ static void emit_function(CG *cg, ASTNode *fn) {
 }
 
 /* ── x86-64 public entry (called by the dispatch codegen() below) ───────── */
+/* g_opt_level / g_verbose_asm are declared above, outside all arch #ifdefs */
 static int codegen_x86_64(ASTNode *program, const char *outpath) {
     CG cg;
     memset(&cg, 0, sizeof(cg));
-    cg.out = fopen(outpath, "w");
+    cg.out       = fopen(outpath, "w");
     if (!cg.out) { perror("codegen: fopen"); return 1; }
+    cg.opt_level = g_opt_level;
+    cg.verbose   = g_verbose_asm;
+
+    if (cg.verbose)
+        emit(&cg, "    # xenlyc v0.1.0  opt=%d  arch=x86-64  abi=sysv", cg.opt_level);
 
     /* main frame: generous */
-    int n_top = count_locals(program) + 16;
+    /* Frame = locals × 8 + 512 bytes of spill headroom.
+     * Each aligned spill in emit_expr uses 16 bytes temporarily;
+     * deeply nested expressions (sys calls inside arithmetic etc.)
+     * can hold up to ~32 simultaneous spill slots = 512 bytes. */
+    int n_top = count_locals(program) + 64;
     int mframe = (n_top * 8 + 15) & ~15;
 
     emit(&cg, XLY_TEXT_SECTION);
@@ -1062,7 +1198,25 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
     emit(&cg, XLY_GNU_STACK_SECTION);
 #endif
 
+    /* Emit compilation stats as trailing comments when verbose */
+    if (cg.verbose) {
+        emit(&cg, "    # --- xenlyc stats ---");
+        emit(&cg, "    # constant folds:   %d", cg.stat_const_fold);
+        emit(&cg, "    # sys inlines:      %d", cg.stat_sys_inline);
+        emit(&cg, "    # noreturn elim:    %d", cg.stat_noreturn_elim);
+        emit(&cg, "    # unboxed ops:      %d", cg.stat_unboxed_ops);
+    }
+
     fclose(cg.out);
+
+    /* Print stats to stderr if verbose */
+    if (g_verbose_asm) {
+        fputs("\033[1;36m[xenlyc] codegen stats:\033[0m\n", stderr);
+        fprintf(stderr, "  sys constants inlined:   %d\n", cg.stat_sys_inline);
+        fprintf(stderr, "  noreturn elims:          %d\n", cg.stat_noreturn_elim);
+        fprintf(stderr, "  constant folds:          %d\n", cg.stat_const_fold);
+        fprintf(stderr, "  unboxed arithmetic ops:  %d\n", cg.stat_unboxed_ops);
+    }
 
     /* cleanup */
     for (int i = 0; i < cg.var_count; i++)    free(cg.vars[i].name);
@@ -1149,18 +1303,60 @@ static void emit_load_double_a64(CG *cg, double d) {
 }
 
 /* ── spill/reload helpers ───────────────────────────────────────────────
- * AArch64 has no push/pop.  We maintain a software spill stack that grows
- * DOWN below sp.  Before the first spill in a function we keep sp as-is;
- * each spill_push adjusts sp by -16 (must stay 16-aligned) and stores x0.
- * spill_pop loads back into x0 and restores sp.
+ * On Apple Silicon, sp must stay within the allocated frame at all times.
+ * We use frame-relative spill slots at [x29, #offset] with NO sp movement.
  *
- * NOTE: This means each push/pop pair must be balanced; nested spills work
- * because each push claims a fresh 16-byte slot.                           */
+ * Spill slots are carved from the frame BELOW the current sp position:
+ *   slot address = x29 + frame_offset - a64_sp_adj - (depth+1)*8
+ *
+ * a64_sp_adj tracks how many bytes sp has been moved down (by sub sp,#N
+ * for print/method-call arg arrays).  This ensures spill slots always land
+ * strictly below sp (i.e., in unused frame space), never in the arg arrays
+ * that occupy [sp, #0 .. alloc_bytes-8].                                  */
+/* ── safe_str_a64 / safe_ldr_a64 ────────────────────────────────────────
+ * AArch64 unscaled load/store (STUR/LDUR) only encodes offsets in [-256,255].
+ * For offsets outside that range, materialise the address in x9.
+ * x9 is a caller-saved scratch register safe to clobber here.           */
+static void safe_str_a64(CG *cg, const char *reg, int off) {
+    if (off >= -256 && off <= 255) {
+        emit(cg, "    str     %s, [x29, #%d]", reg, off);
+    } else if (off < 0) {
+        emit(cg, "    sub     x9, x29, #%d", -off);
+        emit(cg, "    str     %s, [x9]", reg);
+    } else {
+        emit(cg, "    add     x9, x29, #%d", off);
+        emit(cg, "    str     %s, [x9]", reg);
+    }
+}
+static void safe_ldr_a64(CG *cg, const char *reg, int off) {
+    if (off >= -256 && off <= 255) {
+        emit(cg, "    ldr     %s, [x29, #%d]", reg, off);
+    } else if (off < 0) {
+        emit(cg, "    sub     x9, x29, #%d", -off);
+        emit(cg, "    ldr     %s, [x9]", reg);
+    } else {
+        emit(cg, "    add     x9, x29, #%d", off);
+        emit(cg, "    ldr     %s, [x9]", reg);
+    }
+}
 static void spill_push_a64(CG *cg, const char *reg) {
-    emit(cg, "    str     %s, [sp, #-16]!", reg);   /* pre-decrement sp by 16 */
+    int slot = cg->frame_offset - cg->a64_sp_adj - (cg->a64_spill_depth + 1) * 8;
+    safe_str_a64(cg, reg, slot);
+    cg->a64_spill_depth++;
 }
 static void spill_pop_a64(CG *cg, const char *reg) {
-    emit(cg, "    ldr     %s, [sp], #16", reg);     /* post-increment sp by 16 */
+    cg->a64_spill_depth--;
+    int slot = cg->frame_offset - cg->a64_sp_adj - (cg->a64_spill_depth + 1) * 8;
+    safe_ldr_a64(cg, reg, slot);
+}
+/* Emit sub/add sp and keep a64_sp_adj in sync */
+static void sp_sub_a64(CG *cg, int bytes) {
+    emit(cg, "    sub     sp, sp, #%d", bytes);
+    cg->a64_sp_adj += bytes;
+}
+static void sp_add_a64(CG *cg, int bytes) {
+    emit(cg, "    add     sp, sp, #%d", bytes);
+    cg->a64_sp_adj -= bytes;
 }
 
 /* ── emit a PC-relative symbol address into a register ─────────────────
@@ -1205,7 +1401,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
     case NODE_IDENTIFIER: {
         int off = var_offset(cg, node->str_value);
         if (off != 0)
-            emit(cg, "    ldr     x0, [x29, #%d]", off);
+            safe_ldr_a64(cg, "x0", off);
         else
             emit(cg, "    bl      " XLY_SYM("xly_null"));
         break;
@@ -1450,7 +1646,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         int alloc_bytes = argc > 0 ? ((slot_bytes + 15) & ~15) : 0;
 
         if (alloc_bytes > 0)
-            emit(cg, "    sub     sp, sp, #%d", alloc_bytes);
+            sp_sub_a64(cg, alloc_bytes);
 
         for (int i = 0; i < argc; i++) {
             emit_expr_a64(cg, node->children[i + 1]);
@@ -1473,7 +1669,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         emit(cg, "    bl      " XLY_SYM("xly_call_module"));
 
         if (alloc_bytes > 0)
-            emit(cg, "    add     sp, sp, #%d", alloc_bytes);
+            sp_add_a64(cg, alloc_bytes);
         break;
     }
 
@@ -1488,7 +1684,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    ldr     x0, [x29, #%d]", off);  /* current value */
+        safe_ldr_a64(cg, "x0", off);                   /* current value */
         spill_push_a64(cg, "x0");
         emit_load_double_a64(cg, 1.0);
         emit(cg, "    bl      " XLY_SYM("xly_num"));   /* x0 = num(1) */
@@ -1496,17 +1692,17 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         spill_pop_a64(cg, "x0");
         { char isym[64]; emit(cg, "    bl      %s",
               XLY_RSYM(isym, node->type == NODE_INCREMENT ? "xly_add" : "xly_sub")); }
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
     /* ── array literal ─────────────────────────────────────────────── */
     case NODE_ARRAY_LITERAL: {
         int nelems = (int)node->child_count;
-        int alloc_bytes = nelems > 0 ? (((nelems * 8) + 15) & ~15) : 0;
+        int alloc_bytes = nelems > 0 ? (((nelems * 8) + 15) & ~15) & ~15 : 0;
 
         if (alloc_bytes > 0)
-            emit(cg, "    sub     sp, sp, #%d", alloc_bytes);
+            sp_sub_a64(cg, alloc_bytes);
 
         for (int i = 0; i < nelems; i++) {
             emit_expr_a64(cg, node->children[i]);
@@ -1521,7 +1717,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         emit(cg, "    bl      " XLY_SYM("xly_array_create"));
 
         if (alloc_bytes > 0)
-            emit(cg, "    add     sp, sp, #%d", alloc_bytes);
+            sp_add_a64(cg, alloc_bytes);
         break;
     }
 
@@ -1555,21 +1751,21 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
             emit_expr_a64(cg, node->children[0]);
         else
             emit(cg, "    bl      " XLY_SYM("xly_null"));
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
     case NODE_ASSIGN: {
         emit_expr_a64(cg, node->children[0]);
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
     case NODE_COMPOUND_ASSIGN: {
         const char *varname = node->children[0]->str_value;
         int off = var_offset(cg, varname);
-        emit(cg, "    ldr     x0, [x29, #%d]", off);
+        safe_ldr_a64(cg, "x0", off);
         spill_push_a64(cg, "x0");
         emit_expr_a64(cg, node->children[1]);
         emit(cg, "    mov     x1, x0");
@@ -1581,14 +1777,14 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         else if (strcmp(op,"*=") == 0) fn = "xly_mul";
         else if (strcmp(op,"/=") == 0) fn = "xly_div";
         { char csym[64]; emit(cg, "    bl      %s", XLY_RSYM(csym, fn)); }
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    ldr     x0, [x29, #%d]", off);
+        safe_ldr_a64(cg, "x0", off);
         spill_push_a64(cg, "x0");
         emit_load_double_a64(cg, 1.0);
         emit(cg, "    bl      " XLY_SYM("xly_num"));
@@ -1596,7 +1792,7 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         spill_pop_a64(cg, "x0");
         { char isym2[64]; emit(cg, "    bl      %s",
               XLY_RSYM(isym2, node->type == NODE_INCREMENT ? "xly_add" : "xly_sub")); }
-        emit(cg, "    str     x0, [x29, #%d]", off);
+        safe_str_a64(cg, "x0", off);
         break;
     }
 
@@ -1604,11 +1800,13 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         /*
          * xly_print(XlyVal **vals, size_t n)   x0=vals, x1=n
          * Reserve stack space for the val pointer array.
+         * Use sp_sub_a64/sp_add_a64 so a64_sp_adj tracks sp movement;
+         * spill_push_a64 then places spills strictly below sp.
          */
         int n = (int)node->child_count;
         int alloc_bytes = n > 0 ? (((n * 8) + 15) & ~15) : 0;
         if (alloc_bytes > 0)
-            emit(cg, "    sub     sp, sp, #%d", alloc_bytes);
+            sp_sub_a64(cg, alloc_bytes);
 
         for (int i = 0; i < n; i++) {
             emit_expr_a64(cg, node->children[i]);
@@ -1620,7 +1818,7 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         emit(cg, "    bl      " XLY_SYM("xly_print"));
 
         if (alloc_bytes > 0)
-            emit(cg, "    add     sp, sp, #%d", alloc_bytes);
+            sp_add_a64(cg, alloc_bytes);
         break;
     }
 
@@ -1722,31 +1920,31 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         int off_len = var_declare(cg, tmp);
 
         emit_expr_a64(cg, node->children[0]);
-        emit(cg, "    str     x0, [x29, #%d]", off_arr);
+        safe_str_a64(cg, "x0", off_arr);
         emit(cg, "    bl      " XLY_SYM("xly_array_len"));
-        emit(cg, "    str     x0, [x29, #%d]", off_len);
-        /* idx = 0 (store integer 0, not a boxed value — matches x86 backend) */
-        emit(cg, "    str     xzr, [x29, #%d]", off_idx);
+        safe_str_a64(cg, "x0", off_len);
+        /* idx = 0 (store integer 0 — raw, not a boxed XlyVal) */
+        safe_str_a64(cg, "xzr", off_idx);
 
         push_brk(cg, lbl_end);
         push_cnt(cg, lbl_cond);
 
         emit(cg, "%s:", lbl_cond);
-        emit(cg, "    ldr     x9, [x29, #%d]", off_idx);
-        emit(cg, "    ldr     x10, [x29, #%d]", off_len);
+        safe_ldr_a64(cg, "x9", off_idx);
+        safe_ldr_a64(cg, "x10", off_len);
         emit(cg, "    cmp     x9, x10");
         emit(cg, "    b.hs    %s", lbl_end);   /* idx >= len → done */
 
-        emit(cg, "    ldr     x0, [x29, #%d]", off_arr);
-        emit(cg, "    ldr     x1, [x29, #%d]", off_idx);
+        safe_ldr_a64(cg, "x0", off_arr);
+        safe_ldr_a64(cg, "x1", off_idx);
         emit(cg, "    bl      " XLY_SYM("xly_array_get"));
-        emit(cg, "    str     x0, [x29, #%d]", off_iter);
+        safe_str_a64(cg, "x0", off_iter);
 
         emit_stmt_a64(cg, node->children[1]);
 
-        emit(cg, "    ldr     x9, [x29, #%d]", off_idx);
+        safe_ldr_a64(cg, "x9", off_idx);
         emit(cg, "    add     x9, x9, #1");
-        emit(cg, "    str     x9, [x29, #%d]", off_idx);
+        safe_str_a64(cg, "x9", off_idx);
         emit(cg, "    b       %s", lbl_cond);
         emit(cg, "%s:", lbl_end);
 
@@ -1794,7 +1992,12 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
          * We use #16 here because the stp used !-framesz and x29=sp, so
          * the saved pair is always at [x29+0] regardless of locals.       */
         emit(cg, "    mov     sp, x29");
-        emit(cg, "    ldp     x29, x30, [sp], #16");
+        if (cg->a64_frame_size <= 504) {
+            emit(cg, "    ldp     x29, x30, [sp], #%d", cg->a64_frame_size);
+        } else {
+            emit(cg, "    ldp     x29, x30, [sp]");
+            emit(cg, "    add     sp, sp, #%d", cg->a64_frame_size);
+        }
         emit(cg, "    ret");
         break;
 
@@ -1814,40 +2017,51 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
     ASTNode    *body    = fn->children[0];
 
     int sv_vc = cg->var_count, sv_fo = cg->frame_offset, sv_sd = cg->scope_depth;
-    cg->scope_depth  = 0;
-    cg->frame_offset = 0;
+    int sv_spill = cg->a64_spill_depth;
+    cg->scope_depth    = 0;
+    cg->frame_offset   = 0;
+    cg->a64_spill_depth = 0;
+    cg->a64_sp_adj      = 0;
 
-    /* Frame: x29+x30 (16 bytes) + local slots, 16-aligned */
-    int n = (int)nparams + count_locals(body) + 8;
+    /* Frame: x29+x30 (16 bytes) + locals + 16 spill slots, 16-aligned.
+     * The +16 headroom is the spill area; spill_push_a64 addresses them
+     * via safe_str_a64 which handles any [x29,#off] encoding.              */
+    int n = (int)nparams + count_locals(body) + 16;
     int locals_bytes = (n * 8 + 15) & ~15;
-    int frame = locals_bytes + 16;  /* +16 for x29/x30 pair */
+    int frame = locals_bytes + 16;  /* +16 for saved x29/x30 pair */
     frame = (frame + 15) & ~15;
+    cg->a64_frame_size = frame;   /* stored for NODE_RETURN epilogue */
 
     emit(cg, "");
     emit(cg, ".Lxly_fn_%s:", name);
-    /* Prologue: save frame+link, set up frame pointer, allocate locals */
-    emit(cg, "    stp     x29, x30, [sp, #-%d]!", frame);
-    emit(cg, "    mov     x29, sp");
-    /* locals live at [x29, #-8], [x29, #-16], ... */
-    /* But var_declare uses negative offsets from frame_offset starting at 0,
-     * so we bias by +16 to skip the saved x29/x30 at [sp+0..sp+15].
-     * Actually: x29 = sp (after prologue), so [x29, #-8] is valid for locals.
-     * var_declare gives offsets -8, -16, ... from frame_offset=0 which is x29. */
+    /* Prologue: save fp+lr, set frame pointer, allocate locals */
+    /* AArch64 stp pre-indexed only allows offsets in [-512, 504] step 8.
+     * For larger frames split into sub + stp [sp]. */
+    if (frame <= 512) {
+        emit(cg, "    stp     x29, x30, [sp, #-%d]!", frame);
+        emit(cg, "    mov     x29, sp");
+    } else {
+        emit(cg, "    sub     sp, sp, #%d", frame);
+        emit(cg, "    stp     x29, x30, [sp]");
+        emit(cg, "    mov     x29, sp");
+    }
+    /* Locals: var_declare assigns [x29,#-8], [x29,#-16], ...
+     * Spill slots go below those, tracked by a64_spill_depth. */
 
     /* Spill incoming args (x0–x7) into their stack slots */
     static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
     for (size_t i = 0; i < nparams && i < 8; i++) {
         int off = var_declare(cg, fn->params[i].name);
-        emit(cg, "    str     %s, [x29, #%d]", aregs[i], off);
+        safe_str_a64(cg, aregs[i], off);
 
         if (fn->params[i].is_optional || fn->params[i].default_value) {
             char lbl_has_arg[64];
             fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
-            emit(cg, "    ldr     x9, [x29, #%d]", off);
+            safe_ldr_a64(cg, "x9", off);
             emit(cg, "    cbnz    x9, %s", lbl_has_arg);
             if (fn->params[i].default_value) {
                 emit_expr_a64(cg, fn->params[i].default_value);
-                emit(cg, "    str     x0, [x29, #%d]", off);
+                safe_str_a64(cg, "x0", off);
             }
             emit(cg, "%s:", lbl_has_arg);
         }
@@ -1861,12 +2075,19 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
     /* Implicit return null + epilogue */
     emit(cg, "    bl      " XLY_SYM("xly_null"));
     emit(cg, "    mov     sp, x29");
-    emit(cg, "    ldp     x29, x30, [sp], #%d", frame);
+    if (frame <= 504) {
+        emit(cg, "    ldp     x29, x30, [sp], #%d", frame);
+    } else {
+        emit(cg, "    ldp     x29, x30, [sp]");
+        emit(cg, "    add     sp, sp, #%d", frame);
+    }
     emit(cg, "    ret");
 
     while (cg->var_count > sv_vc) { cg->var_count--; free(cg->vars[cg->var_count].name); }
-    cg->frame_offset = sv_fo;
-    cg->scope_depth  = sv_sd;
+    cg->frame_offset    = sv_fo;
+    cg->scope_depth     = sv_sd;
+    cg->a64_spill_depth = sv_spill;
+    cg->a64_sp_adj      = 0;  /* reset: caller's sp_adj is already 0 at call sites */
 }
 
 #endif /* XLY_ARCH_ARM64 */
@@ -1875,25 +2096,46 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
 /* ═══════════════════════════════════════════════════════════════════════════
  * PUBLIC ENTRY POINT  —  dispatches to x86-64 or ARM64 backend
  * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Public configuration — called by xenlyc_main before codegen() ───────── */
+void codegen_set_opts(int opt_level, int verbose_asm) {
+    g_opt_level   = opt_level;
+    g_verbose_asm = verbose_asm;
+}
+
 int codegen(ASTNode *program, const char *outpath) {
 #ifdef XLY_ARCH_ARM64
     /* ── ARM64 code generation ────────────────────────────────────────── */
     CG cg;
     memset(&cg, 0, sizeof(cg));
-    cg.out = fopen(outpath, "w");
+    cg.out       = fopen(outpath, "w");
     if (!cg.out) { perror("codegen: fopen"); return 1; }
+    cg.opt_level = g_opt_level;
+    cg.verbose   = g_verbose_asm;
 
+    cg.a64_spill_depth = 0;
+    cg.a64_sp_adj      = 0;
     int n_top  = count_locals(program) + 16;
-    /* main frame: locals + x29/x30 slot, 16-aligned */
+    /* main frame: locals + spill headroom (16 slots) + x29/x30, 16-aligned.
+     * The +16 gives enough room for simultaneous spills at any expression depth.
+     * safe_str_a64/safe_ldr_a64 handle encoding for any offset within the frame. */
     int locals  = (n_top * 8 + 15) & ~15;
     int mframe  = locals + 16;
     mframe = (mframe + 15) & ~15;
+    cg.a64_frame_size = mframe;  /* used by NODE_RETURN in top-level fns */
 
     emit(&cg, XLY_TEXT_SECTION);
     emit(&cg, ".globl  " XLY_SYM("main"));
     emit(&cg, XLY_SYM("main") ":");
-    emit(&cg, "    stp     x29, x30, [sp, #-%d]!", mframe);
-    emit(&cg, "    mov     x29, sp");
+    /* AArch64 stp pre-indexed only allows offsets in [-512, 504].
+     * For larger frames use: sub sp + stp [sp] (offset 0) + mov x29,sp */
+    if (mframe <= 512) {
+        emit(&cg, "    stp     x29, x30, [sp, #-%d]!", mframe);
+        emit(&cg, "    mov     x29, sp");
+    } else {
+        emit(&cg, "    sub     sp, sp, #%d", mframe);
+        emit(&cg, "    stp     x29, x30, [sp]");
+        emit(&cg, "    mov     x29, sp");
+    }
 
     for (size_t i = 0; i < program->child_count; i++)
         emit_stmt_a64(&cg, program->children[i]);
@@ -1903,7 +2145,12 @@ int codegen(ASTNode *program, const char *outpath) {
     emit(&cg, "    bl      " XLY_SYM("xly_exit"));
     /* fallthrough epilogue (xly_exit does _exit so this is unreachable) */
     emit(&cg, "    mov     sp, x29");
-    emit(&cg, "    ldp     x29, x30, [sp], #%d", mframe);
+    if (mframe <= 504) {
+        emit(&cg, "    ldp     x29, x30, [sp], #%d", mframe);
+    } else {
+        emit(&cg, "    ldp     x29, x30, [sp]");
+        emit(&cg, "    add     sp, sp, #%d", mframe);
+    }
     emit(&cg, "    ret");
 
     /* user-defined functions */

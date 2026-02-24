@@ -21,6 +21,14 @@
  *
  * Returns 0 on success, non-zero on error.
  */
-int codegen(ASTNode *program, const char *outpath);
+int  codegen(ASTNode *program, const char *outpath);
+
+/*
+ * codegen_set_opts  —  configure codegen before calling codegen()
+ *
+ *   opt_level   0=debug  1=basic  2=sys-optimized (default)  3=aggressive
+ *   verbose_asm 1=emit source-level comments + stats in .s output
+ */
+void codegen_set_opts(int opt_level, int verbose_asm);
 
 #endif /* CODEGEN_H */

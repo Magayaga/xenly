@@ -14,7 +14,7 @@
   </a>
 </p>
 
-**Xenly** (formerly known as **Xenon**) is a **free and open-source** high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in **C** programming language.
+**Xenly** (formerly known as **Xenon**) is a **free and open-source** high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in the **C** programming language.
 
 Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
 
@@ -24,7 +24,7 @@ Xenly programming language should be command-line interfaces, web servers, and d
 ### Hello, World! program
 The following shows how a **"Hello, World!"** program is written in Xenly programming language:
 
-```swift
+```rust
 // “Hello, World!” program
 print("Hello, World!")
 ```
@@ -37,6 +37,28 @@ const hi = "Hello, World!"
 print(hi)
 ```
 
+### Xenly's standard library
+```typescript
+// import modules
+import "math"
+import "string"
+import "array"
+
+// math
+print(math.PI())
+print(math.E()))
+print(math.sqrt(144))
+
+// string
+print(string.len("hello"))
+print(string.upper("hello"))
+print(string.lower("WORLD"))
+
+// array
+print(array.create(5, 0))
+print(array.of(10, 20, 30, 40, 50))
+```
+
 ## Getting Started
 
 ### 1. Download Xenly's source code
@@ -44,7 +66,7 @@ print(hi)
 You can download the git clone of the `xenly` programming language project. It is available for the **macOS**, **WSL** (Windows Subsystem for Linux), and **Linux** operating systems.
 
 > [!WARNING]
-> The `xenlyc` native compiler for the **Windows** operating system is not available because it is being fixed for errors and bugs.
+> The `xenly` interpreter and the `xenlyc` native compiler for the **Windows** operating system are not available, because they are being fixed for errors and bugs.
 
 ```bash
 # Download the Xenly's source code
@@ -91,7 +113,7 @@ The Xenly source code is organized as follows:
 | `examples/`                  | Example code for the Xenly programming language             |
 | `src/`                       | Source code for the Xenly programming language              |
 
-If you are new to the **Xenly**, you may want to check out these additional resources.
+If you are new to the **Xenly**, you should check out these additional resources.
 
 * [Official website of Xenly (Getting Started)](https://magayaga.github.io/xenly/get-xenly.html)
 * [Documentation of Xenly (Getting Started)](doc/getting-started.md)
@@ -101,11 +123,3 @@ If you are new to the **Xenly**, you may want to check out these additional reso
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
-
-
-
-
-
-
-
-

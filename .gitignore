@@ -88,3 +88,9 @@ zig-out/
 # Although this was renamed to .zig-cache, let's leave it here for a few
 # releases to make it less annoying to work with multiple branches.
 zig-cache/
+
+# xenly executable files
+xenly.exe
+xenlyc.exe
+xenly
+xenlyc
