@@ -2258,6 +2258,72 @@ Module module_multiproc(void) {
 #include <syslog.h>
 #include <time.h>
 
+/* ── macOS portability shims ─────────────────────────────────────────────────
+ * macOS uses MAP_ANON instead of MAP_ANONYMOUS (Linux name).
+ * macOS hides _SC_NPROCESSORS_ONLN/_CONF behind its own sysctl API when
+ * _POSIX_C_SOURCE is strict; we use sysctlbyname() instead.
+ * _SC_PHYS_PAGES / _SC_AVPHYS_PAGES do not exist on macOS at all — we use
+ * sysctlbyname("hw.memsize") and vm_statistics64 via host_statistics64().
+ * ─────────────────────────────────────────────────────────────────────────── */
+#if defined(PLATFORM_MACOS)
+#  include <sys/sysctl.h>
+#  include <mach/mach.h>
+   /* MAP_ANONYMOUS → MAP_ANON on macOS */
+#  ifndef MAP_ANONYMOUS
+#    define MAP_ANONYMOUS MAP_ANON
+#  endif
+   /* _SC_NPROCESSORS_ONLN / _SC_NPROCESSORS_CONF — use sysctlbyname */
+   static inline long xly_nprocessors_onln(void) {
+       int n = 0; size_t sz = sizeof(n);
+       extern int sysctlbyname(const char *, void *, size_t *, void *, size_t);
+       return (sysctlbyname("hw.logicalcpu", &n, &sz, NULL, 0) == 0 && n > 0)
+              ? (long)n : 1L;
+   }
+   static inline long xly_nprocessors_conf(void) {
+       int n = 0; size_t sz = sizeof(n);
+       extern int sysctlbyname(const char *, void *, size_t *, void *, size_t);
+       return (sysctlbyname("hw.logicalcpu_max", &n, &sz, NULL, 0) == 0 && n > 0)
+              ? (long)n : 1L;
+   }
+   /* _SC_PAGE_SIZE — available on macOS via sysconf, but guard anyway */
+#  ifndef _SC_PAGE_SIZE
+#    define _SC_PAGE_SIZE 29
+#  endif
+   /* _SC_PHYS_PAGES — total RAM pages via hw.memsize / page_size */
+   static inline long xly_phys_pages(void) {
+       uint64_t mem = 0; size_t sz = sizeof(mem);
+       extern int sysctlbyname(const char *, void *, size_t *, void *, size_t);
+       if (sysctlbyname("hw.memsize", &mem, &sz, NULL, 0) != 0) return 0;
+       long ps = sysconf(_SC_PAGE_SIZE);
+       if (ps <= 0) ps = 4096;
+       return (long)(mem / (uint64_t)ps);
+   }
+   /* _SC_AVPHYS_PAGES — free pages via mach vm_statistics64 */
+   static inline long xly_avphys_pages(void) {
+       mach_port_t host = mach_host_self();
+       vm_statistics64_data_t vms;
+       mach_msg_type_number_t cnt = HOST_VM_INFO64_COUNT;
+       if (host_statistics64(host, HOST_VM_INFO64,
+                             (host_info64_t)&vms, &cnt) != KERN_SUCCESS)
+           return 0;
+       return (long)(vms.free_count + vms.inactive_count);
+   }
+#else
+   /* Linux / BSD: use sysconf directly */
+   static inline long xly_nprocessors_onln(void) {
+       long n = sysconf(_SC_NPROCESSORS_ONLN); return n > 0 ? n : 1;
+   }
+   static inline long xly_nprocessors_conf(void) {
+       long n = sysconf(_SC_NPROCESSORS_CONF); return n > 0 ? n : 1;
+   }
+   static inline long xly_phys_pages(void) {
+       long p = sysconf(_SC_PHYS_PAGES); return p > 0 ? p : 0;
+   }
+   static inline long xly_avphys_pages(void) {
+       long p = sysconf(_SC_AVPHYS_PAGES); return p > 0 ? p : 0;
+   }
+#endif /* PLATFORM_MACOS */
+
 // ═════════════════════════════════════════════════════════════════════════════
 // LEVEL 1 — PROCESS CONTROL
 // ═════════════════════════════════════════════════════════════════════════════
@@ -2505,7 +2571,7 @@ static Value *sys_mmap(Value **args, size_t argc) {
     if (argc < 2 || args[0]->type != VAL_NUMBER) return value_number(-1);
     size_t size  = (size_t)args[0]->num;
     int    prot  = (argc >= 2 && args[1]->type == VAL_NUMBER) ? (int)args[1]->num : PROT_READ | PROT_WRITE;
-    int    flags = (argc >= 3 && args[2]->type == VAL_NUMBER) ? (int)args[2]->num : MAP_PRIVATE | MAP_ANONYMOUS;
+    int    flags = (argc >= 3 && args[2]->type == VAL_NUMBER) ? (int)args[2]->num : MAP_PRIVATE | MAP_ANONYMOUS;  /* MAP_ANONYMOUS shim covers macOS MAP_ANON */
     int    fd    = (argc >= 4 && args[3]->type == VAL_NUMBER) ? (int)args[3]->num : -1;
     off_t  off   = (argc >= 5 && args[4]->type == VAL_NUMBER) ? (off_t)args[4]->num : 0;
     void  *ptr   = mmap(NULL, size, prot, flags, fd, off);
@@ -2992,32 +3058,28 @@ static Value *sys_hostname(Value **args, size_t argc) {
     return (gethostname(buf, sizeof(buf)) == 0) ? value_string(buf) : value_null();
 }
 
-// sys.nproc() — online CPU count (C: sysconf(_SC_NPROCESSORS_ONLN))
+// sys.nproc() — online CPU count (portable: sysctlbyname on macOS, sysconf on Linux)
 static Value *sys_nproc(Value **args, size_t argc) {
     (void)args; (void)argc;
-    long n = sysconf(_SC_NPROCESSORS_ONLN);
-    return value_number((double)(n > 0 ? n : 1));
+    return value_number((double)xly_nprocessors_onln());
 }
 
 // sys.nproc_conf() — configured CPU count (may be higher than online)
 static Value *sys_nproc_conf(Value **args, size_t argc) {
     (void)args; (void)argc;
-    long n = sysconf(_SC_NPROCESSORS_CONF);
-    return value_number((double)(n > 0 ? n : 1));
+    return value_number((double)xly_nprocessors_conf());
 }
 
-// sys.phys_pages() — total physical RAM pages (C: sysconf(_SC_PHYS_PAGES))
+// sys.phys_pages() — total physical RAM pages (portable)
 static Value *sys_phys_pages(Value **args, size_t argc) {
     (void)args; (void)argc;
-    long p = sysconf(_SC_PHYS_PAGES);
-    return value_number((double)(p > 0 ? p : 0));
+    return value_number((double)xly_phys_pages());
 }
 
-// sys.avphys_pages() — available (free) RAM pages
+// sys.avphys_pages() — available (free) RAM pages (portable)
 static Value *sys_avphys_pages(Value **args, size_t argc) {
     (void)args; (void)argc;
-    long p = sysconf(_SC_AVPHYS_PAGES);
-    return value_number((double)(p > 0 ? p : 0));
+    return value_number((double)xly_avphys_pages());
 }
 
 // sys.PAGE_SIZE() — OS memory page size in bytes (typically 4096)
