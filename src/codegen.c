@@ -203,7 +203,7 @@ static void emit_stmt(CG *cg, ASTNode *node);
 /* ── pre-pass: count VAR_DECLs recursively ─────────────────────────────── */
 static int count_locals(ASTNode *node) {
     if (!node) return 0;
-    int n = (node->type == NODE_VAR_DECL || node->type == NODE_CONST_DECL) ? 1 : 0;
+    int n = (node->type == NODE_VAR_DECL || node->type == NODE_CONST_DECL || node->type == NODE_LET_DECL) ? 1 : 0;
     /* for-in declares 4 hidden slots per loop; count conservatively */
     if (node->type == NODE_FOR_IN) n += 4;
     for (size_t i = 0; i < node->child_count; i++)
@@ -762,8 +762,9 @@ static void emit_stmt(CG *cg, ASTNode *node) {
 
     switch (node->type) {
 
-    /* ── var/const decl ────────────────────────────────────────────── */
+    /* ── var / let / const decl ─────────────────────────────────────── */
     case NODE_VAR_DECL:
+    case NODE_LET_DECL:
     case NODE_CONST_DECL: {
         int off = var_declare(cg, node->str_value);
         if (node->child_count > 0)
@@ -1745,6 +1746,7 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
     switch (node->type) {
 
     case NODE_VAR_DECL:
+    case NODE_LET_DECL:
     case NODE_CONST_DECL: {
         int off = var_declare(cg, node->str_value);
         if (node->child_count > 0)

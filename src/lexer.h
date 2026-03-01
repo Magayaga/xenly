@@ -55,6 +55,7 @@ typedef enum {
     TOKEN_TYPEOF,       // typeof
     TOKEN_INSTANCEOF,   // instanceof
     TOKEN_CONST,        // const (immutable bindings)
+    TOKEN_LET,          // let   (block-scoped mutable, alias for var)
     TOKEN_ENUM,         // enum (algebraic data types)
     TOKEN_MATCH,        // match (pattern matching)
     TOKEN_PIPE,         // | (for enum variants and match patterns)

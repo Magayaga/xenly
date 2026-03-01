@@ -84,6 +84,7 @@ typedef struct { const char *word; TokenType type; } Keyword;
 
 static const Keyword keywords[] = {
     { "var",    TOKEN_VAR },
+    { "let",    TOKEN_LET },
     { "const",  TOKEN_CONST },
     { "fn",     TOKEN_FN },
     { "return", TOKEN_RETURN },
@@ -418,7 +419,7 @@ const char *token_type_name(TokenType type) {
         case TOKEN_AWAIT:   return "AWAIT";
         case TOKEN_SLEEP:   return "SLEEP";
         case TOKEN_TYPEOF: return "TYPEOF"; case TOKEN_INSTANCEOF: return "INSTANCEOF";
-        case TOKEN_CONST: return "CONST"; case TOKEN_ENUM: return "ENUM";
+        case TOKEN_CONST: return "CONST"; case TOKEN_LET: return "LET"; case TOKEN_ENUM: return "ENUM";
         case TOKEN_MATCH: return "MATCH"; case TOKEN_PIPE: return "|";
         case TOKEN_IN: return "IN";
         case TOKEN_PLUS: return "+"; case TOKEN_MINUS: return "-";

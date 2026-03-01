@@ -760,7 +760,9 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
     }
 
     // ── VAR DECL ───────────────────────────────────────────────────────────
-    case NODE_VAR_DECL: {
+    case NODE_VAR_DECL:
+    // ── LET DECL (block-scoped mutable — same semantics as var) ───────────
+    case NODE_LET_DECL: {
         Value *val = value_null();
         if (node->child_count > 0) {
             val = eval(interp, node->children[0], env);
