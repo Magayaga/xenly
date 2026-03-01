@@ -7,13 +7,13 @@
  * It is available for the Linux and macOS operating systems.
  */
 /*
- * xenlyc_main.c  —  Xenly native compiler driver  (v0.1.1)
+ * xenlyc_main.c  —  Xenly native compiler driver  (v0.1.0)
  *
  * Pipeline:
  *   source.xe  →  lexer  →  parser  →  AST  →  codegen  →  .s
  *   .s  →  as  →  .o  →  gcc/clang (link)  →  ELF/Mach-O binary
  *
- * v0.1.1: Variable keyword update
+ * v0.1.0: Variable keyword update
  *   • Added 'let' keyword — block-scoped mutable variable (semantic alias for var)
  *   • 'var', 'let', 'const' now all supported in native compilation
  *   • 'let' works in for-loops: for (let x in arr) and for (let i = 0; ...)
@@ -191,7 +191,7 @@ static void dump_ast(ASTNode *node, int depth) {
  * ══════════════════════════════════════════════════════════════════════════════ */
 static void print_usage(const char *prog) {
     printf("\n");
-    printf("  %s%s%s  Xenly Native Compiler  %sv0.1.1%s\n",
+    printf("  %s%s%s  Xenly Native Compiler  %sv0.1.0%s\n",
            COL("1;36"), "xenlyc", RESET, COL("1;33"), RESET);
     printf("\n");
     printf("  %sUsage:%s   %s [options] <file.xe>\n", COL("1;33"), RESET, prog);
@@ -240,7 +240,7 @@ static void print_usage(const char *prog) {
 }
 
 static void print_version(void) {
-    printf("\n  %sxenlyc%s v0.1.1  (Xenly native compiler)\n", COL("1;36"), RESET);
+    printf("\n  %sxenlyc%s v0.1.0  (Xenly native compiler)\n", COL("1;36"), RESET);
     printf("  Variable keywords: var, let (block-scoped mutable), const (immutable)\n");
     printf("  Systems programming tier — O2 with sys constant inlining\n");
     printf("  Targets: x86-64 (Linux/BSD), AArch64 (macOS Apple Silicon)\n\n");
