@@ -203,7 +203,7 @@ static void emit_stmt(CG *cg, ASTNode *node);
 /* ── pre-pass: count VAR_DECLs recursively ─────────────────────────────── */
 static int count_locals(ASTNode *node) {
     if (!node) return 0;
-    int n = (node->type == NODE_VAR_DECL || node->type == NODE_CONST_DECL || node->type == NODE_LET_DECL) ? 1 : 0;
+    int n = (node->type == NODE_VAR_DECL || node->type == NODE_CONST_DECL) ? 1 : 0;
     /* for-in declares 4 hidden slots per loop; count conservatively */
     if (node->type == NODE_FOR_IN) n += 4;
     for (size_t i = 0; i < node->child_count; i++)
@@ -762,9 +762,8 @@ static void emit_stmt(CG *cg, ASTNode *node) {
 
     switch (node->type) {
 
-    /* ── var / let / const decl ─────────────────────────────────────── */
+    /* ── var/const decl ────────────────────────────────────────────── */
     case NODE_VAR_DECL:
-    case NODE_LET_DECL:
     case NODE_CONST_DECL: {
         int off = var_declare(cg, node->str_value);
         if (node->child_count > 0)
@@ -1746,7 +1745,6 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
     switch (node->type) {
 
     case NODE_VAR_DECL:
-    case NODE_LET_DECL:
     case NODE_CONST_DECL: {
         int off = var_declare(cg, node->str_value);
         if (node->child_count > 0)
@@ -1985,20 +1983,19 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
             emit_expr_a64(cg, node->children[0]);
         else
             emit(cg, "    bl      " XLY_SYM("xly_null"));
-        /* Epilogue: unwind frame by restoring sp from x29, then reload
-         * the saved x29/x30 pair.  The frame size is unknown here because
-         * emit_stmt_a64 is called recursively, so we use the invariant:
-         * x29 always points to the bottom of the saved-register pair.
-         * mov sp, x29  sets sp to where stp stored x29/x30 (frame base).
-         * ldp with post-increment of the correct frame size restores both.
-         * We use #16 here because the stp used !-framesz and x29=sp, so
-         * the saved pair is always at [x29+0] regardless of locals.       */
-        emit(cg, "    mov     sp, x29");
-        if (cg->a64_frame_size <= 504) {
-            emit(cg, "    ldp     x29, x30, [sp], #%d", cg->a64_frame_size);
-        } else {
-            emit(cg, "    ldp     x29, x30, [sp]");
-            emit(cg, "    add     sp, sp, #%d", cg->a64_frame_size);
+        /* Epilogue: x29 = sp + fp_adj (= frame - 16).
+         * Restore frame base into sp, reload saved pair from top, deallocate. */
+        {
+            int fs   = cg->a64_frame_size;
+            int fpad = fs - 16;
+            emit(cg, "    sub     sp, x29, #%d", fpad);  /* sp → frame base */
+            if (fpad <= 504) {
+                emit(cg, "    ldp     x29, x30, [sp, #%d]", fpad);
+            } else {
+                emit(cg, "    add     x9, sp, #%d", fpad);
+                emit(cg, "    ldp     x29, x30, [x9]");
+            }
+            emit(cg, "    add     sp, sp, #%d", fs);     /* sp → old_sp     */
         }
         emit(cg, "    ret");
         break;
@@ -2025,30 +2022,49 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
     cg->a64_spill_depth = 0;
     cg->a64_sp_adj      = 0;
 
-    /* Frame: x29+x30 (16 bytes) + locals + 16 spill slots, 16-aligned.
-     * The +16 headroom is the spill area; spill_push_a64 addresses them
-     * via safe_str_a64 which handles any [x29,#off] encoding.              */
+    /* Frame layout (macOS ARM64 ABI — NO red zone):
+     *
+     *   old_sp  ──► [ ... caller frame ... ]
+     *               ┌─────────────────────────────────┐  ← old_sp - 0
+     *               │  saved x30 (lr)                 │  [x29, #8]
+     *               │  saved x29 (fp)  ◄── x29 ──     │  [x29, #0]
+     *               ├─────────────────────────────────┤  ← old_sp - 16
+     *               │  local var 0                    │  [x29, #-8]
+     *               │  local var 1                    │  [x29, #-16]
+     *               │  ...                            │
+     *               │  spill slots                    │
+     *               └─────────────────────────────────┘  ← sp = old_sp - frame
+     *
+     * x29 is set to (sp + frame - 16) so that:
+     *   - [x29,  0] / [x29, #8]  hold the saved fp/lr pair
+     *   - [x29, #-8], [x29, #-16], ... hold locals — all within [sp, old_sp)
+     *
+     * This satisfies the macOS AArch64 requirement that all memory accesses
+     * stay within the allocated frame (no red zone below sp).               */
     int n = (int)nparams + count_locals(body) + 16;
     int locals_bytes = (n * 8 + 15) & ~15;
     int frame = locals_bytes + 16;  /* +16 for saved x29/x30 pair */
     frame = (frame + 15) & ~15;
-    cg->a64_frame_size = frame;   /* stored for NODE_RETURN epilogue */
+    int fp_adj = frame - 16;       /* x29 = sp + fp_adj  (saved pair offset) */
+    cg->a64_frame_size = frame;    /* stored for NODE_RETURN epilogue */
 
     emit(cg, "");
     emit(cg, ".Lxly_fn_%s:", name);
-    /* Prologue: save fp+lr, set frame pointer, allocate locals */
-    /* AArch64 stp pre-indexed only allows offsets in [-512, 504] step 8.
-     * For larger frames split into sub + stp [sp]. */
-    if (frame <= 512) {
-        emit(cg, "    stp     x29, x30, [sp, #-%d]!", frame);
-        emit(cg, "    mov     x29, sp");
+    /* Prologue: allocate frame, save fp+lr at TOP, set x29 to saved-pair addr.
+     * stp scaled-immediate range is [-512, 504] in steps of 8.
+     * add/sub immediate range is [0, 4095].                                  */
+    emit(cg, "    sub     sp, sp, #%d", frame);
+    if (fp_adj <= 504) {
+        emit(cg, "    stp     x29, x30, [sp, #%d]", fp_adj);
     } else {
-        emit(cg, "    sub     sp, sp, #%d", frame);
-        emit(cg, "    stp     x29, x30, [sp]");
-        emit(cg, "    mov     x29, sp");
+        /* fp_adj > 504: use a scratch register to address the save slot */
+        emit(cg, "    add     x9, sp, #%d", fp_adj);
+        emit(cg, "    stp     x29, x30, [x9]");
     }
+    emit(cg, "    add     x29, sp, #%d", fp_adj);
     /* Locals: var_declare assigns [x29,#-8], [x29,#-16], ...
-     * Spill slots go below those, tracked by a64_spill_depth. */
+     * All negative offsets from x29 are within [sp, sp+frame) — safe.
+     * Spill slots go below locals, tracked by a64_spill_depth.              */
 
     /* Spill incoming args (x0–x7) into their stack slots */
     static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
@@ -2074,15 +2090,18 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
         emit_stmt_a64(cg, body->children[i]);
     scope_leave(cg);
 
-    /* Implicit return null + epilogue */
+    /* Implicit return null + epilogue.
+     * x29 = sp + fp_adj, so frame base = x29 - fp_adj.
+     * Restore sp, reload saved pair from top of frame, deallocate.         */
     emit(cg, "    bl      " XLY_SYM("xly_null"));
-    emit(cg, "    mov     sp, x29");
-    if (frame <= 504) {
-        emit(cg, "    ldp     x29, x30, [sp], #%d", frame);
+    emit(cg, "    sub     sp, x29, #%d", fp_adj);   /* sp → frame base     */
+    if (fp_adj <= 504) {
+        emit(cg, "    ldp     x29, x30, [sp, #%d]", fp_adj);
     } else {
-        emit(cg, "    ldp     x29, x30, [sp]");
-        emit(cg, "    add     sp, sp, #%d", frame);
+        emit(cg, "    add     x9, sp, #%d", fp_adj);
+        emit(cg, "    ldp     x29, x30, [x9]");
     }
+    emit(cg, "    add     sp, sp, #%d", frame);      /* sp → old_sp         */
     emit(cg, "    ret");
 
     while (cg->var_count > sv_vc) { cg->var_count--; free(cg->vars[cg->var_count].name); }
@@ -2124,35 +2143,37 @@ int codegen(ASTNode *program, const char *outpath) {
     int mframe  = locals + 16;
     mframe = (mframe + 15) & ~15;
     cg.a64_frame_size = mframe;  /* used by NODE_RETURN in top-level fns */
+    int main_fp_adj = mframe - 16; /* x29 = sp + main_fp_adj */
 
     emit(&cg, XLY_TEXT_SECTION);
     emit(&cg, ".globl  " XLY_SYM("main"));
     emit(&cg, XLY_SYM("main") ":");
-    /* AArch64 stp pre-indexed only allows offsets in [-512, 504].
-     * For larger frames use: sub sp + stp [sp] (offset 0) + mov x29,sp */
-    if (mframe <= 512) {
-        emit(&cg, "    stp     x29, x30, [sp, #-%d]!", mframe);
-        emit(&cg, "    mov     x29, sp");
+    /* Same frame layout as emit_function_a64: allocate first, save pair at
+     * TOP of frame, set x29 to saved-pair address so that locals at
+     * [x29, #-8], [x29, #-16], ... remain within [sp, old_sp).            */
+    emit(&cg, "    sub     sp, sp, #%d", mframe);
+    if (main_fp_adj <= 504) {
+        emit(&cg, "    stp     x29, x30, [sp, #%d]", main_fp_adj);
     } else {
-        emit(&cg, "    sub     sp, sp, #%d", mframe);
-        emit(&cg, "    stp     x29, x30, [sp]");
-        emit(&cg, "    mov     x29, sp");
+        emit(&cg, "    add     x9, sp, #%d", main_fp_adj);
+        emit(&cg, "    stp     x29, x30, [x9]");
     }
+    emit(&cg, "    add     x29, sp, #%d", main_fp_adj);
 
     for (size_t i = 0; i < program->child_count; i++)
         emit_stmt_a64(&cg, program->children[i]);
 
-    /* call xly_exit(0) */
+    /* call xly_exit(0) -- unreachable epilogue follows for completeness */
     emit(&cg, "    mov     w0, #0");
     emit(&cg, "    bl      " XLY_SYM("xly_exit"));
-    /* fallthrough epilogue (xly_exit does _exit so this is unreachable) */
-    emit(&cg, "    mov     sp, x29");
-    if (mframe <= 504) {
-        emit(&cg, "    ldp     x29, x30, [sp], #%d", mframe);
+    emit(&cg, "    sub     sp, x29, #%d", main_fp_adj);
+    if (main_fp_adj <= 504) {
+        emit(&cg, "    ldp     x29, x30, [sp, #%d]", main_fp_adj);
     } else {
-        emit(&cg, "    ldp     x29, x30, [sp]");
-        emit(&cg, "    add     sp, sp, #%d", mframe);
+        emit(&cg, "    add     x9, sp, #%d", main_fp_adj);
+        emit(&cg, "    ldp     x29, x30, [x9]");
     }
+    emit(&cg, "    add     sp, sp, #%d", mframe);
     emit(&cg, "    ret");
 
     /* user-defined functions */
