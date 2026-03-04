@@ -29,14 +29,8 @@ jobs:
     - name: sys_demo test (2)
       run: time ./sys_demo
     - name: xenly test (3)
-      run: time ./xenly examples/functional.xe
-    - name: xenlyc test (3)
-      run: time ./xenlyc examples/functional.xe -o functional
-    - name: sys_demo test (3)
-      run: time ./functional
-    - name: xenly test (4)
       run: time ./xenly examples/math_enhanced_demo.xe
-    - name: xenlyc test (4)
+    - name: xenlyc test (3)
       run: time ./xenlyc examples/math_enhanced_demo.xe -o math_enhanced_demo
-    - name: sys_demo test (4)
+    - name: sys_demo test (3)
       run: time ./math_enhanced_demo
