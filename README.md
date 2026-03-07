@@ -44,6 +44,7 @@ print(hi)
 ```
 
 ### Xenly's standard library
+**Xenly** comes with a standard library that helps establish a set of common types used by **Xenly** libraries and programs.
 ```typescript
 // import modules
 import "math"
@@ -76,7 +77,7 @@ You can download the git clone of the `xenly` programming language project. It i
 
 ```bash
 # Download the Xenly's source code
-$ git clone https://github.com/xenly
+$ git clone https://github.com/magayaga/xenly
 $ xenly
 ```
 
@@ -129,5 +130,6 @@ If you are new to the **Xenly**, you should check out these additional resources
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
