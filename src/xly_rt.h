@@ -174,4 +174,14 @@ XlyVal *xly_index(XlyVal *collection, XlyVal *index_val);
 /* ── process exit ────────────────────────────────────────────────────────────── */
 void    xly_exit(int code);   /* calls exit() */
 
+/* ── first-class function values ─────────────────────────────────────────────── */
+/* Wrap a raw C function pointer as a VAL_FUNCTION XlyVal* */
+XlyVal *xly_make_fn(void *fp);
+/* Create a closure: fn ptr + captured-variable environment array */
+XlyVal *xly_make_closure(void *fp, XlyVal **env, int env_size);
+/* Get the environment pointer from a closure XlyVal* */
+XlyVal **xly_closure_env(XlyVal *closure);
+/* Call a VAL_FUNCTION XlyVal* with given args */
+XlyVal *xly_call_fnval(XlyVal *fn_val, XlyVal **args, int argc);
+
 #endif /* XLY_RT_H */
