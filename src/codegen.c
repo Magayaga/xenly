@@ -723,66 +723,89 @@ static void emit_expr(CG *cg, ASTNode *node) {
      * Args are eval'd left-to-right, spilled, then loaded into SysV regs. */
     case NODE_FN_CALL: {
         int nargs = (int)node->child_count;
-        /* Clamp to 6: more than 6 args requires stack-based passing which
-         * we don't yet implement. Emit a codegen error but continue. */
-        if (nargs > 6) {
-            fprintf(stderr,
-                "[xenlyc] warning: function '%s' called with %d args; "
-                "only 6 args supported via registers — extra args ignored.\n",
-                node->str_value, nargs);
-            cg->had_error = 1;
-            nargs = 6;
-        }
         static const char *regs[] = {"rdi","rsi","rdx","rcx","r8","r9"};
-        /* Use sub+store so rsp stays 16-byte aligned for any call inside args */
-        int arg_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
-        if (arg_bytes > 0)
-            emit(cg, "    subq    $%d, %%rsp", arg_bytes);
+        int nreg = nargs < 6 ? nargs : 6;  /* args 0-5 → registers       */
+        int nstk = nargs - nreg;            /* args 6+  → stack (SysV ABI) */
+
+        /* ── variable-fn path: use xly_call_fnval (all args in array) ─────
+         * Handles any number of args cleanly via the args array.           */
+        int var_off = var_offset(cg, node->str_value);
+        int gi_fn   = (var_off == 0) ? gvar_find(cg, node->str_value) : -1;
+        int is_var_fn = !fn_name_is_declared(cg, node->str_value)
+                        && (var_off != 0 || gi_fn >= 0);
+
+        if (is_var_fn) {
+            int arr_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+            if (arr_bytes > 0)
+                emit(cg, "    subq    $%d, %%rsp", arr_bytes);
+            for (int i = 0; i < nargs; i++) {
+                emit_expr(cg, node->children[i]);
+                emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
+            }
+            if (var_off != 0)
+                emit(cg, "    movq    %d(%%rbp), %%rdi", var_off);
+            else
+                emit(cg, "    movq    " XLY_SYM("__xly_globals") "+%d(%%rip), %%rdi", gi_fn * 8);
+            if (nargs > 0)
+                emit(cg, "    movq    %%rsp, %%rsi");
+            else
+                emit(cg, "    xorq    %%rsi, %%rsi");
+            emit(cg, "    movl    $%d, %%edx", nargs);
+            emit(cg, "    call    " XLY_SYM("xly_call_fnval"));
+            if (arr_bytes > 0)
+                emit(cg, "    addq    $%d, %%rsp", arr_bytes);
+            break;
+        }
+
+        if (!fn_name_is_declared(cg, node->str_value)) {
+            emit(cg, "    call    " XLY_SYM("xly_null"));
+            break;
+        }
+
+        /* ── declared fn: SysV x86-64 ABI ──────────────────────────────────
+         * Args 0-5 → rdi,rsi,rdx,rcx,r8,r9
+         * Args 6+  → [rsp], [rsp+8], ...  (callee reads at [rbp+16], ...)
+         *
+         * We evaluate all args into a staging area first, then:
+         *  1. Copy staging[nreg..nargs-1] to positions above staging
+         *     (these become the stack args once staging is freed)
+         *  2. Load staging[0..nreg-1] into the register args
+         *  3. Free staging (stack args slide into place at rsp)
+         *  4. call
+         *  5. Caller cleans up stack args (SysV: caller-cleanup for stack args)
+         */
+        int stage_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+        int stk_bytes   = nstk > 0  ? (((nstk * 8)  + 15) & ~15) : 0;
+
+        /* Evaluate all args into staging */
+        if (stage_bytes > 0)
+            emit(cg, "    subq    $%d, %%rsp", stage_bytes);
         for (int i = 0; i < nargs; i++) {
             emit_expr(cg, node->children[i]);
             emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
         }
-        /* Load args from stack slots into registers in order */
-        for (int i = 0; i < nargs; i++)
-            emit(cg, "    movq    %d(%%rsp), %%%s", i * 8, regs[i]);
-        if (arg_bytes > 0)
-            emit(cg, "    addq    $%d, %%rsp", arg_bytes);
 
-        /* Dispatch: declared fn → direct call; variable fn → indirect call */
-        if (fn_name_is_declared(cg, node->str_value)) {
-            emit(cg, "    call    .Lxly_fn_%s", node->str_value);
-        } else {
-            /* Variable-held function value.  Use xly_call_fnval to avoid
-             * calling-convention mismatches between closures and plain fns.
-             * xly_call_fnval(XlyVal *fn, XlyVal **args, int argc)
-             *   rdi=fn   rsi=args_ptr   rdx=argc                           */
-            int var_off = var_offset(cg, node->str_value);
-            int gi_fn   = (var_off == 0) ? gvar_find(cg, node->str_value) : -1;
-            if (var_off != 0 || gi_fn >= 0) {
-                /* Build args array on stack */
-                int arr_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
-                if (arr_bytes > 0)
-                    emit(cg, "    subq    $%d, %%rsp", arr_bytes);
-                /* Store explicit args (already in regs) into array */
-                for (int i = 0; i < nargs; i++)
-                    emit(cg, "    movq    %%%s, %d(%%rsp)", regs[i], i * 8);
-                /* Load fn_val: local variable or global */
-                if (var_off != 0)
-                    emit(cg, "    movq    %d(%%rbp), %%rdi", var_off);
-                else
-                    emit(cg, "    movq    " XLY_SYM("__xly_globals") "+%d(%%rip), %%rdi", gi_fn * 8);
-                if (nargs > 0)
-                    emit(cg, "    movq    %%rsp, %%rsi");           /* args ptr */
-                else
-                    emit(cg, "    xorq    %%rsi, %%rsi");           /* NULL */
-                emit(cg, "    movl    $%d, %%edx", nargs);          /* argc */
-                emit(cg, "    call    " XLY_SYM("xly_call_fnval"));
-                if (arr_bytes > 0)
-                    emit(cg, "    addq    $%d, %%rsp", arr_bytes);
-            } else {
-                emit(cg, "    call    " XLY_SYM("xly_null"));
-            }
+        /* Pre-place stack args above the staging area (using r10 as scratch).
+         * After addq $stage_bytes these will be at [rsp+0], [rsp+8], ... */
+        for (int i = 0; i < nstk; i++) {
+            emit(cg, "    movq    %d(%%rsp), %%r10", (nreg + i) * 8);
+            emit(cg, "    movq    %%r10, %d(%%rsp)", stage_bytes + i * 8);
         }
+
+        /* Load register args from staging */
+        for (int i = 0; i < nreg; i++)
+            emit(cg, "    movq    %d(%%rsp), %%%s", i * 8, regs[i]);
+
+        /* Free staging — stack args now at [rsp..] */
+        if (stage_bytes > 0)
+            emit(cg, "    addq    $%d, %%rsp", stage_bytes);
+
+        emit(cg, "    call    .Lxly_fn_%s", node->str_value);
+
+        /* Caller cleans up stack args */
+        if (stk_bytes > 0)
+            emit(cg, "    addq    $%d, %%rsp", stk_bytes);
+
         break;
     }
 
@@ -1434,33 +1457,43 @@ static void emit_function(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
         }
     }
 
-    /* spill incoming SysV register args into stack slots */
-    for (size_t i = 0; i < nparams && (i + (size_t)param_reg_start) < 6; i++) {
+    /* spill incoming SysV register args into stack slots.
+     * For closures param_reg_start=1 (rdi=env), so register params cap at
+     * reg index 5, meaning up to (6 - param_reg_start) params in registers. */
+    int nreg_params = 6 - param_reg_start;  /* how many params fit in regs */
+    for (size_t i = 0; i < nparams; i++) {
         int off = var_declare(cg, fn->params[i].name);
-        emit(cg, "    movq    %%%s, %d(%%rbp)", pregs[i + param_reg_start], off);
+        int reg_idx = (int)i + param_reg_start;
+        if (reg_idx < 6) {
+            /* Register-passed arg */
+            emit(cg, "    movq    %%%s, %d(%%rbp)", pregs[reg_idx], off);
+        } else {
+            /* Stack-passed arg: [rbp+16] for param nreg_params,
+             * [rbp+24] for param nreg_params+1, etc.
+             * (rbp+0=saved_rbp, rbp+8=ret_addr, rbp+16=first stack arg) */
+            int stk_slot = (int)(i - (size_t)nreg_params) * 8 + 16;
+            emit(cg, "    movq    %d(%%rbp), %%rax", stk_slot);
+            emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        }
         
         /* Handle optional/default parameters */
         if (fn->params[i].is_optional || fn->params[i].default_value) {
             char lbl_has_arg[64];
             fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
             
-            /* Check if argument is null (not provided) */
             emit(cg, "    movq    %d(%%rbp), %%rax", off);
             emit(cg, "    testq   %%rax, %%rax");
             emit(cg, "    jnz     %s", lbl_has_arg);
             
-            /* Argument not provided - use default */
             if (fn->params[i].default_value) {
-                /* Evaluate default value expression */
                 emit_expr(cg, fn->params[i].default_value);
                 emit(cg, "    movq    %%rax, %d(%%rbp)", off);
-            } else {
-                /* Optional without default - already null */
             }
             
             emit(cg, "%s:", lbl_has_arg);
         }
     }
+    (void)nreg_params; /* suppress unused-variable warning if nparams==0 */
 
     /* body */
     scope_enter(cg);
