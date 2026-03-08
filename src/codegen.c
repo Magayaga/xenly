@@ -1821,7 +1821,8 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         } else {
             /* Build env on stack and call xly_make_closure */
             int env_bytes = ((captures_a.count * 8) + 15) & ~15;
-            sp_sub_a64(cg, env_bytes + 8); /* +8: stash x0 (fn ptr) */
+            int alloc_a = ((env_bytes + 8) + 15) & ~15; /* +8 for fn ptr stash, 16-aligned */
+            sp_sub_a64(cg, alloc_a); /* stash fn ptr at [sp], env[] at [sp+8] */
             emit(cg, "    str     x0, [sp]");  /* save fn ptr */
             for (int i = 0; i < captures_a.count; i++) {
                 int off = var_offset(cg, captures_a.names[i]);
@@ -1832,7 +1833,7 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
             emit(cg, "    add     x1, sp, #8"); /* env array → x1 */
             emit(cg, "    mov     w2, #%d", captures_a.count);
             emit(cg, "    bl      " XLY_SYM("xly_make_closure"));
-            sp_add_a64(cg, env_bytes + 8);
+            sp_add_a64(cg, alloc_a);
         }
         break;
     }
