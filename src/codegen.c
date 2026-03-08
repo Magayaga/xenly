@@ -757,7 +757,8 @@ static void emit_expr(CG *cg, ASTNode *node) {
              * xly_call_fnval(XlyVal *fn, XlyVal **args, int argc)
              *   rdi=fn   rsi=args_ptr   rdx=argc                           */
             int var_off = var_offset(cg, node->str_value);
-            if (var_off != 0) {
+            int gi_fn   = (var_off == 0) ? gvar_find(cg, node->str_value) : -1;
+            if (var_off != 0 || gi_fn >= 0) {
                 /* Build args array on stack */
                 int arr_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
                 if (arr_bytes > 0)
@@ -765,7 +766,11 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 /* Store explicit args (already in regs) into array */
                 for (int i = 0; i < nargs; i++)
                     emit(cg, "    movq    %%%s, %d(%%rsp)", regs[i], i * 8);
-                emit(cg, "    movq    %d(%%rbp), %%rdi", var_off); /* fn_val */
+                /* Load fn_val: local variable or global */
+                if (var_off != 0)
+                    emit(cg, "    movq    %d(%%rbp), %%rdi", var_off);
+                else
+                    emit(cg, "    movq    " XLY_SYM("__xly_globals") "+%d(%%rip), %%rdi", gi_fn * 8);
                 if (nargs > 0)
                     emit(cg, "    movq    %%rsp, %%rsi");           /* args ptr */
                 else
@@ -2084,7 +2089,8 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
             emit(cg, "    bl      .Lxly_fn_%s", node->str_value);
         } else {
             int var_off = var_offset(cg, node->str_value);
-            if (var_off != 0) {
+            int gi_fn_a = (var_off == 0) ? gvar_find(cg, node->str_value) : -1;
+            if (var_off != 0 || gi_fn_a >= 0) {
                 /* Use xly_call_fnval(fn_val, args_array, argc) which handles
                  * both plain fns and closures correctly via the builtin_fn
                  * field (offset 48) and inner env pointer (offset 56).
@@ -2094,13 +2100,20 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
                     sp_sub_a64(cg, arr_bytes);
                 for (int i = 0; i < nargs; i++)
                     emit(cg, "    str     %s, [sp, #%d]", aregs[i], i * 8);
-                /* Load fn_val XlyVal* from variable slot */
-                if (var_off >= -255 && var_off <= 255)
-                    emit(cg, "    ldr     x0, [x29, #%d]", var_off);
-                else {
-                    emit(cg, "    mov     x9, #%d", var_off < 0 ? -var_off : var_off);
-                    if (var_off < 0) emit(cg, "    neg     x9, x9");
-                    emit(cg, "    ldr     x0, [x29, x9]");
+                /* Load fn_val XlyVal*: local variable or global */
+                if (var_off != 0) {
+                    if (var_off >= -255 && var_off <= 255)
+                        emit(cg, "    ldr     x0, [x29, #%d]", var_off);
+                    else {
+                        emit(cg, "    mov     x9, #%d", var_off < 0 ? -var_off : var_off);
+                        if (var_off < 0) emit(cg, "    neg     x9, x9");
+                        emit(cg, "    ldr     x0, [x29, x9]");
+                    }
+                } else {
+                    /* Global variable: load from __xly_globals[gi] */
+                    emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+                    emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+                    emit(cg, "    ldr     x0, [x9, #%d]", gi_fn_a * 8);
                 }
                 if (nargs > 0)
                     emit(cg, "    mov     x1, sp");
@@ -2589,7 +2602,7 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
 }
 
 /* ── emit a user function (ARM64) ────────────────────────────────────────── */
-static void emit_function_a64(CG *cg, ASTNode *fn) {
+static void emit_function_a64(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
     const char *name    = fn->str_value;
     size_t      nparams = fn->param_count;
     ASTNode    *body    = fn->children[0];
@@ -2648,11 +2661,28 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
      * All negative offsets from x29 are within [sp, sp+frame) — safe.
      * Spill slots go below locals, tracked by a64_spill_depth.              */
 
-    /* Spill incoming args (x0–x7) into their stack slots */
+    /* For closures: hidden first arg x0 = XlyVal** __env.
+     * Explicit params are shifted: param[0]->x1, param[1]->x2, etc.
+     * Load captured variables from __env[0..ncaptures-1] into stack slots. */
     static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
-    for (size_t i = 0; i < nparams && i < 8; i++) {
+    int param_reg_start_a = (ncaptures > 0) ? 1 : 0;
+
+    if (ncaptures > 0) {
+        /* Spill __env ptr (x0) into a temp stack slot, then load each capture */
+        int env_slot = var_declare(cg, "__env");
+        safe_str_a64(cg, "x0", env_slot);
+        for (int i = 0; i < ncaptures; i++) {
+            int cslot = var_declare(cg, captures[i]);
+            safe_ldr_a64(cg, "x9", env_slot);            /* x9 = __env ptr */
+            emit(cg, "    ldr     x10, [x9, #%d]", i * 8); /* x10 = env[i] */
+            safe_str_a64(cg, "x10", cslot);               /* store capture */
+        }
+    }
+
+    /* Spill incoming args into their stack slots */
+    for (size_t i = 0; i < nparams && (i + (size_t)param_reg_start_a) < 8; i++) {
         int off = var_declare(cg, fn->params[i].name);
-        safe_str_a64(cg, aregs[i], off);
+        safe_str_a64(cg, aregs[i + param_reg_start_a], off);
 
         if (fn->params[i].is_optional || fn->params[i].default_value) {
             char lbl_has_arg[64];
@@ -2766,7 +2796,7 @@ int codegen(ASTNode *program, const char *outpath) {
 
     /* user-defined functions */
     for (int i = 0; i < cg.func_count; i++)
-        emit_function_a64(&cg, cg.funcs[i].node);
+        emit_function_a64(&cg, cg.funcs[i].node, cg.funcs[i].captures, cg.funcs[i].ncaptures);
 
     /* string literals section */
     emit(&cg, "");
