@@ -312,7 +312,8 @@ static void *thread_worker_func(void *arg) {
         // Resolve the future with the result
         future_set(task->future, result);
         
-        // Clean up task (but not args - they're still referenced)
+        // Free the copied args array (Values already freed by env_destroy above)
+        free(task->args);
         free(task);
     }
     

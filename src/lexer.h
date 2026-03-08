@@ -55,9 +55,13 @@ typedef enum {
     TOKEN_TYPEOF,       // typeof
     TOKEN_INSTANCEOF,   // instanceof
     TOKEN_CONST,        // const (immutable bindings)
+    TOKEN_LET,          // let   (block-scoped mutable, alias for var)
     TOKEN_ENUM,         // enum (algebraic data types)
     TOKEN_MATCH,        // match (pattern matching)
     TOKEN_PIPE,         // | (for enum variants and match patterns)
+    TOKEN_AMPERSAND,    // & — bitwise AND
+    TOKEN_CARET,        // ^ — bitwise XOR
+    TOKEN_TILDE,        // ~ — bitwise NOT
     TOKEN_NAMESPACE,    // namespace (for organizing code)
     TOKEN_TYPE,         // type (for type aliases)
     TOKEN_REQUIRES,     // requires (precondition)
@@ -78,6 +82,8 @@ typedef enum {
     TOKEN_GT,           // >
     TOKEN_LTE,          // <=
     TOKEN_GTE,          // >=
+    TOKEN_SHL,          // << left shift
+    TOKEN_SHR,          // >> right shift
     TOKEN_AND,          // and
     TOKEN_OR,           // or
     TOKEN_NOT,          // not

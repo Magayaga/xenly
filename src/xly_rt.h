@@ -174,4 +174,26 @@ XlyVal *xly_index(XlyVal *collection, XlyVal *index_val);
 /* ── process exit ────────────────────────────────────────────────────────────── */
 void    xly_exit(int code);   /* calls exit() */
 
+/* ── first-class function values ─────────────────────────────────────────────── */
+/* Wrap a raw C function pointer as a VAL_FUNCTION XlyVal* */
+XlyVal *xly_make_fn(void *fp);
+/* Create a closure: fn ptr + captured-variable environment array */
+XlyVal *xly_make_closure(void *fp, XlyVal **env, int env_size);
+/* Get the environment pointer from a closure XlyVal* */
+XlyVal **xly_closure_env(XlyVal *closure);
+/* Call a VAL_FUNCTION XlyVal* with given args */
+XlyVal *xly_call_fnval(XlyVal *fn_val, XlyVal **args, int argc);
+
+/* ── object / instance operations ───────────────────────────────────────────── */
+XlyVal  *xly_obj_new(void);                                    /* create empty object     */
+void     xly_obj_set(XlyVal *obj, const char *key, XlyVal *val); /* set field              */
+XlyVal  *xly_obj_get(XlyVal *obj, const char *key);            /* get field (null if miss) */
+XlyVal  *xly_obj_call(XlyVal *obj, const char *method, XlyVal **args, int argc);
+XlyVal  *xly_this(void);                               /* current method receiver */
+
+/* ── mutable closure capture cells ──────────────────────────────────────────── */
+XlyVal **xly_make_cell(XlyVal *initial);   /* allocate heap cell for mutable capture */
+XlyVal  *xly_cell_get(XlyVal **cell);      /* dereference cell                       */
+void     xly_cell_set(XlyVal **cell, XlyVal *val); /* write through cell              */
+
 #endif /* XLY_RT_H */

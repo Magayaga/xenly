@@ -1,6 +1,10 @@
 // ─── Variables Demo ──────────────────────────────────────
-// var declares a variable. Types are dynamic.
+// Xenly supports three variable keywords:
+//   var   — classic mutable variable (function-scoped)
+//   let   — block-scoped mutable variable
+//   const — immutable binding (must be initialized)
 
+// ── var declarations ──────────────────────────────────────
 var name = "Xenly"
 var version = 0.1
 var is_cool = true
@@ -11,15 +15,32 @@ print("Version:", version)
 print("Cool?", is_cool)
 print("Nothing:", nothing)
 
-// ── Reassignment ──────────────────────────────────────────
-name = "Xenly Lang"
-print("Updated name:", name)
+// ── let declarations ──────────────────────────────────────
+let language = "Xenly"
+let major: number = 1
+let greeting = "Hello, " + language + "!"
 
-// ── String concatenation with + ──────────────────────────
-var greeting = "Hello, " + name + "!"
+print("Language (let):", language)
+print("Major version:", major)
 print(greeting)
 
-// ── Arithmetic ────────────────────────────────────────────
+// ── const declarations ────────────────────────────────────
+const PI = 3.14159265358979
+const MAX_RETRIES = 5
+const APP_NAME = "XenlyApp"
+
+print("PI:", PI)
+print("Max retries:", MAX_RETRIES)
+print("App:", APP_NAME)
+
+// ── Reassignment (var and let are mutable) ────────────────
+name = "Xenly Lang"
+print("Updated var name:", name)
+
+language = "Xenly Language"
+print("Updated let language:", language)
+
+// ── Arithmetic with var ───────────────────────────────────
 var x = 10
 var y = 3
 print("x + y =", x + y)
@@ -27,6 +48,12 @@ print("x - y =", x - y)
 print("x * y =", x * y)
 print("x / y =", x / y)
 print("x % y =", x % y)
+
+// ── Arithmetic with let ───────────────────────────────────
+let a = 20
+let b = 4
+print("a + b =", a + b)
+print("a * b =", a * b)
 
 // ── Compound assignment ──────────────────────────────────
 x += 5
@@ -42,3 +69,8 @@ print("x after ++:", x)
 x--
 x--
 print("x after -- twice:", x)
+
+// ── let in a for loop ─────────────────────────────────────
+for (let i = 0; i < 3; i++) {
+    print("loop i:", i)
+}

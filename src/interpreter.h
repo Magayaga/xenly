@@ -70,6 +70,7 @@ struct Value {
     int           boolean;
     int           local;            // 1 = local wrapper, freed by env_destroy (e.g. __super__)
     int           fn_shared;        // 1 = FnDef is a shared reference (don't free on destroy)
+    int           refcount;         // deep-destroy refcount: >1 means multiple env bindings point here
     FnDef        *fn;               // for VAL_FUNCTION
     NativeFn      builtin_fn;       // for VAL_BUILTIN_FN
     Value        *inner;            // for VAL_RETURN: wraps the actual return value
@@ -119,6 +120,7 @@ typedef struct {
     char        *filepath;      // resolved absolute/relative path for dedup
     Environment *exports;       // exported names → Values (flat env, no parent)
     ASTNode     *ast;           // parsed AST — must outlive the module (FnDef bodies point here)
+    int          shared_exports; // 1 = exports is an alias (don't free at shutdown)
 } UserModule;
 
 // ─── Async Task (for spawn) ──────────────────────────────────────────────────
@@ -155,6 +157,16 @@ typedef struct {
     Value      **all_arrays;        // flat array of every VAL_ARRAY ever created
     size_t       all_arrays_count;
     size_t       all_arrays_cap;
+
+    // Variant registry: all allocated enum variants, freed at shutdown
+    Value      **all_variants;
+    size_t       all_variants_count;
+    size_t       all_variants_cap;
+
+    // Instance registry: all allocated VAL_INSTANCE objects, freed at shutdown
+    Value      **all_instances;
+    size_t       all_instances_count;
+    size_t       all_instances_cap;
 } Interpreter;
 
 // ─── API ─────────────────────────────────────────────────────────────────────

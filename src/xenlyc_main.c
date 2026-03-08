@@ -13,6 +13,11 @@
  *   source.xe  →  lexer  →  parser  →  AST  →  codegen  →  .s
  *   .s  →  as  →  .o  →  gcc/clang (link)  →  ELF/Mach-O binary
  *
+ * v0.1.0: Variable keyword update
+ *   • Added 'let' keyword — block-scoped mutable variable (semantic alias for var)
+ *   • 'var', 'let', 'const' now all supported in native compilation
+ *   • 'let' works in for-loops: for (let x in arr) and for (let i = 0; ...)
+ *
  * v0.1.0: Systems programming compiler upgrade
  *   • --opt <0-3>       Optimization level (default: 2)
  *   • --verbose         Annotate assembly + show codegen stats
@@ -105,25 +110,65 @@ static double now_ms(void) {
  * the parser and understanding what the code generator sees.
  * ══════════════════════════════════════════════════════════════════════════════ */
 static const char *node_type_name(int type) {
+    /* Map matches NodeType enum order in ast.h */
+    static const char *names[] = {
+        "PROGRAM",        /*  0 */
+        "VAR_DECL",       /*  1 */
+        "ASSIGN",         /*  2 */
+        "COMPOUND_ASSIGN",/*  3 */
+        "INCREMENT",      /*  4 */
+        "DECREMENT",      /*  5 */
+        "FN_DECL",        /*  6 */
+        "FN_CALL",        /*  7 */
+        "RETURN",         /*  8 */
+        "IF",             /*  9 */
+        "WHILE",          /* 10 */
+        "FOR",            /* 11 */
+        "FOR_IN",         /* 12 */
+        "BREAK",          /* 13 */
+        "CONTINUE",       /* 14 */
+        "DO_WHILE",       /* 15 */
+        "SWITCH",         /* 16 */
+        "TERNARY",        /* 17 */
+        "PRINT",          /* 18 */
+        "INPUT",          /* 19 */
+        "IMPORT",         /* 20 */
+        "BLOCK",          /* 21 */
+        "BINARY",         /* 22 */
+        "UNARY",          /* 23 */
+        "NUMBER",         /* 24 */
+        "STRING",         /* 25 */
+        "BOOL",           /* 26 */
+        "NULL",           /* 27 */
+        "IDENTIFIER",     /* 28 */
+        "METHOD_CALL",    /* 29 */
+        "EXPR_STMT",      /* 30 */
+    };
+    /* Sparse high-range nodes */
     switch (type) {
-        case 0:  return "PROGRAM";      case 1:  return "NUMBER";
-        case 2:  return "STRING";       case 3:  return "BOOL";
-        case 4:  return "NULL";         case 5:  return "IDENTIFIER";
-        case 6:  return "BINARY";       case 7:  return "UNARY";
-        case 8:  return "VAR_DECL";     case 9:  return "CONST_DECL";
-        case 10: return "ASSIGN";       case 11: return "COMPOUND_ASSIGN";
-        case 12: return "IF";           case 13: return "WHILE";
-        case 14: return "FOR";          case 15: return "FOR_IN";
-        case 16: return "BLOCK";        case 17: return "PRINT";
-        case 18: return "FN_DECL";      case 19: return "FN_CALL";
-        case 20: return "RETURN";       case 21: return "IMPORT";
-        case 22: return "METHOD_CALL";  case 23: return "BREAK";
-        case 24: return "CONTINUE";     case 25: return "INCREMENT";
-        case 26: return "DECREMENT";    case 27: return "TYPEOF";
-        case 28: return "ARRAY_LITERAL";case 29: return "INDEX";
-        case 30: return "EXPR_STMT";
-        default: return "?";
+        case 32: return "CLASS_DECL";
+        case 33: return "NEW";
+        case 34: return "THIS";
+        case 35: return "SUPER_CALL";
+        case 36: return "PROPERTY_GET";
+        case 37: return "PROPERTY_SET";
+        case 40: return "TYPEOF";
+        case 41: return "INSTANCEOF";
+        case 42: return "CALL_EXPR";
+        case 45: return "EXPORT";
+        case 48: return "SPAWN";
+        case 49: return "AWAIT";
+        case 52: return "ARRAY_LITERAL";
+        case 53: return "ARROW_FN";
+        case 54: return "NULLISH";
+        case 55: return "INDEX";
+        case 56: return "CONST_DECL";
+        case 57: return "LET_DECL";
+        case 58: return "ENUM_DECL";
     }
+    if (type >= 0 && type < (int)(sizeof(names)/sizeof(names[0])))
+        return names[type];
+    return "?";
 }
 
 static void dump_ast(ASTNode *node, int depth) {
@@ -196,6 +241,7 @@ static void print_usage(const char *prog) {
 
 static void print_version(void) {
     printf("\n  %sxenlyc%s v0.1.0  (Xenly native compiler)\n", COL("1;36"), RESET);
+    printf("  Variable keywords: var, let (block-scoped mutable), const (immutable)\n");
     printf("  Systems programming tier — O2 with sys constant inlining\n");
     printf("  Targets: x86-64 (Linux/BSD), AArch64 (macOS Apple Silicon)\n\n");
 }

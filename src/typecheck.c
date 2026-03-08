@@ -173,7 +173,8 @@ static char *infer_type(ASTNode *node, TypeEnv *env, TypeCheckMode mode, int *er
             return type ? strdup(type) : strdup("any");
         }
         
-        case NODE_VAR_DECL: {
+        case NODE_VAR_DECL:
+        case NODE_LET_DECL: {
             char *declared_type = node->type_annotation ? node->type_annotation : "any";
             char *inferred_type = NULL;
             

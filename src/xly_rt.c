@@ -41,37 +41,65 @@
 
 /* ── internal struct layout ─────────────────────────────────────────────
  * Must match interpreter.h  Value / ValueType exactly so that modules.c
- * functions (which take Value**) work unchanged.                          */
+ * functions (which take Value**) work unchanged.
+ *
+ * Exact enum values from interpreter.h (sequential, starting at 0):
+ *   VAL_NUMBER=0  VAL_STRING=1  VAL_BOOL=2    VAL_NULL=3
+ *   VAL_FUNCTION=4  VAL_BUILTIN_FN=5  VAL_RETURN=6  VAL_BREAK=7
+ *   VAL_CONTINUE=8  VAL_CLASS=9  VAL_INSTANCE=10  VAL_ARRAY=11
+ *   VAL_ENUM_VARIANT=12
+ *
+ * Exact field offsets (64-bit):
+ *   type=0  num=8  str=16  boolean=24  local=28  fn_shared=32  refcount=36
+ *   fn=40  builtin_fn=48  inner=56  class_def=64  instance=72
+ *   array=80  array_len=88  array_cap=96
+ *                                                                         */
 
 typedef enum {
-    VAL_NUMBER   = 0,
-    VAL_STRING   = 1,
-    VAL_BOOL     = 2,
-    VAL_NULL     = 3,
-    VAL_FUNCTION = 4,
-    VAL_RETURN   = 5,
-    VAL_CLASS    = 6,
-    VAL_INSTANCE = 7,
-    VAL_ARRAY    = 8,
-    VAL_BREAK    = 9,
-    VAL_CONTINUE = 10,
+    VAL_NUMBER      = 0,
+    VAL_STRING      = 1,
+    VAL_BOOL        = 2,
+    VAL_NULL        = 3,
+    VAL_FUNCTION    = 4,
+    VAL_BUILTIN_FN  = 5,   /* built-in C function (interpreter only)     */
+    VAL_RETURN      = 6,   /* sentinel: wraps a return value              */
+    VAL_BREAK       = 7,   /* sentinel: signals break                     */
+    VAL_CONTINUE    = 8,   /* sentinel: signals continue                  */
+    VAL_CLASS       = 9,   /* a class definition                          */
+    VAL_INSTANCE    = 10,  /* an instantiated object                      */
+    VAL_ARRAY       = 11,  /* a dynamic array of Values                   */
+    VAL_ENUM_VARIANT= 12,  /* an ADT variant instance                     */
 } ValType;
 
 /* Forward-declare the fields that modules.c touches.  We keep the struct
- * layout byte-for-byte identical to interpreter.h's Value.               */
+ * layout byte-for-byte identical to interpreter.h's Value.
+ *
+ * IMPORTANT: For compiled code, the raw function pointer (code label) is
+ * stored in the `builtin_fn` slot (offset 48).  The `fn` slot (offset 40)
+ * is kept NULL so modules.c does not mistake this for an interpreter FnDef.
+ * `inner` (offset 56) is reused to store the closure env pointer.         */
 struct XlyVal {
-    ValType   type;
-    double    num;
-    char     *str;
-    int       boolean;
-    int       local;
-    void     *fn;          /* FnDef* — unused in compiled code */
-    struct XlyVal *inner;  /* VAL_RETURN wrapper — unused      */
-    void     *class_def;   /* ClassDef* — unused               */
-    void     *instance;    /* InstanceData* — unused           */
-    struct XlyVal **array; /* VAL_ARRAY elements               */
-    size_t    array_len;
-    size_t    array_cap;
+    ValType   type;          /* offset  0 — 4 bytes + 4 pad               */
+    double    num;           /* offset  8                                  */
+    char     *str;           /* offset 16                                  */
+    int       boolean;       /* offset 24                                  */
+    int       local;         /* offset 28                                  */
+    int       fn_shared;     /* offset 32 — must exist; unused at runtime  */
+    int       refcount;      /* offset 36 — must exist; unused at runtime  */
+    void     *fn;            /* offset 40 — FnDef* in interp; NULL here    */
+    void     *builtin_fn;    /* offset 48 — raw fn ptr for compiled fns    */
+    struct XlyVal *inner;    /* offset 56 — closure env ptr (reused)       */
+    void     *class_def;     /* offset 64 — unused in compiled code        */
+    void     *instance;      /* offset 72 — unused in compiled code        */
+    struct XlyVal **array;   /* offset 80 — VAL_ARRAY elements             */
+    size_t    array_len;     /* offset 88                                  */
+    size_t    array_cap;     /* offset 96                                  */
+    /* variant struct at offset 104 — unused, but sizeof matches Value */
+    struct {
+        char            *tag;
+        struct XlyVal  **fields;
+        size_t           field_count;
+    } variant;               /* offset 104                                 */
 };
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -678,13 +706,192 @@ XlyVal *xly_index(XlyVal *collection, XlyVal *index_val) {
 
 void xly_exit(int code) { exit(code); }
 
+/* ── first-class function values ──────────────────────────────────────────── */
+
+/* Wrap a raw C function pointer as a VAL_FUNCTION XlyVal*.
+ * The raw code pointer is stored in `builtin_fn` (offset 48).
+ * `fn` (offset 40) is kept NULL so modules.c does not confuse this
+ * for an interpreter FnDef*.  `inner` (offset 56) stays NULL → plain fn. */
+XlyVal *xly_make_fn(void *fp) {
+    XlyVal *v = calloc(1, sizeof(XlyVal));
+    v->type       = VAL_FUNCTION;
+    v->builtin_fn = fp;   /* raw code pointer — offset 48 */
+    return v;
+}
+
+/* Create a closure: function pointer + captured environment.
+ * The environment is a heap-allocated array of XlyVal* values.
+ * Stored in `inner` (offset 56).  `builtin_fn` (offset 48) holds the ptr. */
+XlyVal *xly_make_closure(void *fp, XlyVal **env, int env_size) {
+    XlyVal *v = calloc(1, sizeof(XlyVal));
+    v->type       = VAL_FUNCTION;
+    v->builtin_fn = fp;   /* raw code pointer — offset 48 */
+    if (env_size > 0 && env) {
+        XlyVal **captured = malloc(sizeof(XlyVal*) * (size_t)env_size);
+        memcpy(captured, env, sizeof(XlyVal*) * (size_t)env_size);
+        v->inner = (XlyVal*)captured;  /* closure env — offset 56 */
+    }
+    return v;
+}
+
+/* Get the environment pointer from a closure XlyVal* (NULL if none). */
+XlyVal **xly_closure_env(XlyVal *closure) {
+    if (!closure || closure->type != VAL_FUNCTION) return NULL;
+    return (XlyVal**)closure->inner;
+}
+
+/* Call a VAL_FUNCTION XlyVal* with 0–6 args.
+ * For plain functions (inner == NULL): call builtin_fn(args[0], ...)
+ * For closures (inner != NULL):        call builtin_fn(env, args[0], ...) */
+XlyVal *xly_call_fnval(XlyVal *fn_val, XlyVal **args, int argc) {
+    if (!fn_val || fn_val->type != VAL_FUNCTION || !fn_val->builtin_fn)
+        return xly_null();
+    XlyVal **env = (XlyVal**)fn_val->inner;  /* NULL for plain fns */
+    typedef XlyVal *(*F0)(void);
+    typedef XlyVal *(*F1)(XlyVal*);
+    typedef XlyVal *(*F2)(XlyVal*,XlyVal*);
+    typedef XlyVal *(*F3)(XlyVal*,XlyVal*,XlyVal*);
+    typedef XlyVal *(*F4)(XlyVal*,XlyVal*,XlyVal*,XlyVal*);
+    typedef XlyVal *(*F5)(XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*);
+    typedef XlyVal *(*F6)(XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*);
+    typedef XlyVal *(*F7)(XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*);
+    if (!env) {
+        /* Plain function — call with args directly */
+        switch (argc) {
+            case 0: return ((F0)fn_val->builtin_fn)();
+            case 1: return ((F1)fn_val->builtin_fn)(args[0]);
+            case 2: return ((F2)fn_val->builtin_fn)(args[0],args[1]);
+            case 3: return ((F3)fn_val->builtin_fn)(args[0],args[1],args[2]);
+            case 4: return ((F4)fn_val->builtin_fn)(args[0],args[1],args[2],args[3]);
+            case 5: return ((F5)fn_val->builtin_fn)(args[0],args[1],args[2],args[3],args[4]);
+            case 6: return ((F6)fn_val->builtin_fn)(args[0],args[1],args[2],args[3],args[4],args[5]);
+            default: return xly_null();
+        }
+    } else {
+        /* Closure — prepend env as first hidden arg */
+        switch (argc) {
+            case 0: return ((F1)fn_val->builtin_fn)((XlyVal*)env);
+            case 1: return ((F2)fn_val->builtin_fn)((XlyVal*)env,args[0]);
+            case 2: return ((F3)fn_val->builtin_fn)((XlyVal*)env,args[0],args[1]);
+            case 3: return ((F4)fn_val->builtin_fn)((XlyVal*)env,args[0],args[1],args[2]);
+            case 4: return ((F5)fn_val->builtin_fn)((XlyVal*)env,args[0],args[1],args[2],args[3]);
+            case 5: return ((F6)fn_val->builtin_fn)((XlyVal*)env,args[0],args[1],args[2],args[3],args[4]);
+            case 6: return ((F7)fn_val->builtin_fn)((XlyVal*)env,args[0],args[1],args[2],args[3],args[4],args[5]);
+            default: return xly_null();
+        }
+    }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
- * INTERPRETER-API COMPATIBILITY SHIMS
+ * OBJECT / INSTANCE OPERATIONS
  *
- * modules.c calls value_number(), value_string(), etc.  Those live in
- * interpreter.c in the interpreter build.  For compiled binaries, we provide
- * them here, each delegating to the xly_* equivalent.
+ * Compiled Xenly object literals { key: val, ... } use VAL_INSTANCE with
+ * a flat key-value store allocated in the `instance` field.
+ * Layout: XlyObjStore { char **keys; XlyVal **vals; size_t count; size_t cap; }
  * ══════════════════════════════════════════════════════════════════════════════ */
+
+typedef struct {
+    char    **keys;
+    XlyVal  **vals;
+    size_t    count;
+    size_t    cap;
+} XlyObjStore;
+
+/* Create an empty object (VAL_INSTANCE). */
+XlyVal *xly_obj_new(void) {
+    XlyVal *v = (XlyVal*)calloc(1, sizeof(XlyVal));
+    v->type = VAL_INSTANCE;
+    XlyObjStore *s = (XlyObjStore*)calloc(1, sizeof(XlyObjStore));
+    s->cap  = 4;
+    s->keys = (char**)malloc(sizeof(char*) * s->cap);
+    s->vals = (XlyVal**)malloc(sizeof(XlyVal*) * s->cap);
+    v->instance = s;
+    return v;
+}
+
+/* Set (or add) a field on an object. */
+void xly_obj_set(XlyVal *obj, const char *key, XlyVal *val) {
+    if (!obj || obj->type != VAL_INSTANCE || !key) return;
+    XlyObjStore *s = (XlyObjStore*)obj->instance;
+    if (!s) return;
+    for (size_t i = 0; i < s->count; i++) {
+        if (strcmp(s->keys[i], key) == 0) { s->vals[i] = val; return; }
+    }
+    if (s->count >= s->cap) {
+        s->cap *= 2;
+        s->keys = (char**)realloc(s->keys, sizeof(char*) * s->cap);
+        s->vals = (XlyVal**)realloc(s->vals, sizeof(XlyVal*) * s->cap);
+    }
+    s->keys[s->count] = strdup(key);
+    s->vals[s->count] = val;
+    s->count++;
+}
+
+/* Get a field from an object (returns xly_null() if not found). */
+XlyVal *xly_obj_get(XlyVal *obj, const char *key) {
+    if (!obj || !key) return xly_null();
+    if (obj->type == VAL_INSTANCE) {
+        XlyObjStore *s = (XlyObjStore*)obj->instance;
+        if (s) {
+            for (size_t i = 0; i < s->count; i++)
+                if (strcmp(s->keys[i], key) == 0) return s->vals[i];
+        }
+        return xly_null();
+    }
+    /* Support field access on arrays too: .length */
+    if (obj->type == VAL_ARRAY) {
+        if (strcmp(key, "length") == 0) return xly_num((double)obj->array_len);
+        return xly_null();
+    }
+    return xly_null();
+}
+
+/* ── this / self support ─────────────────────────────────────────────────
+ * When a method is called via xly_obj_call, we store the receiver object
+ * in a global so compiled functions can retrieve it via xly_this().
+ * This is not thread-safe, but matches the single-threaded interpreter.   */
+static XlyVal *g_this = NULL;
+XlyVal *xly_this(void) { return g_this ? g_this : xly_null(); }
+
+/* Call a method on an object: obj.method(args, argc).
+ * Looks up field `method` on `obj`; if it's a VAL_FUNCTION, calls it.
+ * Sets g_this = obj so `this` is accessible inside the method body. */
+XlyVal *xly_obj_call(XlyVal *obj, const char *method, XlyVal **args, int argc) {
+    XlyVal *fn_val = xly_obj_get(obj, method);
+    if (!fn_val || fn_val->type != VAL_FUNCTION) return xly_null();
+    XlyVal *prev_this = g_this;
+    g_this = obj;
+    XlyVal *result = xly_call_fnval(fn_val, args, argc);
+    g_this = prev_this;
+    return result;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * MUTABLE CLOSURE CAPTURE CELLS
+ *
+ * For `var` variables captured by closures, we use a heap-allocated cell
+ * (a single XlyVal* on the heap).  All closures sharing the capture hold a
+ * pointer to the SAME cell, so mutations are visible across calls.
+ *
+ * xly_make_cell(val) → XlyVal** (heap pointer, initially pointing to val)
+ * xly_cell_get(cell) → XlyVal*
+ * xly_cell_set(cell, val)
+ * ══════════════════════════════════════════════════════════════════════════════ */
+
+XlyVal **xly_make_cell(XlyVal *initial) {
+    XlyVal **cell = (XlyVal**)malloc(sizeof(XlyVal*));
+    *cell = initial;
+    return cell;
+}
+
+XlyVal *xly_cell_get(XlyVal **cell) {
+    return cell ? *cell : xly_null();
+}
+
+void xly_cell_set(XlyVal **cell, XlyVal *val) {
+    if (cell) *cell = val;
+}
+
 
 XlyVal *value_number(double n)        { return xly_num(n);   }
 XlyVal *value_string(const char *s)   { return xly_str(s);   }

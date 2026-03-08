@@ -71,7 +71,9 @@ typedef enum {
     NODE_ARROW_FN,          // (params) => expr  — arrow function
     NODE_NULLISH,           // expr ?? default  — null coalescing
     NODE_INDEX,             // arr[index]  — array/object indexing
+    NODE_INDEX_ASSIGN,      // arr[index] = expr  — array/object index assignment
     NODE_CONST_DECL,        // const x = expr  — immutable binding
+    NODE_LET_DECL,          // let x = expr    — block-scoped mutable (alias for var)
     NODE_ENUM_DECL,         // enum Option { Some(value), None }  — algebraic data type
     NODE_ENUM_VARIANT,      // Some(value)  — enum variant construction
     NODE_MATCH,             // match expr { pattern => expr, ... }  — pattern matching
