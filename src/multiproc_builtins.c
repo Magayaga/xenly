@@ -21,6 +21,22 @@
 // Global pools (initialized on first use via the built-in functions)
 
 // ─── Thread Pool Functions ────────────────────────────────────────────────────
+
+// Shallow copy of a Value — needed for passing args to worker threads since
+// the original Value objects are freed by the main thread after the builtin returns.
+static Value *value_copy_shallow(Value *v) {
+    if (!v) return value_null();
+    switch (v->type) {
+        case VAL_NUMBER: return value_number(v->num);
+        case VAL_STRING: return value_string(v->str);
+        case VAL_BOOL:   return value_bool(v->boolean);
+        case VAL_NULL:   return value_null();
+        // Shared types (function, array, instance, variant) — pass pointer directly,
+        // they are not freed by value_destroy so they remain valid in the worker.
+        default: return v;
+    }
+}
+
 Value *builtin_thread_pool_create(Value **args, size_t argc) {
     if (argc < 1 || args[0]->type != VAL_NUMBER) {
         fprintf(stderr, "thread_pool_create expects (num_workers: number)\n");
@@ -47,8 +63,15 @@ Value *builtin_thread_pool_submit(Value **args, size_t argc) {
     }
     
     FnDef *fn = args[1]->fn;
-    Value **fn_args = (argc > 2) ? &args[2] : NULL;
     size_t fn_argc = (argc > 2) ? argc - 2 : 0;
+    // Copy fn_args: caller's args[] is freed after this builtin returns,
+    // but the worker thread needs the values to outlive this call.
+    Value **fn_args = NULL;
+    if (fn_argc > 0) {
+        fn_args = (Value **)malloc(sizeof(Value *) * fn_argc);
+        for (size_t i = 0; i < fn_argc; i++)
+            fn_args[i] = value_copy_shallow(args[i + 2]);
+    }
     
     Future *fut = thread_pool_submit(pool, fn, fn_args, fn_argc);
     return value_number((double)(uintptr_t)fut);
@@ -119,7 +142,8 @@ Value *builtin_channel_send(Value **args, size_t argc) {
     }
     
     Channel *chan = (Channel *)(uintptr_t)args[0]->num;
-    Value *data = args[1];
+    // Copy the value: caller frees the original args after this builtin returns
+    Value *data = value_copy_shallow(args[1]);
     
     int result = channel_send(chan, data);
     return value_number((double)result);

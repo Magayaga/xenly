@@ -44,10 +44,10 @@ static void skip_comment(Lexer *l) {
     char c = lexer_peek(l);
     char n = lexer_peek_next(l);
     
-    // Single-line comment: //
-    if (c == '/' && n == '/') {
-        lexer_advance(l); // skip first /
-        lexer_advance(l); // skip second /
+    // Single-line comment: // or #
+    if ((c == '/' && n == '/') || c == '#') {
+        if (c == '/') { lexer_advance(l); lexer_advance(l); } // skip //
+        else lexer_advance(l);  // skip #
         while (l->pos < l->length && lexer_peek(l) != '\n')
             lexer_advance(l);
         return;
@@ -164,11 +164,11 @@ void token_destroy(Token *t) {
 Token lexer_next_token(Lexer *l) {
     skip_whitespace_no_newline(l);
 
-    // Skip comments (// or /* */)
+    // Skip comments (// /* */ or #)
     while (1) {
         char c = lexer_peek(l);
         char n = lexer_peek_next(l);
-        if ((c == '/' && n == '/') || (c == '/' && n == '*')) {
+        if ((c == '/' && n == '/') || (c == '/' && n == '*') || c == '#') {
             skip_comment(l);
             skip_whitespace_no_newline(l);
         } else {
@@ -280,6 +280,20 @@ Token lexer_next_token(Lexer *l) {
     if (isdigit(c) || (c == '.' && isdigit(lexer_peek_next(l)))) {
         char buf[64];
         int len = 0;
+        // Hex literal: 0x... or 0X...
+        if (c == '0' && (lexer_peek_next(l) == 'x' || lexer_peek_next(l) == 'X')) {
+            lexer_advance(l);  // consume '0'
+            buf[len++] = '0';
+            buf[len++] = lexer_advance(l);  // consume 'x' or 'X'
+            while (l->pos < l->length && isxdigit((unsigned char)lexer_peek(l)))
+                buf[len++] = lexer_advance(l);
+            buf[len] = '\0';
+            // Convert hex string to decimal string for the runtime
+            long long hval = strtoll(buf, NULL, 16);
+            char decbuf[32];
+            snprintf(decbuf, sizeof(decbuf), "%lld", hval);
+            return make_token(TOKEN_NUMBER, decbuf, startLine, startCol);
+        }
         while (l->pos < l->length && (isdigit(lexer_peek(l)) || lexer_peek(l) == '.'))
             buf[len++] = lexer_advance(l);
         buf[len] = '\0';
@@ -343,9 +357,11 @@ Token lexer_next_token(Lexer *l) {
             return make_token(TOKEN_ERROR, "!", startLine, startCol);
         case '<':
             if (n == '=') { lexer_advance(l); return make_token(TOKEN_LTE,  "<=", startLine, startCol); }
+            if (n == '<') { lexer_advance(l); return make_token(TOKEN_SHL,  "<<", startLine, startCol); }
             return make_token(TOKEN_LT,  "<", startLine, startCol);
         case '>':
             if (n == '=') { lexer_advance(l); return make_token(TOKEN_GTE,  ">=", startLine, startCol); }
+            if (n == '>') { lexer_advance(l); return make_token(TOKEN_SHR,  ">>", startLine, startCol); }
             return make_token(TOKEN_GT,  ">", startLine, startCol);
         case '+':
             if (n == '=') { lexer_advance(l); return make_token(TOKEN_PLUSEQ,    "+=", startLine, startCol); }
@@ -382,6 +398,9 @@ Token lexer_next_token(Lexer *l) {
         case ':': return make_token(TOKEN_COLON,     ":", startLine, startCol);
         case ';': return make_token(TOKEN_SEMICOLON,";", startLine, startCol);
         case '|': return make_token(TOKEN_PIPE,      "|", startLine, startCol);
+        case '&': return make_token(TOKEN_AMPERSAND, "&", startLine, startCol);
+        case '^': return make_token(TOKEN_CARET,     "^", startLine, startCol);
+        case '~': return make_token(TOKEN_TILDE,     "~", startLine, startCol);
     }
 
     // ── Unknown ──────────────────────────────────────────────────────────────

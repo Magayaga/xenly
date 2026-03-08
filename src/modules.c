@@ -602,6 +602,30 @@ Module module_math(void) {
 // STRING MODULE  — length, case, search, slice, pad, split, join, trim, …
 // ═════════════════════════════════════════════════════════════════════════════
 
+static Value *str_toString(Value **args, size_t argc) {
+    if (argc < 1) return value_string("null");
+    Value *v = args[0];
+    if (v->type == VAL_STRING) return value_string(v->str);
+    if (v->type == VAL_NULL)   return value_string("null");
+    if (v->type == VAL_BOOL)   return value_string(v->boolean ? "true" : "false");
+    if (v->type == VAL_NUMBER) {
+        char buf[64];
+        if (v->num == (long long)v->num) snprintf(buf, sizeof(buf), "%lld", (long long)v->num);
+        else snprintf(buf, sizeof(buf), "%g", v->num);
+        return value_string(buf);
+    }
+    return value_string("[object]");
+}
+
+static Value *str_toNumber(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0);
+    Value *v = args[0];
+    if (v->type == VAL_NUMBER) return value_number(v->num);
+    if (v->type == VAL_STRING) return value_number(strtod(v->str, NULL));
+    if (v->type == VAL_BOOL)   return value_number(v->boolean ? 1.0 : 0.0);
+    return value_number(0);
+}
+
 static Value *str_len(Value **args, size_t argc) {
     if (argc < 1 || args[0]->type != VAL_STRING) return value_number(0);
     return value_number((double)strlen(args[0]->str));
@@ -932,6 +956,8 @@ static Value *str_normalize(Value **args, size_t argc) {
 
 static NativeFunc string_fns[] = {
     { "len",           str_len },
+    { "toString",      str_toString },
+    { "toNumber",      str_toNumber },
     { "upper",         str_upper },
     { "lower",         str_lower },
     { "contains",      str_contains },
@@ -2017,6 +2043,9 @@ static Value *type_isArray(Value **args, size_t argc) {
 static Value *type_isFunction(Value **args, size_t argc) {
     return value_bool(argc >= 1 && args[0]->type == VAL_FUNCTION);
 }
+static Value *type_isObject(Value **args, size_t argc) {
+    return value_bool(argc >= 1 && args[0]->type == VAL_INSTANCE);
+}
 static Value *type_typeOf(Value **args, size_t argc) {
     // Mirrors the typeof keyword but callable
     if (argc < 1) return value_string("null");
@@ -2045,9 +2074,11 @@ static NativeFunc type_fns[] = {
     { "isNumber",   type_isNumber },
     { "isString",   type_isString },
     { "isBool",     type_isBool },
+    { "isBoolean",  type_isBool },    // alias
     { "isNull",     type_isNull },
     { "isArray",    type_isArray },
     { "isFunction", type_isFunction },
+    { "isObject",   type_isObject },
     { "typeOf",     type_typeOf },
     { NULL, NULL }
 };
