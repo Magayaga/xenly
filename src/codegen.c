@@ -88,6 +88,14 @@ typedef struct {
     struct { char *name; int offset; int depth; } *vars;
     int     var_count, var_cap;
 
+    /* global variable table: top-level vars accessible from any function.
+     * These are stored in a fixed-size BSS block (__xly_globals) and
+     * accessed via global pointer loads rather than rbp-relative.
+     * global_offset[i] = byte offset into __xly_globals for the i-th global. */
+    struct { char *name; int index; } *gvars;
+    int     gvar_count, gvar_cap;
+    int     in_main_scope;  /* 1 while emitting main() top-level statements */
+
     int     scope_depth;
     int     frame_offset;       /* next free slot (negative, grows down)   */
 
@@ -160,6 +168,37 @@ static int var_find(CG *cg, const char *name) {
         if (strcmp(cg->vars[i].name, name) == 0) return i;
     return -1;
 }
+
+/* ── global variable table ──────────────────────────────────────────────── */
+/* Top-level const/var declarations are stored in global pointer slots so
+ * user functions can read them.  Each gets an index; the BSS block is
+ * __xly_globals (array of XlyVal*).
+ *
+ * gvar_find() returns the global index, or -1 if not global.
+ * Global read:  movq __xly_globals+index*8(%rip), %rax  (x86-64)
+ * Global write: movq %rax, __xly_globals+index*8(%rip)
+ */
+static int gvar_find(CG *cg, const char *name) {
+    for (int i = 0; i < cg->gvar_count; i++)
+        if (strcmp(cg->gvars[i].name, name) == 0) return cg->gvars[i].index;
+    return -1;
+}
+static int gvar_declare(CG *cg, const char *name) {
+    int existing = gvar_find(cg, name);
+    if (existing >= 0) return existing;
+    if (cg->gvar_count >= cg->gvar_cap) {
+        cg->gvar_cap = cg->gvar_cap ? cg->gvar_cap * 2 : 16;
+        cg->gvars = realloc(cg->gvars, sizeof(cg->gvars[0]) * (size_t)cg->gvar_cap);
+    }
+    int idx = cg->gvar_count;
+    cg->gvars[cg->gvar_count].name  = strdup(name);
+    cg->gvars[cg->gvar_count].index = idx;
+    cg->gvar_count++;
+    return idx;
+}
+
+/* var_offset: returns rbp-relative offset if found locally, 0 if not found.
+ * For globals, callers check gvar_find() separately. */
 static int var_offset(CG *cg, const char *name) {
     int i = var_find(cg, name);
     return i >= 0 ? cg->vars[i].offset : 0;
@@ -408,15 +447,26 @@ static void emit_expr(CG *cg, ASTNode *node) {
         int off = var_offset(cg, node->str_value);
         if (off != 0) {
             emit(cg, "    movq    %d(%%rbp), %%rax", off);
-        } else if (fn_name_is_declared(cg, node->str_value)) {
-            /* Declared function used as a value — wrap its address as XlyVal* */
-            emit(cg, "    leaq    .Lxly_fn_%s(%%rip), %%rdi", node->str_value);
-            emit(cg, "    call    " XLY_SYM("xly_make_fn"));
         } else {
-            emit(cg, "    call    " XLY_SYM("xly_null"));   /* undefined → null */
+            int gi = gvar_find(cg, node->str_value);
+            if (gi >= 0) {
+                /* Global variable: load from __xly_globals array */
+                emit(cg, "    movq    " XLY_SYM("__xly_globals") "+%d(%%rip), %%rax", gi * 8);
+            } else if (fn_name_is_declared(cg, node->str_value)) {
+                /* Declared function used as a value — wrap its address as XlyVal* */
+                emit(cg, "    leaq    .Lxly_fn_%s(%%rip), %%rdi", node->str_value);
+                emit(cg, "    call    " XLY_SYM("xly_make_fn"));
+            } else {
+                emit(cg, "    call    " XLY_SYM("xly_null"));   /* undefined → null */
+            }
         }
         break;
     }
+
+    /* ── this ────────────────────────────────────────────────────────── */
+    case NODE_THIS:
+        emit(cg, "    call    " XLY_SYM("xly_this"));
+        break;
 
     /* ── binary ──────────────────────────────────────────────────────── */
     case NODE_BINARY: {
@@ -745,6 +795,42 @@ static void emit_expr(CG *cg, ASTNode *node) {
         const char *fn_name  = node->str_value;
         int argc = (int)node->child_count - 1;
 
+        /* ── Detect local-variable object method call ───────────────────────
+         * If children[0] is an identifier that resolves to a local variable
+         * (not a module), treat this as obj.method(args) via xly_obj_call.
+         * xly_obj_call(obj, method, args_array, argc)                         */
+        int obj_var_off = (node->children[0]->type == NODE_IDENTIFIER)
+                          ? var_offset(cg, mod_name) : 0;
+        /* Also handle chained expressions: if children[0] is not a simple
+         * identifier, always eval it and use obj_call. */
+        int is_obj_call = (obj_var_off != 0) ||
+                          (node->children[0]->type != NODE_IDENTIFIER);
+
+        if (is_obj_call) {
+            /* Build args array on stack */
+            int arr_bytes = argc > 0 ? (((argc * 8) + 15) & ~15) : 0;
+            if (arr_bytes > 0)
+                emit(cg, "    subq    $%d, %%rsp", arr_bytes);
+            for (int i = 0; i < argc; i++) {
+                emit_expr(cg, node->children[i + 1]);
+                emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
+            }
+            /* Eval the object expression */
+            emit_expr(cg, node->children[0]);
+            emit(cg, "    movq    %%rax, %%rdi");           /* obj */
+            const char *mfl = intern_string(cg, fn_name);
+            emit(cg, "    leaq    %s(%%rip), %%rsi", mfl); /* method name */
+            if (argc > 0)
+                emit(cg, "    movq    %%rsp, %%rdx");       /* args array */
+            else
+                emit(cg, "    xorq    %%rdx, %%rdx");
+            emit(cg, "    movl    $%d, %%ecx", argc);
+            emit(cg, "    call    " XLY_SYM("xly_obj_call"));
+            if (arr_bytes > 0)
+                emit(cg, "    addq    $%d, %%rsp", arr_bytes);
+            break;
+        }
+
         /* ── O2+: sys constant inlining ────────────────────────────────────
          * Zero-arg sys functions returning compile-time constants are inlined
          * as immediate loads — eliminates call overhead in tight sys loops.  */
@@ -916,6 +1002,65 @@ static void emit_expr(CG *cg, ASTNode *node) {
         break;
     }
 
+    /* ── object literal  { key: val, key: val, ... } ───────────────── */
+    case NODE_OBJECT_LITERAL: {
+        /* Parser produces: NODE_OBJECT_LITERAL
+         *   children[i] = NODE_NAMED_ARG { str_value=key, children[0]=val_expr }
+         * Create empty object, then set each field.                          */
+        emit(cg, "    call    " XLY_SYM("xly_obj_new"));
+        /* Spill obj ptr onto stack */
+        emit(cg, "    subq    $16, %%rsp");
+        emit(cg, "    movq    %%rax, (%%rsp)");
+        int npairs = (int)node->child_count;
+        for (int i = 0; i < npairs; i++) {
+            ASTNode *pair = node->children[i];    /* NODE_NAMED_ARG */
+            const char *key_str = pair->str_value;
+            ASTNode *val_node   = pair->child_count > 0 ? pair->children[0] : NULL;
+            const char *kl = intern_string(cg, key_str);
+            /* Eval value; spill obj across the eval */
+            if (val_node)
+                emit_expr(cg, val_node);
+            else
+                emit(cg, "    call    " XLY_SYM("xly_null"));
+            emit(cg, "    movq    %%rax, %%rdx");          /* rdx = value */
+            emit(cg, "    movq    (%%rsp), %%rdi");        /* rdi = obj */
+            emit(cg, "    leaq    %s(%%rip), %%rsi", kl); /* rsi = key */
+            emit(cg, "    call    " XLY_SYM("xly_obj_set"));
+        }
+        emit(cg, "    movq    (%%rsp), %%rax");  /* return obj in rax */
+        emit(cg, "    addq    $16, %%rsp");
+        break;
+    }
+
+    /* ── property get  obj.field ──────────────────────────────────── */
+    case NODE_PROPERTY_GET: {
+        /* children[0] = object expression, str_value = field name */
+        emit_expr(cg, node->children[0]);
+        emit(cg, "    movq    %%rax, %%rdi");
+        const char *fl = intern_string(cg, node->str_value);
+        emit(cg, "    leaq    %s(%%rip), %%rsi", fl);
+        emit(cg, "    call    " XLY_SYM("xly_obj_get"));
+        break;
+    }
+
+    /* ── property set  obj.field = val  (as expression) ─────────────
+     * children[0] = object, children[1] = value; str_value = field   */
+    case NODE_PROPERTY_SET: {
+        emit_expr(cg, node->children[0]);
+        emit(cg, "    subq    $16, %%rsp");
+        emit(cg, "    movq    %%rax, (%%rsp)");   /* spill obj */
+        emit_expr(cg, node->children[1]);
+        emit(cg, "    movq    %%rax, %%rdx");     /* rdx = val */
+        emit(cg, "    movq    (%%rsp), %%rdi");   /* rdi = obj */
+        emit(cg, "    addq    $16, %%rsp");
+        const char *fl2 = intern_string(cg, node->str_value);
+        emit(cg, "    leaq    %s(%%rip), %%rsi", fl2);
+        emit(cg, "    call    " XLY_SYM("xly_obj_set"));
+        /* return the object (rdi) for chaining */
+        emit(cg, "    movq    %%rdi, %%rax");
+        break;
+    }
+
     /* ── fallback ──────────────────────────────────────────────────── */
     default:
         emit(cg, "    call    " XLY_SYM("xly_null"));
@@ -940,12 +1085,21 @@ static void emit_stmt(CG *cg, ASTNode *node) {
     /* ── var/const decl ────────────────────────────────────────────── */
     case NODE_VAR_DECL:
     case NODE_CONST_DECL: {
-        int off = var_declare(cg, node->str_value);
         if (node->child_count > 0)
             emit_expr(cg, node->children[0]);
         else
             emit(cg, "    call    " XLY_SYM("xly_null"));
-        emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        if (cg->in_main_scope && cg->scope_depth == 0) {
+            /* Top-level decl: store in global slot so functions can read it */
+            int gi = gvar_declare(cg, node->str_value);
+            emit(cg, "    movq    %%rax, " XLY_SYM("__xly_globals") "+%d(%%rip)", gi * 8);
+            /* Also declare a local alias for use within main() */
+            int off = var_declare(cg, node->str_value);
+            emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        } else {
+            int off = var_declare(cg, node->str_value);
+            emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        }
         break;
     }
 
@@ -1239,10 +1393,13 @@ static void emit_function(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
     size_t      nparams = fn->param_count;
     ASTNode    *body    = fn->children[0];   /* NODE_BLOCK */
 
-    /* save codegen frame state */
+    /* save codegen frame state — clear var table so main() vars don't leak in */
     int sv_vc = cg->var_count, sv_fo = cg->frame_offset, sv_sd = cg->scope_depth;
+    int sv_nm = cg->noreturn_mode;
     cg->scope_depth  = 0;
     cg->frame_offset = 0;
+    cg->var_count    = 0;   /* hide main() vars: functions have their own scope */
+    cg->noreturn_mode = 0;
 
     /* frame size: params + captures + locals + generous padding, 16-aligned */
     int n = (int)nparams + ncaptures + count_locals(body) + 32;
@@ -1314,6 +1471,9 @@ static void emit_function(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
 
     /* restore codegen state */
     while (cg->var_count > sv_vc) { cg->var_count--; free(cg->vars[cg->var_count].name); }
+    cg->frame_offset  = sv_fo;
+    cg->scope_depth   = sv_sd;
+    cg->noreturn_mode = sv_nm;
     cg->frame_offset = sv_fo;
     cg->scope_depth  = sv_sd;
 }
@@ -1349,8 +1509,10 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
     emit(&cg, "    movq    %%rsp, %%rbp");
     emit(&cg, "    subq    $%d, %%rsp", mframe);
 
+    cg.in_main_scope = 1;
     for (size_t i = 0; i < program->child_count; i++)
         emit_stmt(&cg, program->children[i]);
+    cg.in_main_scope = 0;
 
     emit(&cg, "    movl    $0, %%edi");
     emit(&cg, "    call    " XLY_SYM("xly_exit"));
@@ -1396,6 +1558,21 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
     emit(&cg, XLY_GNU_STACK_SECTION);
 #endif
 
+    /* Global variable storage: __xly_globals[N] = array of XlyVal* pointers.
+     * Initialised to zero (BSS); filled at runtime by main().              */
+    if (cg.gvar_count > 0) {
+        emit(&cg, "");
+#if defined(__APPLE__)
+        emit(&cg, ".section __DATA,__bss");
+#else
+        emit(&cg, ".section .bss");
+#endif
+        emit(&cg, ".globl  " XLY_SYM("__xly_globals"));
+        emit(&cg, ".balign 8");
+        emit(&cg, XLY_SYM("__xly_globals") ":");
+        emit(&cg, "    .zero   %d", cg.gvar_count * 8);
+    }
+
     /* Emit compilation stats as trailing comments when verbose */
     if (cg.verbose) {
         emit(&cg, "    # --- xenlyc stats ---");
@@ -1419,6 +1596,8 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
     /* cleanup */
     for (int i = 0; i < cg.var_count; i++)    free(cg.vars[i].name);
     free(cg.vars);
+    for (int i = 0; i < cg.gvar_count; i++)   free(cg.gvars[i].name);
+    free(cg.gvars);
     for (int i = 0; i < cg.str_count; i++)   { free(cg.strings[i].text); free(cg.strings[i].label); }
     free(cg.strings);
     free(cg.funcs);
@@ -1658,15 +1837,28 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         int off = var_offset(cg, node->str_value);
         if (off != 0) {
             safe_ldr_a64(cg, "x0", off);
-        } else if (fn_name_is_declared(cg, node->str_value)) {
-            emit(cg, "    adrp    x0, .Lxly_fn_%s@PAGE", node->str_value);
-            emit(cg, "    add     x0, x0, .Lxly_fn_%s@PAGEOFF", node->str_value);
-            emit(cg, "    bl      " XLY_SYM("xly_make_fn"));
         } else {
-            emit(cg, "    bl      " XLY_SYM("xly_null"));
+            int gi = gvar_find(cg, node->str_value);
+            if (gi >= 0) {
+                /* Global: load from __xly_globals[gi] */
+                emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+                emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+                emit(cg, "    ldr     x0, [x9, #%d]", gi * 8);
+            } else if (fn_name_is_declared(cg, node->str_value)) {
+                emit(cg, "    adrp    x0, .Lxly_fn_%s@PAGE", node->str_value);
+                emit(cg, "    add     x0, x0, .Lxly_fn_%s@PAGEOFF", node->str_value);
+                emit(cg, "    bl      " XLY_SYM("xly_make_fn"));
+            } else {
+                emit(cg, "    bl      " XLY_SYM("xly_null"));
+            }
         }
         break;
     }
+
+    /* ── this ────────────────────────────────────────────────────────── */
+    case NODE_THIS:
+        emit(cg, "    bl      " XLY_SYM("xly_this"));
+        break;
 
     /* ── binary ─────────────────────────────────────────────────────── */
     case NODE_BINARY: {
@@ -1887,34 +2079,37 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         for (int i = nargs - 1; i >= 0; i--)
             spill_pop_a64(cg, (char*)aregs[i]);
 
-        /* Dispatch: declared fn → bl direct; variable fn → indirect blr */
+        /* Dispatch: declared fn → bl direct; variable fn → xly_call_fnval */
         if (fn_name_is_declared(cg, node->str_value)) {
             emit(cg, "    bl      .Lxly_fn_%s", node->str_value);
         } else {
             int var_off = var_offset(cg, node->str_value);
             if (var_off != 0) {
-                /* Spill arg regs, load fn ptr from XlyVal.fn (offset 32), restore */
-                int spill = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 16;
-                sp_sub_a64(cg, spill);
+                /* Use xly_call_fnval(fn_val, args_array, argc) which handles
+                 * both plain fns and closures correctly via the builtin_fn
+                 * field (offset 48) and inner env pointer (offset 56).
+                 * xly_call_fnval(x0=fn, x1=args_ptr, x2=argc)             */
+                int arr_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+                if (arr_bytes > 0)
+                    sp_sub_a64(cg, arr_bytes);
                 for (int i = 0; i < nargs; i++)
-                    emit(cg, "    str     %s, [x29, #%d]", aregs[i],
-                         -(cg->a64_spill_depth * 8 + (i + 1) * 8));
-                /* Load XlyVal* from variable slot, then fn ptr at offset 32 */
+                    emit(cg, "    str     %s, [sp, #%d]", aregs[i], i * 8);
+                /* Load fn_val XlyVal* from variable slot */
                 if (var_off >= -255 && var_off <= 255)
-                    emit(cg, "    ldr     x9, [x29, #%d]", var_off);
+                    emit(cg, "    ldr     x0, [x29, #%d]", var_off);
                 else {
                     emit(cg, "    mov     x9, #%d", var_off < 0 ? -var_off : var_off);
                     if (var_off < 0) emit(cg, "    neg     x9, x9");
-                    emit(cg, "    ldr     x9, [x29, x9]");
+                    emit(cg, "    ldr     x0, [x29, x9]");
                 }
-                emit(cg, "    ldr     x16, [x9, #32]"); /* .fn ptr */
-                for (int i = 0; i < nargs; i++)
-                    safe_ldr_a64(cg, (char*)aregs[i], var_offset(cg, node->str_value));
-                /* Restore args properly */
-                sp_add_a64(cg, spill);
-                /* Re-eval args cleanly since spill path above was approximate */
-                /* Simple approach: reload args from spill area */
-                emit(cg, "    blr     x16");
+                if (nargs > 0)
+                    emit(cg, "    mov     x1, sp");
+                else
+                    emit(cg, "    mov     x1, #0");
+                emit(cg, "    mov     x2, #%d", nargs);
+                emit(cg, "    bl      " XLY_SYM("xly_call_fnval"));
+                if (arr_bytes > 0)
+                    sp_add_a64(cg, arr_bytes);
             } else {
                 emit(cg, "    bl      " XLY_SYM("xly_null"));
             }
@@ -1922,11 +2117,40 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         break;
     }
 
-    /* ── module method call ─────────────────────────────────────────── */
+    /* ── method call ─────────────────────────────────────────────────── */
     case NODE_METHOD_CALL: {
         const char *mod_name = node->children[0]->str_value;
         const char *fn_name  = node->str_value;
         int argc = (int)node->child_count - 1;
+
+        /* Detect local variable object method call: if children[0] resolves
+         * to a local variable (or is a complex expression), use xly_obj_call. */
+        int obj_var_off_a = (node->children[0]->type == NODE_IDENTIFIER)
+                            ? var_offset(cg, mod_name) : 0;
+        int is_obj_call_a = (obj_var_off_a != 0) ||
+                            (node->children[0]->type != NODE_IDENTIFIER);
+        if (is_obj_call_a) {
+            /* xly_obj_call(x0=obj, x1=method_str, x2=args_ptr, x3=argc) */
+            int arr_bytes = argc > 0 ? (((argc * 8) + 15) & ~15) : 0;
+            if (arr_bytes > 0)
+                sp_sub_a64(cg, arr_bytes);
+            for (int i = 0; i < argc; i++) {
+                emit_expr_a64(cg, node->children[i + 1]);
+                emit(cg, "    str     x0, [sp, #%d]", i * 8);
+            }
+            emit_expr_a64(cg, node->children[0]);    /* x0 = obj */
+            const char *mfl = intern_string(cg, fn_name);
+            emit_adrp_a64(cg, "x1", mfl);            /* x1 = method name */
+            if (argc > 0)
+                emit(cg, "    mov     x2, sp");
+            else
+                emit(cg, "    mov     x2, xzr");
+            emit(cg, "    mov     x3, #%d", argc);
+            emit(cg, "    bl      " XLY_SYM("xly_obj_call"));
+            if (arr_bytes > 0)
+                sp_add_a64(cg, arr_bytes);
+            break;
+        }
 
         /*
          * xly_call_module(mod, fn, args, argc)
@@ -2024,6 +2248,56 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         emit(cg, "    bl      " XLY_SYM("xly_index"));
         break;
 
+    /* ── object literal  { key: val, ... } ─────────────────────────── */
+    case NODE_OBJECT_LITERAL: {
+        /* Parser produces NODE_NAMED_ARG children: str_value=key, children[0]=val */
+        emit(cg, "    bl      " XLY_SYM("xly_obj_new"));
+        /* Declare a hidden var slot to hold the obj ptr across iterations */
+        char obj_slot_name[64];
+        snprintf(obj_slot_name, sizeof(obj_slot_name), "__obj_%d", cg->label_seq++);
+        int obj_slot = var_declare(cg, obj_slot_name);
+        safe_str_a64(cg, "x0", obj_slot);
+        int npairs = (int)node->child_count;
+        for (int i = 0; i < npairs; i++) {
+            ASTNode *pair     = node->children[i];  /* NODE_NAMED_ARG */
+            const char *kl    = intern_string(cg, pair->str_value);
+            ASTNode *val_node = pair->child_count > 0 ? pair->children[0] : NULL;
+            if (val_node)
+                emit_expr_a64(cg, val_node);
+            else
+                emit(cg, "    bl      " XLY_SYM("xly_null"));
+            emit(cg, "    mov     x2, x0");            /* x2 = value */
+            safe_ldr_a64(cg, "x0", obj_slot);         /* x0 = obj */
+            emit_adrp_a64(cg, "x1", kl);              /* x1 = key */
+            emit(cg, "    bl      " XLY_SYM("xly_obj_set"));
+        }
+        safe_ldr_a64(cg, "x0", obj_slot);   /* result = obj */
+        break;
+    }
+
+    /* ── property get  obj.field ──────────────────────────────────── */
+    case NODE_PROPERTY_GET: {
+        emit_expr_a64(cg, node->children[0]);
+        /* x0 = obj */
+        const char *fl = intern_string(cg, node->str_value);
+        emit_adrp_a64(cg, "x1", fl);
+        emit(cg, "    bl      " XLY_SYM("xly_obj_get"));
+        break;
+    }
+
+    /* ── property set  obj.field = val ──────────────────────────── */
+    case NODE_PROPERTY_SET: {
+        emit_expr_a64(cg, node->children[0]);
+        spill_push_a64(cg, "x0");   /* spill obj */
+        emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x2, x0");
+        spill_pop_a64(cg, "x0");
+        const char *fl2 = intern_string(cg, node->str_value);
+        emit_adrp_a64(cg, "x1", fl2);
+        emit(cg, "    bl      " XLY_SYM("xly_obj_set"));
+        break;
+    }
+
     default:
         emit(cg, "    bl      " XLY_SYM("xly_null"));
         break;
@@ -2039,12 +2313,21 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
 
     case NODE_VAR_DECL:
     case NODE_CONST_DECL: {
-        int off = var_declare(cg, node->str_value);
         if (node->child_count > 0)
             emit_expr_a64(cg, node->children[0]);
         else
             emit(cg, "    bl      " XLY_SYM("xly_null"));
-        safe_str_a64(cg, "x0", off);
+        if (cg->in_main_scope && cg->scope_depth == 0) {
+            int gi = gvar_declare(cg, node->str_value);
+            emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+            emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+            emit(cg, "    str     x0, [x9, #%d]", gi * 8);
+            int off = var_declare(cg, node->str_value);
+            safe_str_a64(cg, "x0", off);
+        } else {
+            int off = var_declare(cg, node->str_value);
+            safe_str_a64(cg, "x0", off);
+        }
         break;
     }
 
@@ -2313,8 +2596,11 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
 
     int sv_vc = cg->var_count, sv_fo = cg->frame_offset, sv_sd = cg->scope_depth;
     int sv_spill = cg->a64_spill_depth;
+    int sv_nm_a = cg->noreturn_mode;
     cg->scope_depth    = 0;
     cg->frame_offset   = 0;
+    cg->var_count      = 0;   /* hide main() vars */
+    cg->noreturn_mode  = 0;
     cg->a64_spill_depth = 0;
     cg->a64_sp_adj      = 0;
 
@@ -2404,6 +2690,7 @@ static void emit_function_a64(CG *cg, ASTNode *fn) {
     cg->frame_offset    = sv_fo;
     cg->scope_depth     = sv_sd;
     cg->a64_spill_depth = sv_spill;
+    cg->noreturn_mode   = sv_nm_a;
     cg->a64_sp_adj      = 0;  /* reset: caller's sp_adj is already 0 at call sites */
 }
 
@@ -2459,8 +2746,10 @@ int codegen(ASTNode *program, const char *outpath) {
     }
     emit(&cg, "    add     x29, sp, #%d", main_fp_adj);
 
+    cg.in_main_scope = 1;
     for (size_t i = 0; i < program->child_count; i++)
         emit_stmt_a64(&cg, program->children[i]);
+    cg.in_main_scope = 0;
 
     /* call xly_exit(0) -- unreachable epilogue follows for completeness */
     emit(&cg, "    mov     w0, #0");
@@ -2504,10 +2793,22 @@ int codegen(ASTNode *program, const char *outpath) {
         fputs("\"\n", cg.out);
     }
 
+    /* Global variable storage for ARM64 */
+    if (cg.gvar_count > 0) {
+        emit(&cg, "");
+        emit(&cg, ".section __DATA,__bss");
+        emit(&cg, ".globl  " XLY_SYM("__xly_globals"));
+        emit(&cg, ".balign 8");
+        emit(&cg, XLY_SYM("__xly_globals") ":");
+        emit(&cg, "    .zero   %d", cg.gvar_count * 8);
+    }
+
     fclose(cg.out);
 
     for (int i = 0; i < cg.var_count; i++) free(cg.vars[i].name);
     free(cg.vars);
+    for (int i = 0; i < cg.gvar_count; i++) free(cg.gvars[i].name);
+    free(cg.gvars);
     for (int i = 0; i < cg.str_count; i++) { free(cg.strings[i].text); free(cg.strings[i].label); }
     free(cg.strings);
     free(cg.funcs);
