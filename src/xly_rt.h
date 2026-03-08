@@ -184,4 +184,16 @@ XlyVal **xly_closure_env(XlyVal *closure);
 /* Call a VAL_FUNCTION XlyVal* with given args */
 XlyVal *xly_call_fnval(XlyVal *fn_val, XlyVal **args, int argc);
 
+/* ── object / instance operations ───────────────────────────────────────────── */
+XlyVal  *xly_obj_new(void);                                    /* create empty object     */
+void     xly_obj_set(XlyVal *obj, const char *key, XlyVal *val); /* set field              */
+XlyVal  *xly_obj_get(XlyVal *obj, const char *key);            /* get field (null if miss) */
+XlyVal  *xly_obj_call(XlyVal *obj, const char *method, XlyVal **args, int argc);
+XlyVal  *xly_this(void);                               /* current method receiver */
+
+/* ── mutable closure capture cells ──────────────────────────────────────────── */
+XlyVal **xly_make_cell(XlyVal *initial);   /* allocate heap cell for mutable capture */
+XlyVal  *xly_cell_get(XlyVal **cell);      /* dereference cell                       */
+void     xly_cell_set(XlyVal **cell, XlyVal *val); /* write through cell              */
+
 #endif /* XLY_RT_H */
