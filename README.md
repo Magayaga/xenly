@@ -35,6 +35,7 @@ The following shows how a **"Hello, World!"** program is written in Xenly progra
 print("Hello, World!")
 ```
 
+### Variables
 A **Xenly** variable is created the moment you first assign a value to it.
 
 ```javascript
@@ -78,17 +79,18 @@ You can download the git clone of the `xenly` programming language project. It i
 ```bash
 # Download the Xenly's source code
 $ git clone https://github.com/magayaga/xenly
-$ xenly
+$ cd xenly
 ```
 
 ### 2. Install Xenly's source code
 
-You can run the program `makefile` for Linux and `main.sh` for both WSL and Linux.
+You can run the program `makefile`, `main.sh`, or `install-c.py` for both WSL and Linux.
 
 ```bash
-# Run the program (makefile or bash script)
+# Run the program (Makefile, Bash script, or Python)
 $ make
 $ bash main.sh
+$ py install-c.py
 
 # Run the binary code
 $ ./xenly
@@ -130,6 +132,7 @@ If you are new to the **Xenly**, you should check out these additional resources
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
 
