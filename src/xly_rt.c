@@ -678,6 +678,83 @@ XlyVal *xly_index(XlyVal *collection, XlyVal *index_val) {
 
 void xly_exit(int code) { exit(code); }
 
+/* ── first-class function values ──────────────────────────────────────────── */
+
+/* Wrap a raw C function pointer as a VAL_FUNCTION XlyVal*.
+ * The function pointer is stored in the .fn field (offset 32).
+ * Called functions receive their args in registers (SysV or AAPCS64)
+ * just like any other Xenly function — the indirect call in the
+ * generated code handles argument passing before calling through .fn. */
+XlyVal *xly_make_fn(void *fp) {
+    XlyVal *v = calloc(1, sizeof(XlyVal));
+    v->type = VAL_FUNCTION;
+    v->fn   = fp;
+    return v;
+}
+
+/* Create a closure: function pointer + captured environment.
+ * The environment is a heap-allocated array of XlyVal* values.
+ * Stored in the .inner field (which is otherwise unused in compiled code). */
+XlyVal *xly_make_closure(void *fp, XlyVal **env, int env_size) {
+    XlyVal *v = calloc(1, sizeof(XlyVal));
+    v->type = VAL_FUNCTION;
+    v->fn   = fp;
+    if (env_size > 0 && env) {
+        XlyVal **captured = malloc(sizeof(XlyVal*) * (size_t)env_size);
+        memcpy(captured, env, sizeof(XlyVal*) * (size_t)env_size);
+        v->inner = (XlyVal*)captured;  /* reuse inner to store env ptr */
+    }
+    return v;
+}
+
+/* Get the environment pointer from a closure XlyVal* (NULL if none). */
+XlyVal **xly_closure_env(XlyVal *closure) {
+    if (!closure || closure->type != VAL_FUNCTION) return NULL;
+    return (XlyVal**)closure->inner;
+}
+
+/* Call a VAL_FUNCTION XlyVal* with 0–6 args.
+ * For plain functions (no closure env): call fn(args[0], args[1], ...)
+ * For closures (inner != NULL):         call fn(env, args[0], ...) where env = inner */
+XlyVal *xly_call_fnval(XlyVal *fn_val, XlyVal **args, int argc) {
+    if (!fn_val || fn_val->type != VAL_FUNCTION || !fn_val->fn)
+        return xly_null();
+    XlyVal **env = (XlyVal**)fn_val->inner;  /* NULL for plain fns */
+    typedef XlyVal *(*F0)(void);
+    typedef XlyVal *(*F1)(XlyVal*);
+    typedef XlyVal *(*F2)(XlyVal*,XlyVal*);
+    typedef XlyVal *(*F3)(XlyVal*,XlyVal*,XlyVal*);
+    typedef XlyVal *(*F4)(XlyVal*,XlyVal*,XlyVal*,XlyVal*);
+    typedef XlyVal *(*F5)(XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*);
+    typedef XlyVal *(*F6)(XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*);
+    typedef XlyVal *(*F7)(XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*,XlyVal*);
+    if (!env) {
+        /* Plain function — call with args directly */
+        switch (argc) {
+            case 0: return ((F0)fn_val->fn)();
+            case 1: return ((F1)fn_val->fn)(args[0]);
+            case 2: return ((F2)fn_val->fn)(args[0],args[1]);
+            case 3: return ((F3)fn_val->fn)(args[0],args[1],args[2]);
+            case 4: return ((F4)fn_val->fn)(args[0],args[1],args[2],args[3]);
+            case 5: return ((F5)fn_val->fn)(args[0],args[1],args[2],args[3],args[4]);
+            case 6: return ((F6)fn_val->fn)(args[0],args[1],args[2],args[3],args[4],args[5]);
+            default: return xly_null();
+        }
+    } else {
+        /* Closure — prepend env as first hidden arg */
+        switch (argc) {
+            case 0: return ((F1)fn_val->fn)((XlyVal*)env);
+            case 1: return ((F2)fn_val->fn)((XlyVal*)env,args[0]);
+            case 2: return ((F3)fn_val->fn)((XlyVal*)env,args[0],args[1]);
+            case 3: return ((F4)fn_val->fn)((XlyVal*)env,args[0],args[1],args[2]);
+            case 4: return ((F5)fn_val->fn)((XlyVal*)env,args[0],args[1],args[2],args[3]);
+            case 5: return ((F6)fn_val->fn)((XlyVal*)env,args[0],args[1],args[2],args[3],args[4]);
+            case 6: return ((F7)fn_val->fn)((XlyVal*)env,args[0],args[1],args[2],args[3],args[4],args[5]);
+            default: return xly_null();
+        }
+    }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
  * INTERPRETER-API COMPATIBILITY SHIMS
  *
