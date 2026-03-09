@@ -133,6 +133,26 @@ XlyVal *xly_null(void) {
     return v;
 }
 
+/* xly_make_variant(tag_str, fields_array, nfields) → VAL_ENUM_VARIANT
+ * tag_str    : XlyVal* string holding the variant name (e.g. "Some")
+ * fields_arr : XlyVal** array of field values (may be NULL if nfields==0)
+ * nfields    : XlyVal* number holding field count
+ * Called from compiled code for both parameterless and parametric variants. */
+XlyVal *xly_make_variant(XlyVal *tag_val, XlyVal **fields, int nfields) {
+    XlyVal *v = (XlyVal*)calloc(1, sizeof(XlyVal));
+    v->type = VAL_ENUM_VARIANT;
+    v->variant.tag = strdup(tag_val && tag_val->str ? tag_val->str : "?");
+    v->variant.field_count = (size_t)nfields;
+    if (nfields > 0 && fields) {
+        v->variant.fields = (XlyVal**)malloc(sizeof(XlyVal*) * (size_t)nfields);
+        for (int i = 0; i < nfields; i++)
+            v->variant.fields[i] = fields[i];
+    } else {
+        v->variant.fields = NULL;
+    }
+    return v;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
  * TRUTHINESS
  * ══════════════════════════════════════════════════════════════════════════════ */
@@ -184,6 +204,30 @@ char *xly_to_cstr(XlyVal *v) {
                 free(es);
             }
             out[pos++] = ']';
+            out[pos] = '\0';
+            return out;
+        }
+        case VAL_ENUM_VARIANT: {
+            const char *tag = v->variant.tag ? v->variant.tag : "?";
+            if (v->variant.field_count == 0) return strdup(tag);
+            /* Tag(field0, field1, ...) */
+            size_t cap = 128;
+            char  *out = (char*)malloc(cap);
+            size_t pos = 0;
+            size_t tlen = strlen(tag);
+            while (pos + tlen + 2 >= cap) { cap *= 2; out = (char*)realloc(out, cap); }
+            memcpy(out + pos, tag, tlen); pos += tlen;
+            out[pos++] = '(';
+            for (size_t i = 0; i < v->variant.field_count; i++) {
+                if (i) { out[pos++] = ','; out[pos++] = ' '; }
+                char *fs = xly_to_cstr(v->variant.fields[i]);
+                size_t flen = strlen(fs);
+                while (pos + flen + 4 >= cap) { cap *= 2; out = (char*)realloc(out, cap); }
+                memcpy(out + pos, fs, flen); pos += flen;
+                free(fs);
+            }
+            if (pos + 2 >= cap) { cap *= 2; out = (char*)realloc(out, cap); }
+            out[pos++] = ')';
             out[pos] = '\0';
             return out;
         }
