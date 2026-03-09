@@ -2779,6 +2779,7 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
 }
 
 /* ── emit a user function (ARM64) ────────────────────────────────────────── */
+static void emit_function_a64(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
     const char *name    = fn->str_value;
     size_t      nparams = fn->param_count;
     ASTNode    *body    = fn->children[0];
