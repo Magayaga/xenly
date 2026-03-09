@@ -46,3 +46,15 @@ jobs:
       run: time ./xenlyc examples/test_enum.xe -o test_enum
     - name: test_enum test (5)
       run: time ./test_enum
+    - name: xenly test (6)
+      run: time ./xenly examples/benchmark_full.xe
+    - name: xenlyc test (6)
+      run: time ./xenlyc examples/benchmark_full.xe -o benchmark_full
+    - name: benchmark_full test (6)
+      run: time ./benchmark_full.xe
+    - name: xenly test (7)
+      run: time ./xenly examples/benchmark.xe
+    - name: xenlyc test (7)
+      run: time ./xenlyc examples/benchmark.xe -o benchmark
+    - name: benchmark test (7)
+      run: time ./benchmark.xe
