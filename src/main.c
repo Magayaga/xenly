@@ -39,7 +39,7 @@
  * VERSION / BUILD METADATA  — change these in one place only
  * ══════════════════════════════════════════════════════════════════════════════ */
 #define XLY_VERSION         "0.1.0"
-#define XLY_RELEASE_DATE    "2025-01-01"
+#define XLY_RELEASE_DATE    "202X-XX-XX"
 #define XLY_AUTHOR_NAME     "Cyril John Magayaga"
 #define XLY_AUTHOR_EMAIL    "cjmagayaga957@gmail.com"
 
