@@ -46,5 +46,47 @@ jobs:
       run: time ./xenlyc examples/test_enum.xe -o test_enum
     - name: test_enum test (5)
       run: time ./test_enum
+    - name: xenly test (6)
+      run: time ./xenly examples/benchmark_full.xe
+    - name: xenlyc test (6)
+      run: time ./xenlyc examples/benchmark_full.xe -o benchmark_full
+    - name: benchmark_full test (6)
+      run: time ./benchmark_full
+    - name: xenly test (7)
+      run: time ./xenly examples/benchmark.xe
+    - name: xenlyc test (7)
+      run: time ./xenlyc examples/benchmark.xe -o benchmark
+    - name: benchmark test (7)
+      run: time ./benchmark
+    - name: xenly test (8)
+      run: time ./xenly examples/declarative.xe
+    - name: xenlyc test (9)
+      run: time ./xenlyc examples/declarative.xe -o declarative
+    - name: declarative test (9)
+      run: time ./declarative
+    - name: xenly test (10)
+      run: time ./xenly examples/decl_demo.xe
+    - name: xenlyc test (10)
+      run: time ./xenlyc examples/decl_demo.xe -o decl_demo
+    - name: decl_demo test (10)
+      run: time ./decl_demo
+    - name: xenly test (11)
+      run: time ./xenly examples/decl_work.xe
+    - name: xenlyc test (11)
+      run: time ./xenlyc examples/decl_work.xe -o decl_work
+    - name: decl_work test (11)
+      run: time ./decl_work
+    - name: xenly test (12)
+      run: time ./xenly examples/decl_final.xe
+    - name: xenlyc test (12)
+      run: time ./xenlyc examples/decl_final.xe -o decl_final
+    - name: decl_final test (12)
+      run: time ./decl_final
+    - name: xenly test (13)
+      run: time ./xenly examples/fp_immutability.xe
+    - name: xenlyc test (13)
+      run: time ./xenlyc examples/fp_immutability.xe -o fp_immutability
+    - name: fp_immutability test (13)
+      run: time ./fp_immutability
     - name: make clean test
       run: make clean
