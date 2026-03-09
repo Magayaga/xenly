@@ -119,6 +119,11 @@ typedef struct {
     char  **fn_names;
     int     fn_name_count, fn_name_cap;
 
+    /* enum variant name table: tracks variant names and their param counts
+     * so NODE_FN_CALL and NODE_IDENTIFIER can emit xly_make_variant calls */
+    struct { char *name; int nparams; } *variants;
+    int     variant_count, variant_cap;
+
     int     had_error;
 
     /* ARM64-specific: frame-relative spill tracking (no sp movement) */
@@ -263,6 +268,26 @@ static int fn_name_is_declared(CG *cg, const char *name) {
     return 0;
 }
 
+/* ── enum variant table helpers ──────────────────────────────────────────── */
+static void variant_register(CG *cg, const char *name, int nparams) {
+    for (int i = 0; i < cg->variant_count; i++)
+        if (strcmp(cg->variants[i].name, name) == 0) return;
+    if (cg->variant_count >= cg->variant_cap) {
+        cg->variant_cap = cg->variant_cap ? cg->variant_cap * 2 : 8;
+        cg->variants = realloc(cg->variants, sizeof(cg->variants[0]) * (size_t)cg->variant_cap);
+    }
+    cg->variants[cg->variant_count].name    = strdup(name);
+    cg->variants[cg->variant_count].nparams = nparams;
+    cg->variant_count++;
+}
+/* Returns nparams if name is a known variant, -1 otherwise. */
+static int variant_find(CG *cg, const char *name) {
+    for (int i = 0; i < cg->variant_count; i++)
+        if (strcmp(cg->variants[i].name, name) == 0)
+            return cg->variants[i].nparams;
+    return -1;
+}
+
 /* ── free-variable analysis for closure capture ─────────────────────────
  * Collects names of identifiers in `node` that are NOT in `params[]`
  * and NOT globally declared functions — these are captured from outer scope. */
@@ -314,6 +339,21 @@ static void collect_fn_names(CG *cg, ASTNode *node) {
     for (size_t i = 0; i < node->param_count; i++)
         if (node->params && node->params[i].default_value)
             collect_fn_names(cg, node->params[i].default_value);
+}
+
+/* ── pre-pass: collect enum variant names ───────────────────────────────── */
+static void collect_variant_names(CG *cg, ASTNode *node) {
+    if (!node) return;
+    if (node->type == NODE_ENUM_DECL) {
+        for (size_t i = 0; i < node->child_count; i++) {
+            ASTNode *v = node->children[i];
+            if (v && v->str_value)
+                variant_register(cg, v->str_value, (int)v->param_count);
+        }
+        return; /* don't recurse into children — they are variant nodes */
+    }
+    for (size_t i = 0; i < node->child_count; i++)
+        collect_variant_names(cg, node->children[i]);
 }
 
 /* ── pre-pass: count VAR_DECLs recursively ─────────────────────────────── */
@@ -726,6 +766,33 @@ static void emit_expr(CG *cg, ASTNode *node) {
         static const char *regs[] = {"rdi","rsi","rdx","rcx","r8","r9"};
         int nreg = nargs < 6 ? nargs : 6;  /* args 0-5 → registers       */
         int nstk = nargs - nreg;            /* args 6+  → stack (SysV ABI) */
+
+        /* ── enum variant constructor ───────────────────────────────────────
+         * If the callee name is a known variant, emit xly_make_variant call. */
+        if (node->str_value && variant_find(cg, node->str_value) >= 0) {
+            /* Build args array on stack, call xly_make_variant(tag, arr, n) */
+            int arr_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+            if (arr_bytes > 0)
+                emit(cg, "    subq    $%d, %%rsp", arr_bytes);
+            for (int i = 0; i < nargs; i++) {
+                emit_expr(cg, node->children[i]);
+                emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
+            }
+            /* rdi = tag string (intern the variant name as a string literal) */
+            const char *tag_lbl = intern_string(cg, node->str_value);
+            emit(cg, "    leaq    %s(%%rip), %%rdi", tag_lbl);
+            emit(cg, "    call    " XLY_SYM("xly_str"));
+            emit(cg, "    movq    %%rax, %%rdi");         /* rdi = tag XlyVal* */
+            if (nargs > 0)
+                emit(cg, "    movq    %%rsp, %%rsi");     /* rsi = fields ptr  */
+            else
+                emit(cg, "    xorq    %%rsi, %%rsi");
+            emit(cg, "    movl    $%d, %%edx", nargs);   /* edx = nfields     */
+            emit(cg, "    call    " XLY_SYM("xly_make_variant"));
+            if (arr_bytes > 0)
+                emit(cg, "    addq    $%d, %%rsp", arr_bytes);
+            break;
+        }
 
         /* ── variable-fn path: use xly_call_fnval (all args in array) ─────
          * Handles any number of args cleanly via the args array.           */
@@ -1408,6 +1475,32 @@ static void emit_stmt(CG *cg, ASTNode *node) {
     case NODE_IMPORT:
         break;
 
+    /* ── enum declaration — register variants, create parameterless ones ── */
+    case NODE_ENUM_DECL:
+        /* Variant names already registered in variant table by pre-pass.
+         * For parameterless variants, emit a global holding the singleton
+         * VAL_ENUM_VARIANT value so NODE_IDENTIFIER can load it.
+         * Parametric variants are constructed at call-site via xly_make_variant. */
+        for (size_t vi = 0; vi < node->child_count; vi++) {
+            ASTNode *vn = node->children[vi];
+            if (!vn || !vn->str_value) continue;
+            if (vn->param_count == 0) {
+                /* Create the singleton and store in a global */
+                const char *tag_label = intern_string(cg, vn->str_value);
+                emit(cg, "    leaq    %s(%%rip), %%rdi", tag_label);
+                emit(cg, "    call    " XLY_SYM("xly_str"));
+                emit(cg, "    movq    %%rax, %%rdi");
+                emit(cg, "    xorq    %%rsi, %%rsi");   /* fields = NULL */
+                emit(cg, "    xorl    %%edx, %%edx");   /* nfields = 0   */
+                emit(cg, "    call    " XLY_SYM("xly_make_variant"));
+                /* Store in global slot so identifier lookups find it */
+                int gi = gvar_declare(cg, vn->str_value);
+                emit(cg, "    movq    %%rax, " XLY_SYM("__xly_globals") "+%d(%%rip)", gi * 8);
+            }
+            /* Parametric variants: nothing to emit here; call-sites use xly_make_variant */
+        }
+        break;
+
     /* ── everything else — try as expression ─────────────────────── */
     default:
         emit_expr(cg, node);
@@ -1531,6 +1624,7 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
 
     /* pre-pass: collect all declared function names for call-site dispatch */
     collect_fn_names(&cg, program);
+    collect_variant_names(&cg, program);
 
     /* main frame: generous */
     /* Frame = locals × 8 + 512 bytes of spill headroom.
@@ -1641,6 +1735,8 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
     free(cg.funcs);
     for (int i = 0; i < cg.fn_name_count; i++) free(cg.fn_names[i]);
     free(cg.fn_names);
+    for (int i = 0; i < cg.variant_count; i++) free(cg.variants[i].name);
+    free(cg.variants);
     for (int i = 0; i < cg.brk_top; i++) free(cg.brk_labels[i]);
     free(cg.brk_labels);
     for (int i = 0; i < cg.cnt_top; i++) free(cg.cnt_labels[i]);
@@ -2107,6 +2203,32 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
             cg->had_error = 1;
             nargs = 8;
         }
+
+        /* ── enum variant constructor (ARM64) ───────────────────────────── */
+        if (node->str_value && variant_find(cg, node->str_value) >= 0) {
+            int arr_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+            if (arr_bytes > 0)
+                sp_sub_a64(cg, arr_bytes);
+            for (int i = 0; i < nargs; i++) {
+                emit_expr_a64(cg, node->children[i]);
+                emit(cg, "    str     x0, [sp, #%d]", i * 8);
+            }
+            /* x0 = tag string */
+            const char *tag_lbl = intern_string(cg, node->str_value);
+            emit_adrp_a64(cg, "x0", tag_lbl);
+            emit(cg, "    bl      " XLY_SYM("xly_str"));
+            /* x1 = fields ptr (sp, or 0 if none) */
+            if (nargs > 0)
+                emit(cg, "    mov     x1, sp");
+            else
+                emit(cg, "    mov     x1, #0");
+            emit(cg, "    mov     w2, #%d", nargs);
+            emit(cg, "    bl      " XLY_SYM("xly_make_variant"));
+            if (arr_bytes > 0)
+                sp_add_a64(cg, arr_bytes);
+            break;
+        }
+
         /* AArch64: args go in x0–x7.  We eval left-to-right, spill each,
          * then reload in reverse order into the correct registers.         */
         static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
@@ -2629,6 +2751,27 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
     case NODE_IMPORT:
         break;
 
+    /* ── enum declaration (ARM64) ─────────────────────────────────────── */
+    case NODE_ENUM_DECL:
+        for (size_t vi = 0; vi < node->child_count; vi++) {
+            ASTNode *vn = node->children[vi];
+            if (!vn || !vn->str_value) continue;
+            if (vn->param_count == 0) {
+                /* Create singleton and store in global */
+                const char *tag_lbl = intern_string(cg, vn->str_value);
+                emit_adrp_a64(cg, "x0", tag_lbl);
+                emit(cg, "    bl      " XLY_SYM("xly_str"));
+                emit(cg, "    mov     x1, #0");   /* fields = NULL */
+                emit(cg, "    mov     w2, #0");   /* nfields = 0   */
+                emit(cg, "    bl      " XLY_SYM("xly_make_variant"));
+                int gi = gvar_declare(cg, vn->str_value);
+                emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+                emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+                emit(cg, "    str     x0, [x9, #%d]", gi * 8);
+            }
+        }
+        break;
+
     default:
         emit_expr_a64(cg, node);
         break;
@@ -2636,7 +2779,6 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
 }
 
 /* ── emit a user function (ARM64) ────────────────────────────────────────── */
-static void emit_function_a64(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
     const char *name    = fn->str_value;
     size_t      nparams = fn->param_count;
     ASTNode    *body    = fn->children[0];
@@ -2785,6 +2927,7 @@ int codegen(ASTNode *program, const char *outpath) {
 
     /* pre-pass: collect all declared function names for call-site dispatch */
     collect_fn_names(&cg, program);
+    collect_variant_names(&cg, program);
     int n_top  = count_locals(program) + 16;
     /* main frame: locals + spill headroom (16 slots) + x29/x30, 16-aligned.
      * The +16 gives enough room for simultaneous spills at any expression depth.
@@ -2878,6 +3021,8 @@ int codegen(ASTNode *program, const char *outpath) {
     free(cg.funcs);
     for (int i = 0; i < cg.fn_name_count; i++) free(cg.fn_names[i]);
     free(cg.fn_names);
+    for (int i = 0; i < cg.variant_count; i++) free(cg.variants[i].name);
+    free(cg.variants);
     for (int i = 0; i < cg.brk_top; i++) free(cg.brk_labels[i]);
     free(cg.brk_labels);
     for (int i = 0; i < cg.cnt_top; i++) free(cg.cnt_labels[i]);
