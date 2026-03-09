@@ -33,13 +33,19 @@ jobs:
       run: time ./xenly examples/functional.xe
     - name: xenlyc test (3)
       run: time ./xenlyc examples/functional.xe -o functional
-    - name: sys_demo test (3)
+    - name: functional test (3)
       run: time ./functional
     - name: xenly test (4)
       run: time ./xenly examples/math_enhanced_demo.xe
     - name: xenlyc test (4)
       run: time ./xenlyc examples/math_enhanced_demo.xe -o math_enhanced_demo
-    - name: sys_demo test (4)
+    - name: math_enhanced_demo test (4)
       run: time ./math_enhanced_demo
+    - name: xenly test (5)
+      run: time ./xenly examples/test_enum.xe
+    - name: xenlyc test (5)
+      run: time ./xenlyc examples/test_enum.xe -o test_enum
+    - name: test_enum test (5)
+      run: time ./test_enum
     - name: make clean test
       run: make clean
