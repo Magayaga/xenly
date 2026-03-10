@@ -2326,6 +2326,14 @@ Module module_multiproc(void) {
 #    define MAP_ANONYMOUS 0x1000
 #  endif
 
+   /* ── F_FULLFSYNC ────────────────────────────────────────────────────────
+    * fcntl command that flushes data all the way to physical storage on macOS
+    * (Apple extension, value 51).  Not exposed under strict _POSIX_C_SOURCE,
+    * so we hard-code the value — stable since macOS 10.3 / Darwin 7.0.      */
+#  ifndef F_FULLFSYNC
+#    define F_FULLFSYNC 51
+#  endif
+
    /* ── sysctlbyname forward declaration ──────────────────────────────────── */
    /* We declare it ourselves instead of including <sys/sysctl.h> to dodge the
     * BSD-typedef cascade.  The prototype matches the real libSystem symbol. */
@@ -2645,11 +2653,20 @@ static Value *sys_fsync(Value **args, size_t argc) {
 
 // sys.fdatasync(fd) — flush data only, no metadata
 // On macOS fdatasync() exists but F_FULLFSYNC is the reliable data-durability call.
+#if defined(PLATFORM_MACOS)
+   /* F_FULLFSYNC is a Darwin extension declared in <sys/fcntl.h>, but
+    * -D_POSIX_C_SOURCE=200809L suppresses non-POSIX symbols, making it
+    * invisible.  The numeric value 51 has been stable on every macOS /
+    * Darwin release since 10.3 and is safe to hard-code here.            */
+#  ifndef F_FULLFSYNC
+#    define F_FULLFSYNC 51
+#  endif
+#endif
 static Value *sys_fdatasync(Value **args, size_t argc) {
     if (argc < 1 || args[0]->type != VAL_NUMBER) return value_number(-1);
 #if defined(PLATFORM_MACOS)
-    /* macOS: use fcntl(F_FULLFSYNC) — fdatasync() is present but unreliable on
-     * HFS+/APFS without this flag (does not guarantee data reaches storage).  */
+    /* macOS: fcntl(F_FULLFSYNC) guarantees data reaches physical storage
+     * on HFS+/APFS; plain fdatasync() only flushes the kernel buffer.   */
     return value_number((double)fcntl((int)args[0]->num, F_FULLFSYNC));
 #else
     return value_number((double)fdatasync((int)args[0]->num));
