@@ -1282,6 +1282,23 @@ static void emit_expr(CG *cg, ASTNode *node) {
         break;
     }
 
+    /* ── await expr ─────────────────────────────────────────────────────
+     * await fn_call  — synchronous in current impl: just evaluate the call.
+     * children[0] = the call expression (NODE_FN_CALL or NODE_CALL_EXPR).  */
+    case NODE_AWAIT:
+        emit_expr(cg, node->children[0]);
+        break;
+
+    /* ── spawn expr ─────────────────────────────────────────────────────
+     * spawn fn_call  — evaluate the call for side effects, discard result.
+     * In the compiled runtime there is no scheduler; spawn executes the
+     * function synchronously (matching the interpreter "preview" semantics).
+     * Result ends up in %rax but the expression produces null.             */
+    case NODE_SPAWN:
+        emit_expr(cg, node->children[0]);   /* execute fn call, result in %rax */
+        emit(cg, "    call    " XLY_SYM("xly_null"));  /* spawn → null */
+        break;
+
     /* ── fallback ──────────────────────────────────────────────────── */
     default:
         emit(cg, "    call    " XLY_SYM("xly_null"));
@@ -2629,13 +2646,22 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         break;
     }
 
+    /* ── await expr (ARM64) ─────────────────────────────────────────── */
+    case NODE_AWAIT:
+        emit_expr_a64(cg, node->children[0]);
+        break;
+
+    /* ── spawn expr (ARM64) ─────────────────────────────────────────── */
+    case NODE_SPAWN:
+        emit_expr_a64(cg, node->children[0]);   /* execute call, result in x0 */
+        emit(cg, "    bl      " XLY_SYM("xly_null"));   /* spawn → null */
+        break;
+
     default:
         emit(cg, "    bl      " XLY_SYM("xly_null"));
         break;
     }
 }
-
-/* ── statement compiler (ARM64) ─────────────────────────────────────────
  * Post-condition: sp unchanged from entry.                               */
 static void emit_stmt_a64(CG *cg, ASTNode *node) {
     if (!node) return;
