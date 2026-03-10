@@ -133,6 +133,26 @@ XlyVal *xly_null(void) {
     return v;
 }
 
+/* xly_make_variant(tag_str, fields_array, nfields) → VAL_ENUM_VARIANT
+ * tag_str    : XlyVal* string holding the variant name (e.g. "Some")
+ * fields_arr : XlyVal** array of field values (may be NULL if nfields==0)
+ * nfields    : XlyVal* number holding field count
+ * Called from compiled code for both parameterless and parametric variants. */
+XlyVal *xly_make_variant(XlyVal *tag_val, XlyVal **fields, int nfields) {
+    XlyVal *v = (XlyVal*)calloc(1, sizeof(XlyVal));
+    v->type = VAL_ENUM_VARIANT;
+    v->variant.tag = strdup(tag_val && tag_val->str ? tag_val->str : "?");
+    v->variant.field_count = (size_t)nfields;
+    if (nfields > 0 && fields) {
+        v->variant.fields = (XlyVal**)malloc(sizeof(XlyVal*) * (size_t)nfields);
+        for (int i = 0; i < nfields; i++)
+            v->variant.fields[i] = fields[i];
+    } else {
+        v->variant.fields = NULL;
+    }
+    return v;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
  * TRUTHINESS
  * ══════════════════════════════════════════════════════════════════════════════ */
@@ -184,6 +204,30 @@ char *xly_to_cstr(XlyVal *v) {
                 free(es);
             }
             out[pos++] = ']';
+            out[pos] = '\0';
+            return out;
+        }
+        case VAL_ENUM_VARIANT: {
+            const char *tag = v->variant.tag ? v->variant.tag : "?";
+            if (v->variant.field_count == 0) return strdup(tag);
+            /* Tag(field0, field1, ...) */
+            size_t cap = 128;
+            char  *out = (char*)malloc(cap);
+            size_t pos = 0;
+            size_t tlen = strlen(tag);
+            while (pos + tlen + 2 >= cap) { cap *= 2; out = (char*)realloc(out, cap); }
+            memcpy(out + pos, tag, tlen); pos += tlen;
+            out[pos++] = '(';
+            for (size_t i = 0; i < v->variant.field_count; i++) {
+                if (i) { out[pos++] = ','; out[pos++] = ' '; }
+                char *fs = xly_to_cstr(v->variant.fields[i]);
+                size_t flen = strlen(fs);
+                while (pos + flen + 4 >= cap) { cap *= 2; out = (char*)realloc(out, cap); }
+                memcpy(out + pos, fs, flen); pos += flen;
+                free(fs);
+            }
+            if (pos + 2 >= cap) { cap *= 2; out = (char*)realloc(out, cap); }
+            out[pos++] = ')';
             out[pos] = '\0';
             return out;
         }
@@ -661,6 +705,140 @@ extern int modules_get(const char *name, void *out);
 
 XlyVal *xly_call_module(const char *mod, const char *fn,
                          XlyVal **args, size_t argc) {
+
+    /* ── Special higher-order array functions ───────────────────────────────
+     * These require xly_call_fnval (not available in modules.c), so they are
+     * intercepted here before the general modules_get() dispatch.            */
+    if (strcmp(mod, "array") == 0) {
+
+        /* array.length(arr) — alias for array.len */
+        if (strcmp(fn, "length") == 0) {
+            if (argc < 1 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_num(0.0);
+            return xly_num((double)args[0]->array_len);
+        }
+
+        /* array.map(arr, fn) — new array with fn applied to every element */
+        if (strcmp(fn, "map") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_array_create(NULL, 0);
+            XlyVal *arr  = args[0];
+            XlyVal *cb   = args[1];
+            size_t   n   = arr->array_len;
+            XlyVal **out = (XlyVal **)malloc(sizeof(XlyVal *) * (n ? n : 1));
+            for (size_t k = 0; k < n; k++) {
+                XlyVal *ea[1] = { arr->array[k] };
+                XlyVal *r = xly_call_fnval(cb, ea, 1);
+                out[k] = r ? r : xly_null();
+            }
+            XlyVal *result = xly_array_create(out, n);
+            free(out);
+            return result;
+        }
+
+        /* array.filter(arr, fn) — new array with elements where fn returns truthy */
+        if (strcmp(fn, "filter") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_array_create(NULL, 0);
+            XlyVal *arr  = args[0];
+            XlyVal *cb   = args[1];
+            size_t   n   = arr->array_len;
+            XlyVal **out = (XlyVal **)malloc(sizeof(XlyVal *) * (n ? n : 1));
+            size_t out_n = 0;
+            for (size_t k = 0; k < n; k++) {
+                XlyVal *ea[1]  = { arr->array[k] };
+                XlyVal *keep   = xly_call_fnval(cb, ea, 1);
+                int     truthy = keep &&
+                                 keep->type != VAL_NULL &&
+                                 !(keep->type == VAL_BOOL && !keep->boolean) &&
+                                 !(keep->type == VAL_NUMBER && keep->num == 0.0);
+                if (truthy) out[out_n++] = arr->array[k];
+            }
+            XlyVal *result = xly_array_create(out, out_n);
+            free(out);
+            return result;
+        }
+
+        /* array.reduce(arr, fn, initial) — fold array to a single value */
+        if (strcmp(fn, "reduce") == 0) {
+            if (argc < 3 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return (argc >= 3 && args) ? args[2] : xly_null();
+            XlyVal *arr = args[0];
+            XlyVal *cb  = args[1];
+            XlyVal *acc = args[2];
+            for (size_t k = 0; k < arr->array_len; k++) {
+                XlyVal *ea[2] = { acc, arr->array[k] };
+                XlyVal *next  = xly_call_fnval(cb, ea, 2);
+                acc = next ? next : xly_null();
+            }
+            return acc;
+        }
+
+        /* array.forEach(arr, fn) — call fn for each element, return null */
+        if (strcmp(fn, "forEach") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_null();
+            XlyVal *arr = args[0];
+            XlyVal *cb  = args[1];
+            for (size_t k = 0; k < arr->array_len; k++) {
+                XlyVal *ea[2] = { arr->array[k], xly_num((double)k) };
+                xly_call_fnval(cb, ea, 1);
+            }
+            return xly_null();
+        }
+
+        /* array.find(arr, fn) — return first element where fn is truthy, or null */
+        if (strcmp(fn, "find") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_null();
+            XlyVal *arr = args[0];
+            XlyVal *cb  = args[1];
+            for (size_t k = 0; k < arr->array_len; k++) {
+                XlyVal *ea[1]  = { arr->array[k] };
+                XlyVal *keep   = xly_call_fnval(cb, ea, 1);
+                int     truthy = keep &&
+                                 keep->type != VAL_NULL &&
+                                 !(keep->type == VAL_BOOL && !keep->boolean);
+                if (truthy) return arr->array[k];
+            }
+            return xly_null();
+        }
+
+        /* array.some(arr, fn) — true if any element passes fn */
+        if (strcmp(fn, "some") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_bool(0);
+            XlyVal *arr = args[0];
+            XlyVal *cb  = args[1];
+            for (size_t k = 0; k < arr->array_len; k++) {
+                XlyVal *ea[1]  = { arr->array[k] };
+                XlyVal *r      = xly_call_fnval(cb, ea, 1);
+                int     truthy = r &&
+                                 r->type != VAL_NULL &&
+                                 !(r->type == VAL_BOOL && !r->boolean);
+                if (truthy) return xly_bool(1);
+            }
+            return xly_bool(0);
+        }
+
+        /* array.every(arr, fn) — true if all elements pass fn */
+        if (strcmp(fn, "every") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_bool(1);
+            XlyVal *arr = args[0];
+            XlyVal *cb  = args[1];
+            for (size_t k = 0; k < arr->array_len; k++) {
+                XlyVal *ea[1]  = { arr->array[k] };
+                XlyVal *r      = xly_call_fnval(cb, ea, 1);
+                int     truthy = r &&
+                                 r->type != VAL_NULL &&
+                                 !(r->type == VAL_BOOL && !r->boolean);
+                if (!truthy) return xly_bool(0);
+            }
+            return xly_bool(1);
+        }
+    }
+
     Mod m;
     memset(&m, 0, sizeof(m));
     if (!modules_get(mod, &m)) {

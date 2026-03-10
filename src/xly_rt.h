@@ -43,6 +43,7 @@ XlyVal *xly_num(double n);
 XlyVal *xly_str(const char *s);     /* copies s            */
 XlyVal *xly_bool(int b);            /* 0 or 1              */
 XlyVal *xly_null(void);
+XlyVal *xly_make_variant(XlyVal *tag, XlyVal **fields, int nfields);
 
 /* ── arithmetic / comparison  (both args must be valid XlyVal*) ────────────── */
 XlyVal *xly_add(XlyVal *a, XlyVal *b);   /* num+num  or  str concat */

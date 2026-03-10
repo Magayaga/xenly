@@ -542,6 +542,18 @@ void interpreter_destroy(Interpreter *interp) {
     }
     free(interp->all_instances);
     free(interp->source_dir);
+    /* Free any remaining queued tasks (normally empty after drain_task_queue).
+     * Args here were never bound to an env, so we free them individually.    */
+    Task *t = interp->task_queue;
+    while (t) {
+        Task *next = t->next;
+        for (size_t i = 0; i < t->argc; i++)
+            if (t->args[i]) value_destroy(t->args[i]);
+        free(t->args);
+        env_release(t->call_env);
+        free(t);
+        t = next;
+    }
     free(interp);
 }
 
@@ -2608,87 +2620,73 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
 
     // ── SPAWN (async task launch) ────────────────────────────────────────
     case NODE_SPAWN: {
-        // spawn fn_call  — launches async function in background
+        // spawn fn_call  — launches a function as a background task
         ASTNode *call = node->children[0];
-        
+
         if (call->type != NODE_FN_CALL && call->type != NODE_CALL_EXPR) {
             fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: spawn expects a function call.\033[0m\n",
                     node->line);
             interp->had_error = 1;
             return value_null();
         }
-        
-        // Get the function
+
+        // Get the function value
         Value *fnval = NULL;
         if (call->type == NODE_FN_CALL) {
             fnval = env_get(env, call->str_value);
         } else {
-            // NODE_CALL_EXPR: evaluate the callee
             fnval = eval(interp, call->children[0], env);
         }
-        
+
         if (!fnval || fnval->type != VAL_FUNCTION) {
             fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: spawn requires a function.\033[0m\n",
                     node->line);
             interp->had_error = 1;
             return value_null();
         }
-        
-        FnDef *fn = fnval->fn;
-        if (!fn->is_async) {
-            fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: spawn requires an async function.\033[0m\n",
-                    node->line);
-            interp->had_error = 1;
-            return value_null();
-        }
-        
+
         // Evaluate arguments
-        size_t argc = (call->type == NODE_FN_CALL) ? call->child_count : 
+        size_t argc = (call->type == NODE_FN_CALL) ? call->child_count :
                       (call->child_count > 1 ? call->child_count - 1 : 0);
         size_t arg_start = (call->type == NODE_CALL_EXPR) ? 1 : 0;
-        
-        Value **args = (Value **)malloc(sizeof(Value *) * argc);
-        for (size_t i = 0; i < argc; i++) {
+
+        Value **args = argc > 0 ? (Value **)malloc(sizeof(Value *) * argc) : NULL;
+        for (size_t i = 0; i < argc; i++)
             args[i] = eval(interp, call->children[arg_start + i], env);
-        }
-        
-        // Create task and add to queue
+
+        // Enqueue as a task — drained by drain_task_queue after main finishes
         Task *task = (Task *)calloc(1, sizeof(Task));
-        task->fn = fn;
-        task->args = args;
-        task->argc = argc;
+        task->fn       = fnval->fn;
+        task->args     = args;
+        task->argc     = argc;
         task->call_env = env;
         env_retain(env);
-        
-        // Enqueue task
+
         if (interp->task_queue_tail) {
             interp->task_queue_tail->next = task;
             interp->task_queue_tail = task;
         } else {
             interp->task_queue = interp->task_queue_tail = task;
         }
-        
-        // Return a task handle (for now, just return null)
-        // In a full implementation, return a Future/Promise value
+
         return value_null();
     }
 
     // ── AWAIT (wait for async result) ────────────────────────────────────
     case NODE_AWAIT: {
-        // await fn_call  — calls async function and waits for result
+        // await fn_call  — executes the call synchronously and returns its result.
+        // In the current "preview" implementation there is no concurrency, so
+        // await simply evaluates the child call expression directly.
         ASTNode *call = node->children[0];
-        
+
         if (call->type != NODE_FN_CALL && call->type != NODE_CALL_EXPR) {
             fprintf(stderr, "\033[1;31m[Xenly Error] Line %d: await expects a function call.\033[0m\n",
                     node->line);
             interp->had_error = 1;
             return value_null();
         }
-        
-        // For now, just execute synchronously
-        // A full implementation would check if it's a Future/Promise and wait
-        Value *result = eval(interp, call, env);
-        return result;
+
+        return eval(interp, call, env);
     }
 
     default:
@@ -2697,7 +2695,56 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
 }
 
 // ─── Public Entry ────────────────────────────────────────────────────────────
+/* ── Drain the spawn task queue ────────────────────────────────────────────
+ * After the main program body finishes, execute all queued spawned tasks in
+ * FIFO order.  Each task runs synchronously in the same thread (the current
+ * implementation is "async syntax preview" — no real concurrency).          */
+static void drain_task_queue(Interpreter *interp) {
+    while (interp->task_queue) {
+        Task *task = interp->task_queue;
+        interp->task_queue = task->next;
+        if (!interp->task_queue) interp->task_queue_tail = NULL;
+
+        FnDef *fn = task->fn;
+        if (fn && fn->body) {
+            /* Build a fresh scope from the function's closure and bind args.
+             * env_set does NOT transfer ownership — env_destroy will call
+             * value_destroy on each bound value, matching what NODE_FN_CALL
+             * does (it also just free(args) without destroying individual values). */
+            Environment *fn_env = env_create(fn->closure);
+            for (size_t i = 0; i < fn->param_count && i < task->argc; i++)
+                env_set(fn_env, fn->params[i].name, task->args[i]);
+            /* Fill remaining parameters with null */
+            for (size_t i = task->argc; i < fn->param_count; i++)
+                env_set(fn_env, fn->params[i].name, value_null());
+
+            Value *result = eval(interp, fn->body, fn_env);
+            /* Unwrap return sentinel */
+            if (result && result->type == VAL_RETURN) {
+                Value *inner = result->inner;
+                result->inner = NULL;
+                value_destroy(result);
+                result = inner;
+            }
+            if (result) value_destroy(result);
+            env_destroy(fn_env);   /* also destroys the bound arg values */
+        } else {
+            /* No body (e.g. variant constructor) — free args directly */
+            for (size_t i = 0; i < task->argc; i++)
+                if (task->args[i]) value_destroy(task->args[i]);
+        }
+
+        /* Free the args array pointer (values already owned/destroyed by fn_env) */
+        free(task->args);
+        env_release(task->call_env);
+        free(task);
+    }
+}
+
 Value *interpreter_run(Interpreter *interp, ASTNode *program) {
     g_interp = interp;
-    return eval(interp, program, interp->global);
+    Value *result = eval(interp, program, interp->global);
+    /* Run any tasks queued by spawn after the main program completes */
+    drain_task_queue(interp);
+    return result;
 }

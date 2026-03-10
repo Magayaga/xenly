@@ -70,6 +70,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * SHARED: codegen state (same layout for both backends)
  * ═══════════════════════════════════════════════════════════════════════════ */
+/* Named type for the rename table entries — used in CG, funcs[], and helpers */
+typedef struct { char *src; char *lbl; } FnRename;
+
 /* ── codegen state ──────────────────────────────────────────────────────── */
 /* ── Optimization levels ────────────────────────────────────────────────────
  *   0 = -O0: no opts (debug output, most readable asm)
@@ -112,12 +115,31 @@ typedef struct {
         ASTNode *node;
         char   **captures;   /* names of captured outer variables (NULL if none) */
         int      ncaptures;
+        char    *asm_label;  /* unique asm label suffix (without .Lxly_fn_ prefix) */
+        /* rename context snapshot: the fn_renames visible when this decl was encountered,
+         * so that when the body is later emitted the same peer/sibling names resolve. */
+        FnRename *rename_ctx;
+        int rename_ctx_count;
     } *funcs;
     int     func_count, func_cap;
 
     /* set of declared function names (for call-site dispatch) */
     char  **fn_names;
     int     fn_name_count, fn_name_cap;
+
+    /* set of asm labels already claimed for fn bodies (never reset) */
+    struct { char *lbl; } *fn_labels_used;
+    int fn_labels_used_count, fn_labels_used_cap;
+
+    /* per-scope rename table: source-name → unique asm label
+     * Saved/restored around each emit_function call.             */
+    FnRename *fn_renames;
+    int fn_rename_count, fn_rename_cap;
+
+    /* enum variant name table: tracks variant names and their param counts
+     * so NODE_FN_CALL and NODE_IDENTIFIER can emit xly_make_variant calls */
+    struct { char *name; int nparams; } *variants;
+    int     variant_count, variant_cap;
 
     int     had_error;
 
@@ -263,6 +285,125 @@ static int fn_name_is_declared(CG *cg, const char *name) {
     return 0;
 }
 
+/* ── fn label uniquification helpers ────────────────────────────────────
+ * Guarantee every function body gets a globally-unique asm label even
+ * when the same name is used in different scopes (nested functions,
+ * closures, sibling namespaces, etc.).
+ *
+ * fn_labels_used  — global set of labels already claimed this compilation
+ * fn_renames      — scope-local stack: source-name → unique asm label
+ *                   saved/restored around each emit_function() call       */
+
+static int fn_label_is_used(CG *cg, const char *lbl) {
+    for (int i = 0; i < cg->fn_labels_used_count; i++)
+        if (strcmp(cg->fn_labels_used[i].lbl, lbl) == 0) return 1;
+    return 0;
+}
+static void fn_label_mark_used(CG *cg, const char *lbl) {
+    if (fn_label_is_used(cg, lbl)) return;
+    if (cg->fn_labels_used_count >= cg->fn_labels_used_cap) {
+        cg->fn_labels_used_cap = cg->fn_labels_used_cap ? cg->fn_labels_used_cap * 2 : 16;
+        cg->fn_labels_used = realloc(cg->fn_labels_used,
+                             sizeof(cg->fn_labels_used[0]) * (size_t)cg->fn_labels_used_cap);
+    }
+    cg->fn_labels_used[cg->fn_labels_used_count++].lbl = strdup(lbl);
+}
+/* Pick a unique label for `name`; write into buf[bufsz]; mark as used. */
+static void fn_unique_label(CG *cg, const char *name, char *buf, size_t bufsz) {
+    if (!fn_label_is_used(cg, name)) {
+        snprintf(buf, bufsz, "%s", name);
+    } else {
+        for (int n = 2; ; n++) {
+            snprintf(buf, bufsz, "%s__%d", name, n);
+            if (!fn_label_is_used(cg, buf)) break;
+        }
+    }
+    fn_label_mark_used(cg, buf);
+}
+/* Push source→label rename for the current function scope. */
+static void fn_rename_push(CG *cg, const char *src, const char *lbl) {
+    if (cg->fn_rename_count >= cg->fn_rename_cap) {
+        cg->fn_rename_cap = cg->fn_rename_cap ? cg->fn_rename_cap * 2 : 16;
+        cg->fn_renames = realloc(cg->fn_renames,
+                         sizeof(FnRename) * (size_t)cg->fn_rename_cap);
+    }
+    cg->fn_renames[cg->fn_rename_count].src = strdup(src);
+    cg->fn_renames[cg->fn_rename_count].lbl = strdup(lbl);
+    cg->fn_rename_count++;
+}
+/* Pop rename entries back to `target`, freeing strings. */
+static void fn_renames_pop_to(CG *cg, int target) {
+    while (cg->fn_rename_count > target) {
+        cg->fn_rename_count--;
+        free(cg->fn_renames[cg->fn_rename_count].src);
+        free(cg->fn_renames[cg->fn_rename_count].lbl);
+    }
+}
+/* Return the innermost asm label for `src`, or NULL if not renamed. */
+static const char *fn_rename_lookup(CG *cg, const char *src) {
+    for (int i = cg->fn_rename_count - 1; i >= 0; i--)
+        if (strcmp(cg->fn_renames[i].src, src) == 0)
+            return cg->fn_renames[i].lbl;
+    return NULL;
+}
+
+/* Snapshot the current rename stack: returns a malloc'd copy array + count.
+ * The caller owns the returned array; free with fn_rename_ctx_free().        */
+static void fn_rename_ctx_snapshot(CG *cg, FnRename **out, int *out_count) {
+    *out_count = cg->fn_rename_count;
+    if (cg->fn_rename_count == 0) { *out = NULL; return; }
+    *out = malloc(sizeof(FnRename) * (size_t)cg->fn_rename_count);
+    for (int i = 0; i < cg->fn_rename_count; i++) {
+        (*out)[i].src = strdup(cg->fn_renames[i].src);
+        (*out)[i].lbl = strdup(cg->fn_renames[i].lbl);
+    }
+}
+/* Restore (overlay) a snapshot onto the rename stack: push all entries from
+ * snapshot that are not already present (inner scope entries win).           */
+static void fn_rename_ctx_restore(CG *cg, FnRename *ctx, int count) {
+    for (int i = 0; i < count; i++) {
+        /* Only push if not already in stack (current scope wins) */
+        if (!fn_rename_lookup(cg, ctx[i].src))
+            fn_rename_push(cg, ctx[i].src, ctx[i].lbl);
+    }
+}
+/* Free a snapshot. */
+static void fn_rename_ctx_free(FnRename *ctx, int count) {
+    for (int i = 0; i < count; i++) { free(ctx[i].src); free(ctx[i].lbl); }
+    free(ctx);
+}
+/* Resolve identifier `src` to its asm label (rename wins over fn_names). */
+static const char *fn_resolve_label(CG *cg, const char *src) {
+    const char *r = fn_rename_lookup(cg, src);
+    return r ? r : src;
+}
+/* True if `name` is a known callable function in the current scope.
+ * Combines the global fn_names[] table (top-level) with the per-scope
+ * rename table (nested / inner functions).                               */
+static int fn_is_known(CG *cg, const char *name) {
+    return fn_name_is_declared(cg, name) || fn_rename_lookup(cg, name) != NULL;
+}
+
+/* ── enum variant table helpers ──────────────────────────────────────────── */
+static void variant_register(CG *cg, const char *name, int nparams) {
+    for (int i = 0; i < cg->variant_count; i++)
+        if (strcmp(cg->variants[i].name, name) == 0) return;
+    if (cg->variant_count >= cg->variant_cap) {
+        cg->variant_cap = cg->variant_cap ? cg->variant_cap * 2 : 8;
+        cg->variants = realloc(cg->variants, sizeof(cg->variants[0]) * (size_t)cg->variant_cap);
+    }
+    cg->variants[cg->variant_count].name    = strdup(name);
+    cg->variants[cg->variant_count].nparams = nparams;
+    cg->variant_count++;
+}
+/* Returns nparams if name is a known variant, -1 otherwise. */
+static int variant_find(CG *cg, const char *name) {
+    for (int i = 0; i < cg->variant_count; i++)
+        if (strcmp(cg->variants[i].name, name) == 0)
+            return cg->variants[i].nparams;
+    return -1;
+}
+
 /* ── free-variable analysis for closure capture ─────────────────────────
  * Collects names of identifiers in `node` that are NOT in `params[]`
  * and NOT globally declared functions — these are captured from outer scope. */
@@ -303,17 +444,38 @@ static void collect_free_vars(CG *cg, ASTNode *node, NameSet *params, NameSet *o
         collect_free_vars(cg, node->children[i], params, out);
 }
 
-/* ── pre-pass: collect all top-level and nested fn declaration names ──── */
+/* ── pre-pass: collect top-level fn declaration names ────────────────── *
+ * Only registers direct top-level function names so forward calls work.
+ * Nested functions (inside other fn bodies) are uniquified at emit time
+ * to prevent duplicate asm label errors when names are reused across    *
+ * scopes.                                                                */
 static void collect_fn_names(CG *cg, ASTNode *node) {
     if (!node) return;
-    if (node->type == NODE_FN_DECL && node->str_value)
+    if (node->type == NODE_FN_DECL && node->str_value) {
         fn_name_register(cg, node->str_value);
+        return; /* do NOT recurse into body — nested fn labels assigned at emit time */
+    }
     for (size_t i = 0; i < node->child_count; i++)
         collect_fn_names(cg, node->children[i]);
     /* also recurse into params default values */
     for (size_t i = 0; i < node->param_count; i++)
         if (node->params && node->params[i].default_value)
             collect_fn_names(cg, node->params[i].default_value);
+}
+
+/* ── pre-pass: collect enum variant names ───────────────────────────────── */
+static void collect_variant_names(CG *cg, ASTNode *node) {
+    if (!node) return;
+    if (node->type == NODE_ENUM_DECL) {
+        for (size_t i = 0; i < node->child_count; i++) {
+            ASTNode *v = node->children[i];
+            if (v && v->str_value)
+                variant_register(cg, v->str_value, (int)v->param_count);
+        }
+        return; /* don't recurse into children — they are variant nodes */
+    }
+    for (size_t i = 0; i < node->child_count; i++)
+        collect_variant_names(cg, node->children[i]);
 }
 
 /* ── pre-pass: count VAR_DECLs recursively ─────────────────────────────── */
@@ -417,6 +579,9 @@ static void emit_expr(CG *cg, ASTNode *node) {
         cg->funcs[fi].node       = node;
         cg->funcs[fi].ncaptures  = captures.count;
         cg->funcs[fi].captures   = captures.count > 0 ? captures.names : NULL;
+        cg->funcs[fi].asm_label  = strdup(anon_name);
+        fn_label_mark_used(cg, anon_name);
+        fn_rename_ctx_snapshot(cg, &cg->funcs[fi].rename_ctx, &cg->funcs[fi].rename_ctx_count);
         /* (don't nameset_free: captures.names ownership transferred) */
 
         if (captures.count == 0) {
@@ -452,9 +617,10 @@ static void emit_expr(CG *cg, ASTNode *node) {
             if (gi >= 0) {
                 /* Global variable: load from __xly_globals array */
                 emit(cg, "    movq    " XLY_SYM("__xly_globals") "+%d(%%rip), %%rax", gi * 8);
-            } else if (fn_name_is_declared(cg, node->str_value)) {
+            } else if (fn_is_known(cg, node->str_value)) {
                 /* Declared function used as a value — wrap its address as XlyVal* */
-                emit(cg, "    leaq    .Lxly_fn_%s(%%rip), %%rdi", node->str_value);
+                const char *lbl = fn_resolve_label(cg, node->str_value);
+                emit(cg, "    leaq    .Lxly_fn_%s(%%rip), %%rdi", lbl);
                 emit(cg, "    call    " XLY_SYM("xly_make_fn"));
             } else {
                 emit(cg, "    call    " XLY_SYM("xly_null"));   /* undefined → null */
@@ -727,11 +893,38 @@ static void emit_expr(CG *cg, ASTNode *node) {
         int nreg = nargs < 6 ? nargs : 6;  /* args 0-5 → registers       */
         int nstk = nargs - nreg;            /* args 6+  → stack (SysV ABI) */
 
+        /* ── enum variant constructor ───────────────────────────────────────
+         * If the callee name is a known variant, emit xly_make_variant call. */
+        if (node->str_value && variant_find(cg, node->str_value) >= 0) {
+            /* Build args array on stack, call xly_make_variant(tag, arr, n) */
+            int arr_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+            if (arr_bytes > 0)
+                emit(cg, "    subq    $%d, %%rsp", arr_bytes);
+            for (int i = 0; i < nargs; i++) {
+                emit_expr(cg, node->children[i]);
+                emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
+            }
+            /* rdi = tag string (intern the variant name as a string literal) */
+            const char *tag_lbl = intern_string(cg, node->str_value);
+            emit(cg, "    leaq    %s(%%rip), %%rdi", tag_lbl);
+            emit(cg, "    call    " XLY_SYM("xly_str"));
+            emit(cg, "    movq    %%rax, %%rdi");         /* rdi = tag XlyVal* */
+            if (nargs > 0)
+                emit(cg, "    movq    %%rsp, %%rsi");     /* rsi = fields ptr  */
+            else
+                emit(cg, "    xorq    %%rsi, %%rsi");
+            emit(cg, "    movl    $%d, %%edx", nargs);   /* edx = nfields     */
+            emit(cg, "    call    " XLY_SYM("xly_make_variant"));
+            if (arr_bytes > 0)
+                emit(cg, "    addq    $%d, %%rsp", arr_bytes);
+            break;
+        }
+
         /* ── variable-fn path: use xly_call_fnval (all args in array) ─────
          * Handles any number of args cleanly via the args array.           */
         int var_off = var_offset(cg, node->str_value);
         int gi_fn   = (var_off == 0) ? gvar_find(cg, node->str_value) : -1;
-        int is_var_fn = !fn_name_is_declared(cg, node->str_value)
+        int is_var_fn = !fn_is_known(cg, node->str_value)
                         && (var_off != 0 || gi_fn >= 0);
 
         if (is_var_fn) {
@@ -757,7 +950,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
             break;
         }
 
-        if (!fn_name_is_declared(cg, node->str_value)) {
+        if (!fn_is_known(cg, node->str_value)) {
             emit(cg, "    call    " XLY_SYM("xly_null"));
             break;
         }
@@ -800,7 +993,7 @@ static void emit_expr(CG *cg, ASTNode *node) {
         if (stage_bytes > 0)
             emit(cg, "    addq    $%d, %%rsp", stage_bytes);
 
-        emit(cg, "    call    .Lxly_fn_%s", node->str_value);
+        emit(cg, "    call    .Lxly_fn_%s", fn_resolve_label(cg, node->str_value));
 
         /* Caller cleans up stack args */
         if (stk_bytes > 0)
@@ -1089,6 +1282,23 @@ static void emit_expr(CG *cg, ASTNode *node) {
         break;
     }
 
+    /* ── await expr ─────────────────────────────────────────────────────
+     * await fn_call  — synchronous in current impl: just evaluate the call.
+     * children[0] = the call expression (NODE_FN_CALL or NODE_CALL_EXPR).  */
+    case NODE_AWAIT:
+        emit_expr(cg, node->children[0]);
+        break;
+
+    /* ── spawn expr ─────────────────────────────────────────────────────
+     * spawn fn_call  — evaluate the call for side effects, discard result.
+     * In the compiled runtime there is no scheduler; spawn executes the
+     * function synchronously (matching the interpreter "preview" semantics).
+     * Result ends up in %rax but the expression produces null.             */
+    case NODE_SPAWN:
+        emit_expr(cg, node->children[0]);   /* execute fn call, result in %rax */
+        emit(cg, "    call    " XLY_SYM("xly_null"));  /* spawn → null */
+        break;
+
     /* ── fallback ──────────────────────────────────────────────────── */
     default:
         emit(cg, "    call    " XLY_SYM("xly_null"));
@@ -1096,10 +1306,9 @@ static void emit_expr(CG *cg, ASTNode *node) {
     }
 }
 
-/* ── statement compiler ─────────────────────────────────────────────────
- * Post-condition: %rsp unchanged from entry.
+/* ── statement compiler (x86-64) — Post-condition: %%rsp unchanged from entry.
  * If noreturn_mode is set (after sys.exit/abort), all subsequent statements
- * are elided — the code is unreachable and emitting it wastes binary space.*/
+ * are elided — the code is unreachable and emitting it wastes binary space.  */
 static void emit_stmt(CG *cg, ASTNode *node) {
     if (!node) return;
     /* Dead code elimination after noreturn calls (O1+) */
@@ -1382,16 +1591,31 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         break;
 
     /* ── fn decl — stash for emission after main ─────────────────── */
-    case NODE_FN_DECL:
+    case NODE_FN_DECL: {
+        /* Allocate a globally-unique asm label for this function body.
+         * If a function with this name was already emitted (e.g. same name
+         * reused in a different inner scope), the label gets a numeric suffix
+         * like "add__2" so the assembler never sees duplicate definitions.   */
+        char ulbl[256];
+        fn_unique_label(cg, node->str_value, ulbl, sizeof(ulbl));
+        /* Push scope-local rename so call sites inside THIS body resolve
+         * to the correct (possibly renamed) label.                           */
+        fn_rename_push(cg, node->str_value, ulbl);
         if (cg->func_count >= cg->func_cap) {
             cg->func_cap = cg->func_cap ? cg->func_cap * 2 : 16;
             cg->funcs    = realloc(cg->funcs, sizeof(cg->funcs[0]) * (size_t)cg->func_cap);
         }
         { int fi = cg->func_count++;
-          cg->funcs[fi].node = node;
-          cg->funcs[fi].captures = NULL;
-          cg->funcs[fi].ncaptures = 0; }
+          cg->funcs[fi].node      = node;
+          cg->funcs[fi].captures  = NULL;
+          cg->funcs[fi].ncaptures = 0;
+          cg->funcs[fi].asm_label = strdup(ulbl);
+          /* Snapshot the current rename table so that when this function's
+           * body is emitted later (after the outer scope has been cleaned up),
+           * peer functions declared in the same scope are still resolvable.   */
+          fn_rename_ctx_snapshot(cg, &cg->funcs[fi].rename_ctx, &cg->funcs[fi].rename_ctx_count); }
         break;
+    }
 
     /* ── return ────────────────────────────────────────────────────── */
     case NODE_RETURN:
@@ -1408,6 +1632,32 @@ static void emit_stmt(CG *cg, ASTNode *node) {
     case NODE_IMPORT:
         break;
 
+    /* ── enum declaration — register variants, create parameterless ones ── */
+    case NODE_ENUM_DECL:
+        /* Variant names already registered in variant table by pre-pass.
+         * For parameterless variants, emit a global holding the singleton
+         * VAL_ENUM_VARIANT value so NODE_IDENTIFIER can load it.
+         * Parametric variants are constructed at call-site via xly_make_variant. */
+        for (size_t vi = 0; vi < node->child_count; vi++) {
+            ASTNode *vn = node->children[vi];
+            if (!vn || !vn->str_value) continue;
+            if (vn->param_count == 0) {
+                /* Create the singleton and store in a global */
+                const char *tag_label = intern_string(cg, vn->str_value);
+                emit(cg, "    leaq    %s(%%rip), %%rdi", tag_label);
+                emit(cg, "    call    " XLY_SYM("xly_str"));
+                emit(cg, "    movq    %%rax, %%rdi");
+                emit(cg, "    xorq    %%rsi, %%rsi");   /* fields = NULL */
+                emit(cg, "    xorl    %%edx, %%edx");   /* nfields = 0   */
+                emit(cg, "    call    " XLY_SYM("xly_make_variant"));
+                /* Store in global slot so identifier lookups find it */
+                int gi = gvar_declare(cg, vn->str_value);
+                emit(cg, "    movq    %%rax, " XLY_SYM("__xly_globals") "+%d(%%rip)", gi * 8);
+            }
+            /* Parametric variants: nothing to emit here; call-sites use xly_make_variant */
+        }
+        break;
+
     /* ── everything else — try as expression ─────────────────────── */
     default:
         emit_expr(cg, node);
@@ -1416,25 +1666,31 @@ static void emit_stmt(CG *cg, ASTNode *node) {
 }
 
 /* ── emit a user-defined function ──────────────────────────────────────── */
-static void emit_function(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
-    const char *name    = fn->str_value;
+static void emit_function(CG *cg, ASTNode *fn, const char *asm_label,
+                          FnRename *rename_ctx, int rename_ctx_count,
+                          char **captures, int ncaptures) {
     size_t      nparams = fn->param_count;
     ASTNode    *body    = fn->children[0];   /* NODE_BLOCK */
 
     /* save codegen frame state — clear var table so main() vars don't leak in */
     int sv_vc = cg->var_count, sv_fo = cg->frame_offset, sv_sd = cg->scope_depth;
     int sv_nm = cg->noreturn_mode;
+    int sv_rename = cg->fn_rename_count;   /* save rename scope for nested fns */
     cg->scope_depth  = 0;
     cg->frame_offset = 0;
     cg->var_count    = 0;   /* hide main() vars: functions have their own scope */
     cg->noreturn_mode = 0;
+
+    /* Restore the rename context that was visible when this fn was declared.
+     * This makes sibling/peer inner function names resolvable inside the body. */
+    fn_rename_ctx_restore(cg, rename_ctx, rename_ctx_count);
 
     /* frame size: params + captures + locals + generous padding, 16-aligned */
     int n = (int)nparams + ncaptures + count_locals(body) + 32;
     int frame = (n * 8 + 15) & ~15;
 
     emit(cg, "");
-    emit(cg, ".Lxly_fn_%s:", name);
+    emit(cg, ".Lxly_fn_%s:", asm_label);
     emit(cg, "    pushq   %%rbp");
     emit(cg, "    movq    %%rsp, %%rbp");
     emit(cg, "    subq    $%d, %%rsp", frame);
@@ -1514,6 +1770,7 @@ static void emit_function(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
     cg->noreturn_mode = sv_nm;
     cg->frame_offset = sv_fo;
     cg->scope_depth  = sv_sd;
+    fn_renames_pop_to(cg, sv_rename);  /* pop renames pushed by nested fn decls */
 }
 
 /* ── x86-64 public entry (called by the dispatch codegen() below) ───────── */
@@ -1531,6 +1788,7 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
 
     /* pre-pass: collect all declared function names for call-site dispatch */
     collect_fn_names(&cg, program);
+    collect_variant_names(&cg, program);
 
     /* main frame: generous */
     /* Frame = locals × 8 + 512 bytes of spill headroom.
@@ -1560,7 +1818,9 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
 
     /* user functions */
     for (int i = 0; i < cg.func_count; i++)
-        emit_function(&cg, cg.funcs[i].node, cg.funcs[i].captures, cg.funcs[i].ncaptures);
+        emit_function(&cg, cg.funcs[i].node, cg.funcs[i].asm_label,
+                      cg.funcs[i].rename_ctx, cg.funcs[i].rename_ctx_count,
+                      cg.funcs[i].captures, cg.funcs[i].ncaptures);
 
     /* .rodata */
     emit(&cg, "");
@@ -1638,9 +1898,19 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
     free(cg.gvars);
     for (int i = 0; i < cg.str_count; i++)   { free(cg.strings[i].text); free(cg.strings[i].label); }
     free(cg.strings);
+    for (int i = 0; i < cg.func_count; i++) {
+        free(cg.funcs[i].asm_label);
+        fn_rename_ctx_free(cg.funcs[i].rename_ctx, cg.funcs[i].rename_ctx_count);
+    }
     free(cg.funcs);
     for (int i = 0; i < cg.fn_name_count; i++) free(cg.fn_names[i]);
     free(cg.fn_names);
+    for (int i = 0; i < cg.fn_labels_used_count; i++) free(cg.fn_labels_used[i].lbl);
+    free(cg.fn_labels_used);
+    for (int i = 0; i < cg.fn_rename_count; i++) { free(cg.fn_renames[i].src); free(cg.fn_renames[i].lbl); }
+    free(cg.fn_renames);
+    for (int i = 0; i < cg.variant_count; i++) free(cg.variants[i].name);
+    free(cg.variants);
     for (int i = 0; i < cg.brk_top; i++) free(cg.brk_labels[i]);
     free(cg.brk_labels);
     for (int i = 0; i < cg.cnt_top; i++) free(cg.cnt_labels[i]);
@@ -1785,8 +2055,7 @@ static void emit_adrp_a64(CG *cg, const char *reg, const char *sym) {
     emit(cg, "    add     %s, %s, %s@PAGEOFF", reg, reg, sym);
 }
 
-/* ── expression compiler (ARM64) ────────────────────────────────────────
- * Post-condition: result XlyVal* is in x0.  sp is unchanged.             */
+/* ── expression compiler (ARM64) — Post-condition: result XlyVal* in x0, sp unchanged. */
 static void emit_expr_a64(CG *cg, ASTNode *node) {
     if (!node) { emit(cg, "    bl      " XLY_SYM("xly_null")); return; }
 
@@ -1844,7 +2113,10 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         { int fi = cg->func_count++;
           cg->funcs[fi].node = node;
           cg->funcs[fi].ncaptures = captures_a.count;
-          cg->funcs[fi].captures  = captures_a.count > 0 ? captures_a.names : NULL; }
+          cg->funcs[fi].captures  = captures_a.count > 0 ? captures_a.names : NULL;
+          cg->funcs[fi].asm_label = strdup(anon_name);
+          fn_label_mark_used(cg, anon_name);
+          fn_rename_ctx_snapshot(cg, &cg->funcs[fi].rename_ctx, &cg->funcs[fi].rename_ctx_count); }
 
         /* Load address of the synthesized label, wrap via xly_make_fn/closure */
         emit(cg, "    adrp    x0, .Lxly_fn_%s@PAGE", anon_name);
@@ -1883,9 +2155,10 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
                 emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
                 emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
                 emit(cg, "    ldr     x0, [x9, #%d]", gi * 8);
-            } else if (fn_name_is_declared(cg, node->str_value)) {
-                emit(cg, "    adrp    x0, .Lxly_fn_%s@PAGE", node->str_value);
-                emit(cg, "    add     x0, x0, .Lxly_fn_%s@PAGEOFF", node->str_value);
+            } else if (fn_is_known(cg, node->str_value)) {
+                const char *lbl_a = fn_resolve_label(cg, node->str_value);
+                emit(cg, "    adrp    x0, .Lxly_fn_%s@PAGE", lbl_a);
+                emit(cg, "    add     x0, x0, .Lxly_fn_%s@PAGEOFF", lbl_a);
                 emit(cg, "    bl      " XLY_SYM("xly_make_fn"));
             } else {
                 emit(cg, "    bl      " XLY_SYM("xly_null"));
@@ -2107,6 +2380,32 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
             cg->had_error = 1;
             nargs = 8;
         }
+
+        /* ── enum variant constructor (ARM64) ───────────────────────────── */
+        if (node->str_value && variant_find(cg, node->str_value) >= 0) {
+            int arr_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+            if (arr_bytes > 0)
+                sp_sub_a64(cg, arr_bytes);
+            for (int i = 0; i < nargs; i++) {
+                emit_expr_a64(cg, node->children[i]);
+                emit(cg, "    str     x0, [sp, #%d]", i * 8);
+            }
+            /* x0 = tag string */
+            const char *tag_lbl = intern_string(cg, node->str_value);
+            emit_adrp_a64(cg, "x0", tag_lbl);
+            emit(cg, "    bl      " XLY_SYM("xly_str"));
+            /* x1 = fields ptr (sp, or 0 if none) */
+            if (nargs > 0)
+                emit(cg, "    mov     x1, sp");
+            else
+                emit(cg, "    mov     x1, #0");
+            emit(cg, "    mov     w2, #%d", nargs);
+            emit(cg, "    bl      " XLY_SYM("xly_make_variant"));
+            if (arr_bytes > 0)
+                sp_add_a64(cg, arr_bytes);
+            break;
+        }
+
         /* AArch64: args go in x0–x7.  We eval left-to-right, spill each,
          * then reload in reverse order into the correct registers.         */
         static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
@@ -2119,8 +2418,8 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
             spill_pop_a64(cg, (char*)aregs[i]);
 
         /* Dispatch: declared fn → bl direct; variable fn → xly_call_fnval */
-        if (fn_name_is_declared(cg, node->str_value)) {
-            emit(cg, "    bl      .Lxly_fn_%s", node->str_value);
+        if (fn_is_known(cg, node->str_value)) {
+            emit(cg, "    bl      .Lxly_fn_%s", fn_resolve_label(cg, node->str_value));
         } else {
             int var_off = var_offset(cg, node->str_value);
             int gi_fn_a = (var_off == 0) ? gvar_find(cg, node->str_value) : -1;
@@ -2345,14 +2644,24 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         break;
     }
 
+    /* ── await expr (ARM64) ─────────────────────────────────────────── */
+    case NODE_AWAIT:
+        emit_expr_a64(cg, node->children[0]);
+        break;
+
+    /* ── spawn expr (ARM64) ─────────────────────────────────────────── */
+    case NODE_SPAWN:
+        emit_expr_a64(cg, node->children[0]);   /* execute call, result in x0 */
+        emit(cg, "    bl      " XLY_SYM("xly_null"));   /* spawn → null */
+        break;
+
     default:
         emit(cg, "    bl      " XLY_SYM("xly_null"));
         break;
     }
 }
 
-/* ── statement compiler (ARM64) ─────────────────────────────────────────
- * Post-condition: sp unchanged from entry.                               */
+/* ── statement compiler (ARM64) — Post-condition: sp unchanged from entry. */
 static void emit_stmt_a64(CG *cg, ASTNode *node) {
     if (!node) return;
 
@@ -2593,16 +2902,22 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         scope_leave(cg);
         break;
 
-    case NODE_FN_DECL:
+    case NODE_FN_DECL: {
+        char ulbl_a[256];
+        fn_unique_label(cg, node->str_value, ulbl_a, sizeof(ulbl_a));
+        fn_rename_push(cg, node->str_value, ulbl_a);
         if (cg->func_count >= cg->func_cap) {
             cg->func_cap = cg->func_cap ? cg->func_cap * 2 : 16;
             cg->funcs    = realloc(cg->funcs, sizeof(cg->funcs[0]) * (size_t)cg->func_cap);
         }
         { int fi = cg->func_count++;
-          cg->funcs[fi].node = node;
-          cg->funcs[fi].captures = NULL;
-          cg->funcs[fi].ncaptures = 0; }
+          cg->funcs[fi].node      = node;
+          cg->funcs[fi].captures  = NULL;
+          cg->funcs[fi].ncaptures = 0;
+          cg->funcs[fi].asm_label = strdup(ulbl_a);
+          fn_rename_ctx_snapshot(cg, &cg->funcs[fi].rename_ctx, &cg->funcs[fi].rename_ctx_count); }
         break;
+    }
 
     case NODE_RETURN:
         if (node->child_count > 0)
@@ -2629,6 +2944,27 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
     case NODE_IMPORT:
         break;
 
+    /* ── enum declaration (ARM64) ─────────────────────────────────────── */
+    case NODE_ENUM_DECL:
+        for (size_t vi = 0; vi < node->child_count; vi++) {
+            ASTNode *vn = node->children[vi];
+            if (!vn || !vn->str_value) continue;
+            if (vn->param_count == 0) {
+                /* Create singleton and store in global */
+                const char *tag_lbl = intern_string(cg, vn->str_value);
+                emit_adrp_a64(cg, "x0", tag_lbl);
+                emit(cg, "    bl      " XLY_SYM("xly_str"));
+                emit(cg, "    mov     x1, #0");   /* fields = NULL */
+                emit(cg, "    mov     w2, #0");   /* nfields = 0   */
+                emit(cg, "    bl      " XLY_SYM("xly_make_variant"));
+                int gi = gvar_declare(cg, vn->str_value);
+                emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+                emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+                emit(cg, "    str     x0, [x9, #%d]", gi * 8);
+            }
+        }
+        break;
+
     default:
         emit_expr_a64(cg, node);
         break;
@@ -2636,20 +2972,25 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
 }
 
 /* ── emit a user function (ARM64) ────────────────────────────────────────── */
-static void emit_function_a64(CG *cg, ASTNode *fn, char **captures, int ncaptures) {
-    const char *name    = fn->str_value;
+static void emit_function_a64(CG *cg, ASTNode *fn, const char *asm_label,
+                              FnRename *rename_ctx, int rename_ctx_count,
+                              char **captures, int ncaptures) {
     size_t      nparams = fn->param_count;
     ASTNode    *body    = fn->children[0];
 
     int sv_vc = cg->var_count, sv_fo = cg->frame_offset, sv_sd = cg->scope_depth;
     int sv_spill = cg->a64_spill_depth;
     int sv_nm_a = cg->noreturn_mode;
+    int sv_rename_a = cg->fn_rename_count;   /* save rename scope */
     cg->scope_depth    = 0;
     cg->frame_offset   = 0;
     cg->var_count      = 0;   /* hide main() vars */
     cg->noreturn_mode  = 0;
     cg->a64_spill_depth = 0;
     cg->a64_sp_adj      = 0;
+
+    /* Restore the rename context visible when this fn was declared. */
+    fn_rename_ctx_restore(cg, rename_ctx, rename_ctx_count);
 
     /* Frame layout (macOS ARM64 ABI — NO red zone):
      *
@@ -2678,7 +3019,7 @@ static void emit_function_a64(CG *cg, ASTNode *fn, char **captures, int ncapture
     cg->a64_frame_size = frame;    /* stored for NODE_RETURN epilogue */
 
     emit(cg, "");
-    emit(cg, ".Lxly_fn_%s:", name);
+    emit(cg, ".Lxly_fn_%s:", asm_label);
     /* Prologue: allocate frame, save fp+lr at TOP, set x29 to saved-pair addr.
      * stp scaled-immediate range is [-512, 504] in steps of 8.
      * add/sub immediate range is [0, 4095].                                  */
@@ -2756,6 +3097,7 @@ static void emit_function_a64(CG *cg, ASTNode *fn, char **captures, int ncapture
     cg->a64_spill_depth = sv_spill;
     cg->noreturn_mode   = sv_nm_a;
     cg->a64_sp_adj      = 0;  /* reset: caller's sp_adj is already 0 at call sites */
+    fn_renames_pop_to(cg, sv_rename_a);  /* pop renames pushed by nested fn decls */
 }
 
 #endif /* XLY_ARCH_ARM64 */
@@ -2785,6 +3127,7 @@ int codegen(ASTNode *program, const char *outpath) {
 
     /* pre-pass: collect all declared function names for call-site dispatch */
     collect_fn_names(&cg, program);
+    collect_variant_names(&cg, program);
     int n_top  = count_locals(program) + 16;
     /* main frame: locals + spill headroom (16 slots) + x29/x30, 16-aligned.
      * The +16 gives enough room for simultaneous spills at any expression depth.
@@ -2830,7 +3173,9 @@ int codegen(ASTNode *program, const char *outpath) {
 
     /* user-defined functions */
     for (int i = 0; i < cg.func_count; i++)
-        emit_function_a64(&cg, cg.funcs[i].node, cg.funcs[i].captures, cg.funcs[i].ncaptures);
+        emit_function_a64(&cg, cg.funcs[i].node, cg.funcs[i].asm_label,
+                          cg.funcs[i].rename_ctx, cg.funcs[i].rename_ctx_count,
+                          cg.funcs[i].captures, cg.funcs[i].ncaptures);
 
     /* string literals section */
     emit(&cg, "");
@@ -2875,9 +3220,19 @@ int codegen(ASTNode *program, const char *outpath) {
     free(cg.gvars);
     for (int i = 0; i < cg.str_count; i++) { free(cg.strings[i].text); free(cg.strings[i].label); }
     free(cg.strings);
+    for (int i = 0; i < cg.func_count; i++) {
+        free(cg.funcs[i].asm_label);
+        fn_rename_ctx_free(cg.funcs[i].rename_ctx, cg.funcs[i].rename_ctx_count);
+    }
     free(cg.funcs);
     for (int i = 0; i < cg.fn_name_count; i++) free(cg.fn_names[i]);
     free(cg.fn_names);
+    for (int i = 0; i < cg.fn_labels_used_count; i++) free(cg.fn_labels_used[i].lbl);
+    free(cg.fn_labels_used);
+    for (int i = 0; i < cg.fn_rename_count; i++) { free(cg.fn_renames[i].src); free(cg.fn_renames[i].lbl); }
+    free(cg.fn_renames);
+    for (int i = 0; i < cg.variant_count; i++) free(cg.variants[i].name);
+    free(cg.variants);
     for (int i = 0; i < cg.brk_top; i++) free(cg.brk_labels[i]);
     free(cg.brk_labels);
     for (int i = 0; i < cg.cnt_top; i++) free(cg.cnt_labels[i]);

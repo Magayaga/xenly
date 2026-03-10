@@ -47,6 +47,14 @@
 #include <unistd.h>
 
 /* ══════════════════════════════════════════════════════════════════════════════
+ * VERSION / BUILD METADATA  — change these in one place only
+ * ══════════════════════════════════════════════════════════════════════════════ */
+#define XLY_VERSION         "0.1.0"
+#define XLY_RELEASE_DATE    "202X-XX-XX"
+#define XLY_AUTHOR_NAME     "Cyril John Magayaga"
+#define XLY_AUTHOR_EMAIL    "cjmagayaga957@gmail.com"
+
+/* ══════════════════════════════════════════════════════════════════════════════
  * COLOUR HELPERS
  * ══════════════════════════════════════════════════════════════════════════════ */
 static int g_color = 1;
@@ -187,40 +195,104 @@ static void dump_ast(ASTNode *node, int depth) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+ * PLATFORM / MACHINE STRINGS
+ * ══════════════════════════════════════════════════════════════════════════════ */
+static const char *xly_machine(void) {
+#if defined(__aarch64__) || defined(__arm64__)
+    return "aarch64";
+#elif defined(__x86_64__) || defined(_M_X64)
+    return "x86_64";
+#elif defined(__i386__) || defined(_M_IX86)
+    return "i686";
+#elif defined(__arm__)
+    return "armv7";
+#elif defined(__riscv) && __riscv_xlen == 64
+    return "riscv64";
+#else
+    return "unknown";
+#endif
+}
+
+static const char *xly_os(void) {
+#if defined(__linux__)
+    return "Linux";
+#elif defined(__APPLE__) && defined(__MACH__)
+    return "macOS";
+#elif defined(__FreeBSD__)
+    return "FreeBSD";
+#elif defined(__OpenBSD__)
+    return "OpenBSD";
+#elif defined(__NetBSD__)
+    return "NetBSD";
+#elif defined(_WIN32) || defined(_WIN64)
+    return "Windows";
+#else
+    return "Unknown";
+#endif
+}
+
+static const char *xly_dumpmachine(void) {
+#if defined(__aarch64__) || defined(__arm64__)
+#  if defined(__APPLE__) && defined(__MACH__)
+    return "aarch64-apple-darwin";
+#  else
+    return "aarch64-linux-gnu";
+#  endif
+#elif defined(__x86_64__) || defined(_M_X64)
+#  if defined(__APPLE__) && defined(__MACH__)
+    return "x86_64-apple-darwin";
+#  elif defined(__linux__)
+    return "x86_64-linux-gnu";
+#  else
+    return "x86_64-unknown";
+#  endif
+#elif defined(__i386__) || defined(_M_IX86)
+    return "i686-linux-gnu";
+#else
+    return "unknown-unknown-unknown";
+#endif
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
  * HELP / VERSION
  * ══════════════════════════════════════════════════════════════════════════════ */
 static void print_usage(const char *prog) {
     printf("\n");
-    printf("  %s%s%s  Xenly Native Compiler  %sv0.1.0%s\n",
+    printf("  %s%s%s  Xenly Native Compiler  %sv" XLY_VERSION "%s\n",
            COL("1;36"), "xenlyc", RESET, COL("1;33"), RESET);
     printf("\n");
     printf("  %sUsage:%s   %s [options] <file.xe>\n", COL("1;33"), RESET, prog);
     printf("\n");
     printf("  %sOptions:%s\n", COL("1;33"), RESET);
-    printf("    %s-o <file>%s          Output binary name  %s(default: a.out)%s\n",
+    printf("    %s-o <file>%s            Output binary name  %s(default: a.out)%s\n",
            COL("1"), RESET, COL("2"), RESET);
-    printf("    %s--opt <0-3>%s        Optimisation level  %s(default: 2)%s\n",
+    printf("    %s--opt <0-3>%s          Optimisation level  %s(default: 2)%s\n",
            COL("1"), RESET, COL("2"), RESET);
-    printf("    %s--emit-asm%s         Emit assembly only (.s), then stop\n",
+    printf("    %s--emit-asm%s           Emit assembly only (.s), then stop\n",
            COL("1"), RESET);
-    printf("    %s--emit-ir%s          Dump AST to stdout, then stop\n",
+    printf("    %s--emit-ir%s            Dump AST to stdout, then stop\n",
            COL("1"), RESET);
-    printf("    %s--keep-asm%s         Keep the .s file after linking\n",
+    printf("    %s--keep-asm%s           Keep the .s file after linking\n",
            COL("1"), RESET);
-    printf("    %s--verbose%s          Annotate asm + show codegen stats\n",
+    printf("    %s--verbose%s            Annotate asm + show codegen stats\n",
            COL("1"), RESET);
-    printf("    %s--static%s           Link a static binary\n",
+    printf("    %s--static%s             Link a static binary\n",
            COL("1"), RESET);
-    printf("    %s--time%s             Print phase timings to stderr\n",
+    printf("    %s--time%s               Print phase timings to stderr\n",
            COL("1"), RESET);
-    printf("    %s--no-color%s         Disable ANSI colour in output\n",
+    printf("    %s--no-color%s           Disable ANSI colour in output\n",
            COL("1"), RESET);
-    printf("    %s-D<name>[=val]%s     Define a compile-time constant\n",
+    printf("    %s-D<n>[=val]%s       Define a compile-time constant\n",
            COL("1"), RESET);
-    printf("    %s--target <triple>%s  Target triple %s(informational, native only)%s\n",
+    printf("    %s--target <triple>%s    Target triple %s(informational, native only)%s\n",
            COL("1"), RESET, COL("2"), RESET);
-    printf("    %s--version%s          Show version\n", COL("1"), RESET);
-    printf("    %s--help%s             Show this help\n",  COL("1"), RESET);
+    printf("    %s-h,  --help%s          Show this help\n",   COL("1"), RESET);
+    printf("    %s-v,  --version%s       Show version\n",     COL("1"), RESET);
+    printf("    %s-dm, --dumpmachine%s   Print the compiler's target machine\n",    COL("1"), RESET);
+    printf("    %s-drd,--dumpreleasedate%s Print the release date of this build\n", COL("1"), RESET);
+    printf("    %s-dv, --dumpversion%s   Print detailed version information\n",     COL("1"), RESET);
+    printf("    %s-os, --operatingsystem%s Print the host operating system\n",      COL("1"), RESET);
+    printf("    %s     --author%s        Print author information\n",               COL("1"), RESET);
     printf("\n");
     printf("  %sOptimisation levels:%s\n", COL("1;33"), RESET);
     printf("    0  No opts     — readable asm, good for debugging\n");
@@ -229,18 +301,17 @@ static void print_usage(const char *prog) {
     printf("    3  Aggressive  — + all level-2 opts, maximum inlining\n");
     printf("\n");
     printf("  %sExamples:%s\n", COL("1;32"), RESET);
-    printf("    %s main.xe                   %s→ ./a.out\n",   prog, COL("2"));
-    printf("    %s%s main.xe -o main          %s→ ./main\n",   RESET, prog, COL("2"));
-    printf("    %s%s --opt 0 main.xe          %s→ debug build\n", RESET, prog, COL("2"));
-    printf("    %s%s --emit-asm main.xe       %s→ main.s\n",   RESET, prog, COL("2"));
-    printf("    %s%s --emit-ir  main.xe       %s→ AST dump\n", RESET, prog, COL("2"));
-    printf("    %s%s --verbose main.xe -o m   %s→ annotated asm + stats\n",
+    printf("    %s main.xe                   %s\u2192 ./a.out\n",   prog, COL("2"));
+    printf("    %s%s main.xe -o main          %s\u2192 ./main\n",   RESET, prog, COL("2"));
+    printf("    %s%s --opt 0 main.xe          %s\u2192 debug build\n", RESET, prog, COL("2"));
+    printf("    %s%s --emit-asm main.xe       %s\u2192 main.s\n",   RESET, prog, COL("2"));
+    printf("    %s%s --emit-ir  main.xe       %s\u2192 AST dump\n", RESET, prog, COL("2"));
+    printf("    %s%s --verbose main.xe -o m   %s\u2192 annotated asm + stats\n",
            RESET, prog, COL("2"));
     printf("%s\n", RESET);
 }
-
 static void print_version(void) {
-    printf("\n  %sxenlyc%s v0.1.0  (Xenly native compiler)\n", COL("1;36"), RESET);
+    printf("\n  %sxenlyc%s v" XLY_VERSION "  (Xenly native compiler)\n", COL("1;36"), RESET);
     printf("  Variable keywords: var, let (block-scoped mutable), const (immutable)\n");
     printf("  Systems programming tier — O2 with sys constant inlining\n");
     printf("  Targets: x86-64 (Linux/BSD), AArch64 (macOS Apple Silicon)\n\n");
@@ -271,6 +342,24 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
             print_version(); return 0;
+        }
+        if (strcmp(argv[i], "--dumpmachine") == 0 || strcmp(argv[i], "-dm") == 0) {
+            printf("%s\n", xly_dumpmachine()); return 0;
+        }
+        if (strcmp(argv[i], "--dumpreleasedate") == 0 || strcmp(argv[i], "-drd") == 0) {
+            printf("%s\n", XLY_RELEASE_DATE); return 0;
+        }
+        if (strcmp(argv[i], "--dumpversion") == 0 || strcmp(argv[i], "-dv") == 0) {
+            printf("%s\n", XLY_VERSION); return 0;
+        }
+        if (strcmp(argv[i], "--operatingsystem") == 0 || strcmp(argv[i], "-os") == 0) {
+            printf("%s (%s)\n", xly_os(), xly_machine()); return 0;
+        }
+        if (strcmp(argv[i], "--author") == 0) {
+            printf("\n  %sxenlyc%s — created, designed, and developed by\n",
+                   COL("1;36"), RESET);
+            printf("  " XLY_AUTHOR_NAME " <%s>\n\n", XLY_AUTHOR_EMAIL);
+            return 0;
         }
         if (strcmp(argv[i], "--no-color") == 0) { g_color = 0; continue; }
         if (strcmp(argv[i], "--emit-asm") == 0 || strcmp(argv[i], "-S") == 0) {
