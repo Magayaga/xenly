@@ -88,5 +88,11 @@ jobs:
       run: time ./xenlyc examples/fp_immutability.xe -o fp_immutability
     - name: fp_immutability test (13)
       run: time ./fp_immutability
+    - name: xenly test (14)
+      run: time ./xenly examples/type_system.xe
+    - name: xenlyc test (14)
+      run: time ./xenlyc examples/type_system.xe -o type_system
+    - name: type_system test (14)
+      run: time ./type_system
     - name: make clean test
       run: make clean
