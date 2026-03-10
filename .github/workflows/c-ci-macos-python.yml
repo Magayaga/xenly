@@ -94,4 +94,9 @@ jobs:
       run: time ./xenlyc examples/type_system.xe -o type_system
     - name: type_system test (14)
       run: time ./type_system
-
+    - name: xenly test (15)
+      run: time ./xenly examples/async.xe
+    - name: xenlyc test (15)
+      run: time ./xenlyc examples/async.xe -o async
+    - name: async test (15)
+      run: time ./async
