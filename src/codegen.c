@@ -1306,10 +1306,9 @@ static void emit_expr(CG *cg, ASTNode *node) {
     }
 }
 
-/* ── statement compiler ─────────────────────────────────────────────────
- * Post-condition: %rsp unchanged from entry.
+/* ── statement compiler (x86-64) — Post-condition: %%rsp unchanged from entry.
  * If noreturn_mode is set (after sys.exit/abort), all subsequent statements
- * are elided — the code is unreachable and emitting it wastes binary space.*/
+ * are elided — the code is unreachable and emitting it wastes binary space.  */
 static void emit_stmt(CG *cg, ASTNode *node) {
     if (!node) return;
     /* Dead code elimination after noreturn calls (O1+) */
@@ -2056,8 +2055,7 @@ static void emit_adrp_a64(CG *cg, const char *reg, const char *sym) {
     emit(cg, "    add     %s, %s, %s@PAGEOFF", reg, reg, sym);
 }
 
-/* ── expression compiler (ARM64) ────────────────────────────────────────
- * Post-condition: result XlyVal* is in x0.  sp is unchanged.             */
+/* ── expression compiler (ARM64) — Post-condition: result XlyVal* in x0, sp unchanged. */
 static void emit_expr_a64(CG *cg, ASTNode *node) {
     if (!node) { emit(cg, "    bl      " XLY_SYM("xly_null")); return; }
 
@@ -2662,7 +2660,8 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         break;
     }
 }
- * Post-condition: sp unchanged from entry.                               */
+
+/* ── statement compiler (ARM64) — Post-condition: sp unchanged from entry. */
 static void emit_stmt_a64(CG *cg, ASTNode *node) {
     if (!node) return;
 
