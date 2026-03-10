@@ -7,7 +7,12 @@
  * It is available for the Linux and macOS operating systems.
  *
  */
+/* _GNU_SOURCE: enables GNU/Linux extensions (memfd_create, getline, etc.).
+ * On macOS, this macro has no effect — Darwin uses _DARWIN_C_SOURCE instead.
+ * Guard it so static analysers don't warn about cross-platform redefinitions. */
+#if !defined(__APPLE__)
 #define _GNU_SOURCE
+#endif
 #include "modules.h"
 #include "unicode.h"
 #include "platform.h"
@@ -2638,10 +2643,17 @@ static Value *sys_fsync(Value **args, size_t argc) {
     return value_number((double)fsync((int)args[0]->num));
 }
 
-// sys.fdatasync(fd) — flush data only, no metadata (C: fdatasync())
+// sys.fdatasync(fd) — flush data only, no metadata
+// On macOS fdatasync() exists but F_FULLFSYNC is the reliable data-durability call.
 static Value *sys_fdatasync(Value **args, size_t argc) {
     if (argc < 1 || args[0]->type != VAL_NUMBER) return value_number(-1);
+#if defined(PLATFORM_MACOS)
+    /* macOS: use fcntl(F_FULLFSYNC) — fdatasync() is present but unreliable on
+     * HFS+/APFS without this flag (does not guarantee data reaches storage).  */
+    return value_number((double)fcntl((int)args[0]->num, F_FULLFSYNC));
+#else
     return value_number((double)fdatasync((int)args[0]->num));
+#endif
 }
 
 // sys.truncate(path, length) — truncate file to length bytes (C: truncate())
