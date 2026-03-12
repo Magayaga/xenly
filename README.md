@@ -22,9 +22,10 @@ Xenly programming language should be command-line interfaces, web servers, and d
 
 |   Operating systems  | Interpreter (`xenly`) | Native compiler (`xenlyc`) | Xenly Virtual Machine (`xenlybyc` and `xenlyrun`)   |
 |:--------------------:|:---------------------:|:--------------------------:|:---------------------------------------------------:|
-| Linux 🐧             | Yes                   | Yes                        | -                                                   |
-| Apple macOS 🍎       | Yes                   | Yes                        | -                                                   |
-| Windows Subsystem for Linux 🪟 | Yes         | Yes                        | -                                                   |
+| Linux 🐧             | Yes                   | Yes                        | Yes                                                 |
+| Apple macOS 🍎       | Yes                   | Yes                        | Yes                                                 |
+| Windows Subsystem for Linux 🪟 | Yes         | Yes                        | Yes                                                 |
+| Windows 🪟           | No (Not available)    | No (Not available)         | Yes                                                 |
 
 ## Examples
 ### Hello, World! program
@@ -133,6 +134,7 @@ If you are new to the **Xenly**, you should check out these additional resources
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
 
