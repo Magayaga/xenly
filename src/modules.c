@@ -24,6 +24,11 @@
 #include <time.h>
 #include <float.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
+
+// ─── Forward declarations for modules defined later in this file ─────────────
+static Module module_fs(void);
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 int modules_get(const char *name, Module *out) {
@@ -37,6 +42,7 @@ int modules_get(const char *name, Module *out) {
     if (strcmp(name, "path")      == 0) { *out = module_path();      return 1; }
     if (strcmp(name, "multiproc") == 0) { *out = module_multiproc(); return 1; }
     if (strcmp(name, "sys")       == 0) { *out = module_sys();       return 1; }
+    if (strcmp(name, "fs")        == 0) { *out = module_fs();        return 1; }
     return 0;
 }
 
@@ -1051,6 +1057,204 @@ Module module_io(void) {
     m.name      = NULL;
     m.functions = io_fns;
     m.fn_count  = sizeof(io_fns)/sizeof(io_fns[0]) - 1;  // auto-count
+    return m;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// FS MODULE  — file-system read / write / append / exists / remove / list
+// ═════════════════════════════════════════════════════════════════════════════
+
+// fs.readFile(path) → string | null
+static Value *fs_readFile(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_null();
+    FILE *f = fopen(args[0]->str, "rb");
+    if (!f) return value_null();
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz < 0) { fclose(f); return value_null(); }
+    char *buf = (char *)malloc((size_t)sz + 1);
+    if (!buf) { fclose(f); return value_null(); }
+    size_t rd = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    buf[rd] = '\0';
+    Value *v = value_string(buf);
+    free(buf);
+    return v;
+}
+
+// fs.writeFile(path, content) → bool
+static Value *fs_writeFile(Value **args, size_t argc) {
+    if (argc < 2 || args[0]->type != VAL_STRING || args[1]->type != VAL_STRING)
+        return value_bool(0);
+    FILE *f = fopen(args[0]->str, "wb");
+    if (!f) return value_bool(0);
+    size_t len = strlen(args[1]->str);
+    size_t wr  = fwrite(args[1]->str, 1, len, f);
+    fclose(f);
+    return value_bool(wr == len);
+}
+
+// fs.appendFile(path, content) → bool
+static Value *fs_appendFile(Value **args, size_t argc) {
+    if (argc < 2 || args[0]->type != VAL_STRING || args[1]->type != VAL_STRING)
+        return value_bool(0);
+    FILE *f = fopen(args[0]->str, "ab");
+    if (!f) return value_bool(0);
+    size_t len = strlen(args[1]->str);
+    size_t wr  = fwrite(args[1]->str, 1, len, f);
+    fclose(f);
+    return value_bool(wr == len);
+}
+
+// fs.exists(path) → bool
+static Value *fs_exists(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    FILE *f = fopen(args[0]->str, "rb");
+    if (!f) return value_bool(0);
+    fclose(f);
+    return value_bool(1);
+}
+
+// fs.remove(path) → bool
+static Value *fs_remove(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+    return value_bool(remove(args[0]->str) == 0);
+}
+
+// fs.size(path) → number | null
+static Value *fs_size(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_null();
+    FILE *f = fopen(args[0]->str, "rb");
+    if (!f) return value_null();
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fclose(f);
+    return value_number((double)sz);
+}
+
+// fs.readLines(path) → array<string> | null
+static Value *fs_readLines(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_null();
+    FILE *f = fopen(args[0]->str, "rb");
+    if (!f) return value_null();
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz < 0) { fclose(f); return value_null(); }
+    char *buf = (char *)malloc((size_t)sz + 1);
+    if (!buf) { fclose(f); return value_null(); }
+    size_t rd = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    buf[rd] = '\0';
+
+    // Count lines first
+    size_t cap = 64, count = 0;
+    Value **lines = (Value **)malloc(cap * sizeof(Value *));
+    char *p = buf, *start = buf;
+    while (*p) {
+        if (*p == '\n') {
+            size_t linelen = (size_t)(p - start);
+            if (linelen > 0 && start[linelen-1] == '\r') linelen--;
+            char *line = (char *)malloc(linelen + 1);
+            memcpy(line, start, linelen);
+            line[linelen] = '\0';
+            if (count >= cap) { cap *= 2; lines = (Value **)realloc(lines, cap * sizeof(Value *)); }
+            lines[count++] = value_string(line);
+            free(line);
+            start = p + 1;
+        }
+        p++;
+    }
+    // last line (no trailing newline)
+    if (p > start) {
+        size_t linelen = (size_t)(p - start);
+        char *line = (char *)malloc(linelen + 1);
+        memcpy(line, start, linelen);
+        line[linelen] = '\0';
+        if (count >= cap) { cap *= 2; lines = (Value **)realloc(lines, cap * sizeof(Value *)); }
+        lines[count++] = value_string(line);
+        free(line);
+    }
+    free(buf);
+    // value_array takes ownership of lines pointer
+    return value_array(lines, count);
+}
+
+// fs.writeLines(path, array) → bool
+static Value *fs_writeLines(Value **args, size_t argc) {
+    if (argc < 2 || args[0]->type != VAL_STRING || args[1]->type != VAL_ARRAY)
+        return value_bool(0);
+    FILE *f = fopen(args[0]->str, "wb");
+    if (!f) return value_bool(0);
+    for (size_t i = 0; i < args[1]->array_len; i++) {
+        Value *item = args[1]->array[i];
+        if (item && item->type == VAL_STRING)
+            fprintf(f, "%s\n", item->str);
+    }
+    fclose(f);
+    return value_bool(1);
+}
+
+// fs.rename(src, dst) → bool
+static Value *fs_rename(Value **args, size_t argc) {
+    if (argc < 2 || args[0]->type != VAL_STRING || args[1]->type != VAL_STRING)
+        return value_bool(0);
+    return value_bool(rename(args[0]->str, args[1]->str) == 0);
+}
+
+// fs.mkdir(path) → bool
+static Value *fs_mkdir(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_bool(0);
+#if defined(_WIN32)
+    return value_bool(_mkdir(args[0]->str) == 0);
+#else
+    return value_bool(mkdir(args[0]->str, 0755) == 0);
+#endif
+}
+
+// fs.listDir(path) → array<string> | null
+static Value *fs_listDir(Value **args, size_t argc) {
+    if (argc < 1 || args[0]->type != VAL_STRING) return value_null();
+#if defined(_WIN32)
+    return value_null();
+#else
+    DIR *d = opendir(args[0]->str);
+    if (!d) return value_null();
+    size_t cap = 32, count = 0;
+    Value **entries = (Value **)malloc(cap * sizeof(Value *));
+    struct dirent *ent;
+    while ((ent = readdir(d)) != NULL) {
+        if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) continue;
+        if (count >= cap) { cap *= 2; entries = (Value **)realloc(entries, cap * sizeof(Value *)); }
+        entries[count++] = value_string(ent->d_name);
+    }
+    closedir(d);
+    Value *arr = value_array(entries, count);
+    return arr;
+#endif
+}
+
+static NativeFunc fs_fns[] = {
+    { "readFile",   fs_readFile  },
+    { "writeFile",  fs_writeFile },
+    { "appendFile", fs_appendFile},
+    { "exists",     fs_exists    },
+    { "remove",     fs_remove    },
+    { "size",       fs_size      },
+    { "readLines",  fs_readLines },
+    { "writeLines", fs_writeLines},
+    { "rename",     fs_rename    },
+    { "mkdir",      fs_mkdir     },
+    { "listDir",    fs_listDir   },
+    { NULL, NULL }
+};
+
+static Module module_fs(void) {
+    Module m;
+    m.name      = NULL;
+    m.functions = fs_fns;
+    m.fn_count  = sizeof(fs_fns)/sizeof(fs_fns[0]) - 1;
     return m;
 }
 

@@ -121,7 +121,7 @@ INTERP_OBJS = $(INTERP_SRCS:.c=.o)
 
 XENLYC = xenlyc
 XENLYC_SRCS = src/xenlyc_main.c src/lexer.c src/ast.c src/parser.c \
-              src/codegen.c src/unicode.c
+              src/codegen.c src/unicode.c src/sema.c
 XENLYC_OBJS = $(XENLYC_SRCS:.c=.o)
 
 RT_LIB = libxly_rt.a

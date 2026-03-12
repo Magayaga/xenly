@@ -108,6 +108,7 @@ $ ./xenlyc
 
 # Running xenlyc's examples (Native compiler)
 ./xenlyc examples/hello.xe -o hello
+./hello
 ```
 
 ## Source Code Organization
@@ -132,6 +133,7 @@ If you are new to the **Xenly**, you should check out these additional resources
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
 
 
 

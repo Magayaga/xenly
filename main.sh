@@ -119,7 +119,7 @@ INTERP_SRCS=(
 )
 XENLYC_SRCS=(
   src/xenlyc_main.c src/lexer.c src/ast.c src/parser.c
-  src/codegen.c src/unicode.c
+  src/codegen.c src/unicode.c src/sema.c
 )
 RT_OBJS=(
   src/xly_rt.o src/modules_rt.o src/unicode_rt.o

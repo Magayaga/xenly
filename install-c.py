@@ -26,7 +26,7 @@ INTERP_SRCS = [
 
 XENLYC_SRCS = [
     "src/xenlyc_main.c", "src/lexer.c", "src/ast.c",
-    "src/parser.c", "src/codegen.c", "src/unicode.c",
+    "src/parser.c", "src/codegen.c", "src/unicode.c", "src/sema.c",
 ]
 
 RT_SRCS = [
