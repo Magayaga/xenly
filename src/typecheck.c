@@ -880,12 +880,24 @@ static char *infer_type(ASTNode *node, TypeEnv *env, CheckCtx *ctx) {
             return xstrdup("class");
         }
 
-        /* ---- Member access ------------------------------------- */
-        case NODE_MEMBER_ACCESS: {
-            /* Propagate object type; member type is opaque for now. */
+        /* ---- Property get (obj.field) ------------------------- */
+        case NODE_PROPERTY_GET: {
             if (node->child_count > 0) {
                 char *obj_type = infer_type(node->children[0], env, ctx);
                 free(obj_type);
+            }
+            return xstrdup("any");
+        }
+
+        /* ---- Property set (obj.field = value) ----------------- */
+        case NODE_PROPERTY_SET: {
+            if (node->child_count > 0) {
+                char *obj_type = infer_type(node->children[0], env, ctx);
+                free(obj_type);
+            }
+            if (node->child_count > 1) {
+                char *val_type = infer_type(node->children[1], env, ctx);
+                free(val_type);
             }
             return xstrdup("any");
         }
