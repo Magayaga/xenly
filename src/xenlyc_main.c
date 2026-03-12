@@ -10,7 +10,7 @@
  * xenlyc_main.c  —  Xenly native compiler driver  (v0.1.0)
  *
  * Pipeline:
- *   source.xe  →  lexer  →  parser  →  AST  →  codegen  →  .s
+ *   source.xe  →  lexer  →  parser  →  AST  →  sema  →  codegen  →  .s
  *   .s  →  as  →  .o  →  gcc/clang (link)  →  ELF/Mach-O binary
  *
  * v0.1.0: Variable keyword update
@@ -38,6 +38,7 @@
 
 #include "lexer.h"
 #include "parser.h"
+#include "sema.h"
 #include "codegen.h"
 #include "ast.h"
 #include "platform.h"
@@ -332,6 +333,10 @@ int main(int argc, char **argv) {
     int         do_time   = 0;
     int         opt_level = 2;     /* default: -O2 / sys-optimized */
 
+    /* semantic analysis flags */
+    int         sema_enabled = 1;  /* 1 = run sema (default on)              */
+    int         sema_strict  = 0;  /* 1 = treat sema warnings as errors      */
+
     /* defines table (D<name>=val stored here for future macro use) */
     char *defines[64]; int ndefines = 0;
 
@@ -362,6 +367,8 @@ int main(int argc, char **argv) {
             return 0;
         }
         if (strcmp(argv[i], "--no-color") == 0) { g_color = 0; continue; }
+        if (strcmp(argv[i], "--no-sema")     == 0) { sema_enabled = 0; continue; }
+        if (strcmp(argv[i], "--sema-strict") == 0) { sema_strict  = 1; continue; }
         if (strcmp(argv[i], "--emit-asm") == 0 || strcmp(argv[i], "-S") == 0) {
             emit_asm = 1; continue;
         }
@@ -466,6 +473,44 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    /* ── semantic analysis ───────────────────────────────────────────── */
+    double t_sema = t_parse;
+    if (sema_enabled) {
+        SemaOpts sopts    = sema_default_opts();
+        sopts.color       = g_color;
+        sopts.verbose     = verbose;
+        /* In strict mode every warning is also counted as an error */
+        int sema_errors   = 0;
+        int sema_warns    = 0;
+        SemaResult sres   = sema_analyze(program, &sopts,
+                                         &sema_errors, &sema_warns);
+        t_sema = now_ms();
+
+        /* Hard errors always abort */
+        if (sres == SEMA_ERROR) {
+            fprintf(stderr, "%s[xenlyc]%s Semantic errors — aborting.\n",
+                    COL("1;31"), RESET);
+            ast_node_destroy(program);
+            parser_destroy(parser);
+            lexer_destroy(lexer);
+            free(source);
+            return 1;
+        }
+
+        /* In --sema-strict mode, warnings also abort */
+        if (sema_strict && sema_warns > 0) {
+            fprintf(stderr,
+                    "%s[xenlyc]%s Semantic warnings treated as errors "
+                    "(--sema-strict) — aborting.\n",
+                    COL("1;31"), RESET);
+            ast_node_destroy(program);
+            parser_destroy(parser);
+            lexer_destroy(lexer);
+            free(source);
+            return 1;
+        }
+    }
+
     /* ── codegen → .s ────────────────────────────────────────────────── */
     char *asm_path = swap_ext(input, ".s");
 
@@ -485,8 +530,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s[xenlyc]%s Assembly written to %s\n",
                 COL("1;32"), RESET, asm_path);
         if (do_time)
-            fprintf(stderr, "[xenlyc] read %.1f ms  parse %.1f ms  codegen %.1f ms\n",
-                    t_read-t0, t_parse-t_read, t_codegen-t_parse);
+            fprintf(stderr, "[xenlyc] read %.1f ms  parse %.1f ms  sema %.1f ms  codegen %.1f ms\n",
+                    t_read-t0, t_parse-t_read, t_sema-t_parse, t_codegen-t_sema);
         free(asm_path);
         return 0;
     }
@@ -596,7 +641,8 @@ int main(int argc, char **argv) {
             fprintf(stderr, "\n%s[xenlyc] compile times:%s\n", COL("1;36"), RESET);
             fprintf(stderr, "  read    %6.1f ms\n", t_read     - t0);
             fprintf(stderr, "  parse   %6.1f ms\n", t_parse    - t_read);
-            fprintf(stderr, "  codegen %6.1f ms\n", t_codegen  - t_parse);
+            fprintf(stderr, "  sema    %6.1f ms\n", t_sema     - t_parse);
+            fprintf(stderr, "  codegen %6.1f ms\n", t_codegen  - t_sema);
             fprintf(stderr, "  assem   %6.1f ms\n", t_assemble - t_codegen);
             fprintf(stderr, "  link    %6.1f ms\n", t_link     - t_assemble);
             fprintf(stderr, "  total   %6.1f ms\n", t_link     - t0);
