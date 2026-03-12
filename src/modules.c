@@ -27,6 +27,9 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
+// ─── Forward declarations for modules defined later in this file ─────────────
+static Module module_fs(void);
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 int modules_get(const char *name, Module *out) {
     if (strcmp(name, "math")      == 0) { *out = module_math();      return 1; }
@@ -1247,7 +1250,7 @@ static NativeFunc fs_fns[] = {
     { NULL, NULL }
 };
 
-Module module_fs(void) {
+static Module module_fs(void) {
     Module m;
     m.name      = NULL;
     m.functions = fs_fns;
