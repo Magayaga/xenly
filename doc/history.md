@@ -73,3 +73,5 @@
 * On April 6, 2025, He wrote “I want to print() function returns but should be don’t nota() function”. In addition, xenly.c was returned because this is the longest code in a split of the many files.
   
 * On February 8, 2026, He announced that new native compiler and redesign of interpreter of Xenly programming language then new upcoming releases (**alpha** and **beta**).
+
+* On March 12, 2026, He announced that **XVM (Xenly Virtual Machine)** because `xenlybyc` replaced old `xenlyc` (the Xenly compiler that translates human-readable source code into bytecode) and `xenlyrun` replaced `xenly` (the launcher that runs the compiled bytecode using the Xenly Virtual Machine) using **Go** programming language.
