@@ -3,27 +3,26 @@
 package vm
 
 import (
+	"os/exec"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
 )
 
-// ── stat time fields ──────────────────────────────────────────────────────────
 func sysStatMtime(st syscall.Stat_t) float64 { return float64(st.Mtimespec.Sec) }
 func sysStatAtime(st syscall.Stat_t) float64 { return float64(st.Atimespec.Sec) }
 
-// ── fdatasync ─────────────────────────────────────────────────────────────────
 func sysFdatasync(fd int) error {
 	const F_FULLFSYNC = 51
-	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL,
-		uintptr(fd), uintptr(F_FULLFSYNC), 0)
+	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), uintptr(F_FULLFSYNC), 0)
 	if errno != 0 {
 		return syscall.Fsync(fd)
 	}
 	return nil
 }
 
-// ── fork ─────────────────────────────────────────────────────────────────────
 func sysFork() (int, error) {
 	r, _, errno := syscall.RawSyscall(syscall.SYS_FORK, 0, 0, 0)
 	if errno != 0 {
@@ -32,7 +31,6 @@ func sysFork() (int, error) {
 	return int(r), nil
 }
 
-// ── clocks ────────────────────────────────────────────────────────────────────
 func sysClockRealtime() (int64, int64) {
 	now := time.Now()
 	return now.Unix(), int64(now.Nanosecond())
@@ -54,8 +52,7 @@ func sysGettimeofday() (int64, int64) {
 	return now.Unix(), int64(now.Nanosecond() / 1000)
 }
 
-// ── poll ──────────────────────────────────────────────────────────────────────
-// Darwin's syscall package doesn't export PollFd — mirror the struct manually.
+// sysPollFd mirrors struct pollfd — same layout on Darwin and Linux.
 type sysPollFd struct {
 	Fd      int32
 	Events  int16
@@ -76,7 +73,6 @@ func sysPoll(fds []sysPollFd, timeout int) (int, error) {
 	return int(r), nil
 }
 
-// Poll event constants — numeric values are stable on Darwin.
 const (
 	sysPOLLIN  = 0x0001
 	sysPOLLOUT = 0x0004
@@ -84,10 +80,8 @@ const (
 	sysPOLLHUP = 0x0010
 )
 
-// ── mmap anonymous flag ───────────────────────────────────────────────────────
 const sysMAP_ANON = int(syscall.MAP_ANON)
 
-// ── fcntl advisory lock ───────────────────────────────────────────────────────
 func sysFcntlLock(fd, lockType int) int {
 	var lt int16
 	switch lockType {
@@ -99,7 +93,6 @@ func sysFcntlLock(fd, lockType int) int {
 		lt = syscall.F_UNLCK
 	}
 	fl := syscall.Flock_t{Type: lt, Whence: int16(0)}
-	// On Darwin we call fcntl(F_SETLK) directly via Syscall.
 	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL,
 		uintptr(fd), uintptr(syscall.F_SETLK),
 		uintptr(unsafe.Pointer(&fl)))
@@ -109,80 +102,56 @@ func sysFcntlLock(fd, lockType int) int {
 	return 0
 }
 func sysFcntlGetfl(fd int) int {
-	flags, _, errno := syscall.Syscall(syscall.SYS_FCNTL,
-		uintptr(fd), uintptr(syscall.F_GETFL), 0)
+	flags, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), uintptr(syscall.F_GETFL), 0)
 	if errno != 0 {
 		return -1
 	}
 	return int(flags)
 }
 func sysFcntlSetfl(fd, flags int) int {
-	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL,
-		uintptr(fd), uintptr(syscall.F_SETFL), uintptr(flags))
+	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), uintptr(syscall.F_SETFL), uintptr(flags))
 	if errno != 0 {
 		return -1
 	}
 	return 0
 }
 
-// ── sysinfo ───────────────────────────────────────────────────────────────────
-func sysSysinfo() (totalPages, freePages uint64, err error) {
-	return 0, 0, nil // no Sysinfo on Darwin without CGO
-}
+func sysSysinfo() (uint64, uint64, error) { return 0, 0, nil }
 
-// ── uname ─────────────────────────────────────────────────────────────────────
+// sysUname: avoid syscall.Uname/Utsname which may not be available in all
+// Go/Darwin versions. Use exec.Command("uname") instead.
 func sysUname() []string {
-	var u syscall.Utsname
-	if err := syscall.Uname(&u); err != nil {
-		return []string{"", "", "", "", ""}
-	}
-	// Darwin: Utsname fields are [256]int8
-	toStr := func(b [256]int8) string {
-		s := make([]byte, 0, 256)
-		for _, c := range b {
-			if c == 0 {
-				break
-			}
-			s = append(s, byte(c))
+	getField := func(flag string) string {
+		out, err := exec.Command("uname", flag).Output()
+		if err != nil {
+			return "unknown"
 		}
-		return string(s)
+		return strings.TrimSpace(string(out))
 	}
-	return []string{
-		toStr(u.Sysname), toStr(u.Nodename),
-		toStr(u.Release), toStr(u.Version), toStr(u.Machine),
-	}
+	sysname := getField("-s")   // Darwin
+	nodename := getField("-n")  // hostname
+	release := getField("-r")   // kernel release
+	version := getField("-v")   // kernel version
+	machine := runtime.GOARCH  // amd64 / arm64
+	return []string{sysname, nodename, release, version, machine}
 }
 
-// ── rlimit ────────────────────────────────────────────────────────────────────
 func sysGetrlimit(resource int) (soft, hard float64, ok bool) {
 	var rl syscall.Rlimit
 	if err := syscall.Getrlimit(resource, &rl); err != nil {
 		return 0, 0, false
 	}
 	const inf = ^uint64(0)
-	s := float64(rl.Cur)
-	if rl.Cur == inf {
-		s = -1
-	}
-	h := float64(rl.Max)
-	if rl.Max == inf {
-		h = -1
-	}
+	s, h := float64(rl.Cur), float64(rl.Max)
+	if rl.Cur == inf { s = -1 }
+	if rl.Max == inf { h = -1 }
 	return s, h, true
 }
 func sysSetrlimit(resource int, soft, hard float64) int {
 	const inf = ^uint64(0)
 	rl := syscall.Rlimit{}
-	if soft < 0 {
-		rl.Cur = inf
-	} else {
-		rl.Cur = uint64(soft)
-	}
-	if hard < 0 {
-		rl.Max = inf
-	} else {
-		rl.Max = uint64(hard)
-	}
+	if soft < 0 { rl.Cur = inf } else { rl.Cur = uint64(soft) }
+	if hard < 0 { rl.Max = inf } else { rl.Max = uint64(hard) }
 	if err := syscall.Setrlimit(resource, &rl); err != nil {
 		return -1
 	}
@@ -197,7 +166,6 @@ const (
 	sysRLIMIT_AS     = int(syscall.RLIMIT_AS)
 )
 
-// ── mmap/munmap ───────────────────────────────────────────────────────────────
 func sysMmap(size, prot, flags, fd int, offset int64) (uintptr, error) {
 	b, err := syscall.Mmap(fd, offset, size, prot, flags)
 	if err != nil {
