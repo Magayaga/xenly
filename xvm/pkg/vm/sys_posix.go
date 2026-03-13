@@ -4,6 +4,7 @@ package vm
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/bits"
 	"net"
