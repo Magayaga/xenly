@@ -2,7 +2,7 @@
  * XENLY - Xenly Virtual Machine (XVM)
  * XYC Binary File Format
  *
- * .xebc file layout:
+ * .xyc file layout:
  *
  *   Header (12 bytes)
  *     [0:4]   Magic    "XYC\x01"
@@ -346,7 +346,7 @@ func Read(path string) (*Module, error) {
 		return nil, fmt.Errorf("read magic: %w", err)
 	}
 	if magic != Magic {
-		return nil, fmt.Errorf("not a valid .xebc file (bad magic)")
+		return nil, fmt.Errorf("not a valid .xyc file (bad magic)")
 	}
 	major, _ := readU8()
 	minor, _ := readU8()

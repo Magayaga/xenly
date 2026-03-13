@@ -244,8 +244,8 @@ func RegisterBuiltins(env *Env) {
 			return Number(float64(os.Getppid())), nil
 		}),
 		"fork": builtin(func(a []*Value) (*Value, error) {
-			pid, _, errno := syscall.RawSyscall(syscall.SYS_FORK, 0, 0, 0)
-			if errno != 0 { return Number(-1), nil }
+			pid, err := sysFork()
+			if err != nil { return Number(-1), nil }
 			return Number(float64(pid)), nil
 		}),
 		"exec": builtin(func(a []*Value) (*Value, error) {
@@ -290,19 +290,13 @@ func RegisterBuiltins(env *Env) {
 		"getegid": builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.Getegid())), nil }),
 		"getrlimit": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 1 { return Null(), nil }
-			var rl syscall.Rlimit
-			if err := syscall.Getrlimit(int(a[0].NumVal), &rl); err != nil { return Null(), nil }
-			soft := float64(rl.Cur); if rl.Cur == ^uint64(0) { soft = -1 }
-			hard := float64(rl.Max); if rl.Max == ^uint64(0) { hard = -1 }
+			soft, hard, ok := sysGetrlimit(int(a[0].NumVal))
+			if !ok { return Null(), nil }
 			return Array([]*Value{Number(soft), Number(hard)}), nil
 		}),
 		"setrlimit": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 3 { return Number(-1), nil }
-			rl := syscall.Rlimit{}
-			if a[1].NumVal < 0 { rl.Cur = ^uint64(0) } else { rl.Cur = uint64(a[1].NumVal) }
-			if a[2].NumVal < 0 { rl.Max = ^uint64(0) } else { rl.Max = uint64(a[2].NumVal) }
-			if err := syscall.Setrlimit(int(a[0].NumVal), &rl); err != nil { return Number(-1), nil }
-			return Number(0), nil
+			return Number(float64(sysSetrlimit(int(a[0].NumVal), a[1].NumVal, a[2].NumVal))), nil
 		}),
 
 		// ── Level 2: File Descriptor I/O ───────────────────────────────
@@ -391,26 +385,19 @@ func RegisterBuiltins(env *Env) {
 			size := int(a[0].NumVal)
 			prot := syscall.PROT_READ | syscall.PROT_WRITE
 			if len(a) >= 2 { prot = int(a[1].NumVal) }
-			flags := syscall.MAP_PRIVATE | syscall.MAP_ANON
+			flags := syscall.MAP_PRIVATE | sysMAP_ANON
 			if len(a) >= 3 { flags = int(a[2].NumVal) }
 			fd := -1
 			if len(a) >= 4 { fd = int(a[3].NumVal) }
 			off := int64(0)
 			if len(a) >= 5 { off = int64(a[4].NumVal) }
-			b, err := syscall.Mmap(fd, off, size, prot, flags)
+			ptr, err := sysMmap(size, prot, flags, fd, off)
 			if err != nil { return Number(-1), nil }
-			ptr := uintptr(unsafe.Pointer(&b[0]))
 			return Number(float64(ptr)), nil
 		}),
 		"munmap": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 { return Number(-1), nil }
-			ptr := uintptr(a[0].NumVal)
-			size := int(a[1].NumVal)
-			// Reconstruct slice header to call Munmap
-			b := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), size)
-			err := syscall.Munmap(b)
-			if err != nil { return Number(-1), nil }
-			return Number(0), nil
+			return Number(float64(sysMunmap(uintptr(a[0].NumVal), int(a[1].NumVal)))), nil
 		}),
 		"mmap_read": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 3 { return Null(), nil }
@@ -447,25 +434,15 @@ func RegisterBuiltins(env *Env) {
 		}),
 		"fcntl_lock": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 { return Number(-1), nil }
-			t := int(a[1].NumVal)
-			var ltype int16
-			if t == 0 { ltype = syscall.F_RDLCK } else if t == 1 { ltype = syscall.F_WRLCK } else { ltype = syscall.F_UNLCK }
-			fl := syscall.Flock_t{Type: ltype, Whence: int16(0), Start: 0, Len: 0}
-			err := syscall.FcntlFlock(uintptr(int(a[0].NumVal)), syscall.F_SETLK, &fl)
-			if err != nil { return Number(-1), nil }
-			return Number(0), nil
+			return Number(float64(sysFcntlLock(int(a[0].NumVal), int(a[1].NumVal)))), nil
 		}),
 		"fcntl_setfl": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 { return Number(-1), nil }
-			_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(int(a[0].NumVal)), uintptr(syscall.F_SETFL), uintptr(int(a[1].NumVal)))
-			if errno != 0 { return Number(-1), nil }
-			return Number(0), nil
+			return Number(float64(sysFcntlSetfl(int(a[0].NumVal), int(a[1].NumVal)))), nil
 		}),
 		"fcntl_getfl": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 1 { return Number(-1), nil }
-			flags, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(int(a[0].NumVal)), uintptr(syscall.F_GETFL), 0)
-			if errno != 0 { return Number(-1), nil }
-			return Number(float64(flags)), nil
+			return Number(float64(sysFcntlGetfl(int(a[0].NumVal)))), nil
 		}),
 
 		// ── Level 3: Filesystem ─────────────────────────────────────────
@@ -990,19 +967,19 @@ func RegisterBuiltins(env *Env) {
 		"LOG_DEBUG":   builtin(func(a []*Value) (*Value, error) { return Number(7), nil }),
 
 		// ── Poll event flags ────────────────────────────────────────────
-		"POLLIN":  builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.POLLIN)), nil }),
-		"POLLOUT": builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.POLLOUT)), nil }),
-		"POLLERR": builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.POLLERR)), nil }),
-		"POLLHUP": builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.POLLHUP)), nil }),
+		"POLLIN":  builtin(func(a []*Value) (*Value, error) { return Number(float64(sysPOLLIN)), nil }),
+		"POLLOUT": builtin(func(a []*Value) (*Value, error) { return Number(float64(sysPOLLOUT)), nil }),
+		"POLLERR": builtin(func(a []*Value) (*Value, error) { return Number(float64(sysPOLLERR)), nil }),
+		"POLLHUP": builtin(func(a []*Value) (*Value, error) { return Number(float64(sysPOLLHUP)), nil }),
 
 		// ── mmap prot/flags constants ───────────────────────────────────
-		"PROT_READ":    builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.PROT_READ)), nil }),
-		"PROT_WRITE":   builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.PROT_WRITE)), nil }),
-		"PROT_EXEC":    builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.PROT_EXEC)), nil }),
-		"PROT_NONE":    builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.PROT_NONE)), nil }),
-		"MAP_SHARED":   builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.MAP_SHARED)), nil }),
-		"MAP_PRIVATE":  builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.MAP_PRIVATE)), nil }),
-		"MAP_ANONYMOUS": builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.MAP_ANON)), nil }),
+		"PROT_READ":     builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.PROT_READ)), nil }),
+		"PROT_WRITE":    builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.PROT_WRITE)), nil }),
+		"PROT_EXEC":     builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.PROT_EXEC)), nil }),
+		"PROT_NONE":     builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.PROT_NONE)), nil }),
+		"MAP_SHARED":    builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.MAP_SHARED)), nil }),
+		"MAP_PRIVATE":   builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.MAP_PRIVATE)), nil }),
+		"MAP_ANONYMOUS": builtin(func(a []*Value) (*Value, error) { return Number(float64(sysMAP_ANON)), nil }),
 
 		// ── Socket domain/type constants ────────────────────────────────
 		"AF_INET":     builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.AF_INET)), nil }),
@@ -1012,11 +989,11 @@ func RegisterBuiltins(env *Env) {
 		"SOCK_DGRAM":  builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.SOCK_DGRAM)), nil }),
 
 		// ── Resource limit constants ─────────────────────────────────────
-		"RLIMIT_CPU":    builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.RLIMIT_CPU)), nil }),
-		"RLIMIT_FSIZE":  builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.RLIMIT_FSIZE)), nil }),
-		"RLIMIT_STACK":  builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.RLIMIT_STACK)), nil }),
-		"RLIMIT_NOFILE": builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.RLIMIT_NOFILE)), nil }),
-		"RLIMIT_AS":     builtin(func(a []*Value) (*Value, error) { return Number(float64(syscall.RLIMIT_AS)), nil }),
+		"RLIMIT_CPU":    builtin(func(a []*Value) (*Value, error) { return Number(float64(sysRLIMIT_CPU)), nil }),
+		"RLIMIT_FSIZE":  builtin(func(a []*Value) (*Value, error) { return Number(float64(sysRLIMIT_FSIZE)), nil }),
+		"RLIMIT_STACK":  builtin(func(a []*Value) (*Value, error) { return Number(float64(sysRLIMIT_STACK)), nil }),
+		"RLIMIT_NOFILE": builtin(func(a []*Value) (*Value, error) { return Number(float64(sysRLIMIT_NOFILE)), nil }),
+		"RLIMIT_AS":     builtin(func(a []*Value) (*Value, error) { return Number(float64(sysRLIMIT_AS)), nil }),
 
 		// ── Level 10: I/O FD constants & numeric limits ─────────────────
 		"STDIN":     builtin(func(a []*Value) (*Value, error) { return Number(0), nil }),

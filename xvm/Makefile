@@ -87,11 +87,11 @@ test: build
 	@echo "  Running XVM test suite"
 	@echo "═══════════════════════════════════════"
 	@echo 'print("Hello, World!")' > /tmp/xvm_test.xe
-	$(XENLYBYC) /tmp/xvm_test.xe -o /tmp/xvm_test.xebc
+	$(XENLYBYC) /tmp/xvm_test.xe -o /tmp/xvm_test.xyc
 	@echo "  ✓  xenlybyc compiled hello"
-	$(XENLYRUN) /tmp/xvm_test.xebc
+	$(XENLYRUN) /tmp/xvm_test.xyc
 	@echo "  ✓  xenlyrun executed hello"
-	@rm -f /tmp/xvm_test.xe /tmp/xvm_test.xebc
+	@rm -f /tmp/xvm_test.xe /tmp/xvm_test.xyc
 	$(GOTEST) ./...
 	@echo "✓  All tests passed"
 
@@ -108,7 +108,7 @@ vet:
 clean:
 	@echo "Cleaning..."
 	rm -rf $(BINDIR)
-	rm -f *.xebc
+	rm -f *.xyc
 	@echo "✓  Clean complete"
 
 # ── Install ───────────────────────────────────────────────────────────────────
@@ -158,8 +158,8 @@ help:
 	@echo "  Workflow examples:"
 	@echo "    make                         # build both tools"
 	@echo "    make test                    # build + smoke test"
-	@echo "    ./bin/xenlybyc hello.xe      # compile hello.xe → hello.xebc"
-	@echo "    ./bin/xenlyrun  hello.xebc    # run compiled bytecode"
+	@echo "    ./bin/xenlybyc hello.xe      # compile hello.xe → hello.xyc"
+	@echo "    ./bin/xenlyrun  hello.xyc    # run compiled bytecode"
 	@echo "    ./bin/xenlyrun --run hello.xe  # compile + run in one step"
 	@echo "    make cross-all               # build for all platforms"
 	@echo ""
