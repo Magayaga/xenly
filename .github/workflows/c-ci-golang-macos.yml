@@ -1,4 +1,4 @@
-name: C CI for Xenly programming language using GO
+name: C CI for Xenly programming language using GO for macOS
 
 on: [push]
 
