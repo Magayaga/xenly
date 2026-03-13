@@ -26,6 +26,6 @@ jobs:
       - name: xenlyrun test
         run: ./xvm/bin/xenlyrun
       - name: hello test (1)
-        run: ./xvm/bin/xenlybyc examples/hello.xe -o hello.xebc
+        run: time ./xvm/bin/xenlybyc examples/hello.xe -o hello.xebc
       - name: run hello test (1)
-        run: ./xvm/bin/xenlyrun hello.xebc
+        run: time ./xvm/bin/xenlyrun hello.xebc
