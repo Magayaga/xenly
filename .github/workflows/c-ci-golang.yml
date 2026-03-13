@@ -19,12 +19,8 @@ jobs:
       # You can test your matrix by printing the current Go version
       - name: Display Go version
         run: go version
-      - name: xvm folder
-        run: cd xvm
-      - name: makefile
-        run: make
-      - name: return the xenly folder
-        run: cd ..
+      - name: xvm folder and makefile
+        run: cd xvm && make
       - name: xenlybyc test
         run: ./xvm/bin/xenlybyc
       - name: xenlyrun test
