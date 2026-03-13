@@ -1,4 +1,4 @@
-name: Go
+name: C CI for Xenly programming language using GO
 
 on: [push]
 
@@ -19,3 +19,13 @@ jobs:
       # You can test your matrix by printing the current Go version
       - name: Display Go version
         run: go version
+      - name: xvm folder
+        run: cd xvm
+      - name: makefile
+        run: make
+      - name: return the xenly folder
+        run: cd ..
+      - name: xenlybyc test
+        run: ./xvm/bin/xenlybyc
+      - name: xenlyrun test
+        run: ./xvm/bin/xenlyrun
