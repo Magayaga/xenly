@@ -1,0 +1,343 @@
+/*
+ * XENLY - Xenly Virtual Machine (XVM)
+ * VM: Value representation
+ */
+package vm
+
+import (
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+)
+
+// ValueType identifies the runtime type of a Value.
+type ValueType int
+
+const (
+	TypeNull ValueType = iota
+	TypeNumber
+	TypeString
+	TypeBool
+	TypeFunction
+	TypeBuiltin
+	TypeArray
+	TypeObject
+	TypeClass
+	TypeInstance
+	TypeVariant
+	TypeIterator
+)
+
+// Value is a dynamically typed runtime value.
+type Value struct {
+	Tag      ValueType
+	NumVal   float64
+	StrVal   string
+	BoolVal  bool
+	FnVal    *FunctionVal
+	BuiltinV BuiltinFn
+	ArrayVal []*Value
+	ObjVal   map[string]*Value
+	ClassVal *ClassVal
+	InstVal  *InstanceVal
+	VarTag   string    // for TypeVariant
+	VarFields []*Value  // for TypeVariant
+	IterVal  *IterVal
+}
+
+// BuiltinFn is the signature for native built-in functions.
+type BuiltinFn func(args []*Value) (*Value, error)
+
+// FunctionVal holds a compiled function.
+type FunctionVal struct {
+	Name    string
+	Params  []ParamDef
+	Code    []byte
+	IsAsync bool
+	Closure *Env // captured environment (closures)
+}
+
+// ParamDef describes one function parameter.
+type ParamDef struct {
+	Name       string
+	HasDefault bool
+	IsRest     bool
+	Default    *Value // pre-compiled? no — for now, null
+}
+
+// ClassVal holds a class definition.
+type ClassVal struct {
+	Name    string
+	Parent  *ClassVal
+	Methods map[string]*FunctionVal
+}
+
+// InstanceVal is an instantiated object.
+type InstanceVal struct {
+	Class  *ClassVal
+	Fields map[string]*Value
+}
+
+// IterVal is an iterator over an array.
+type IterVal struct {
+	Items []*Value
+	Index int
+}
+
+// ─── Constructors ─────────────────────────────────────────────────────────────
+
+func Null() *Value  { return &Value{Tag: TypeNull} }
+func True() *Value  { return &Value{Tag: TypeBool, BoolVal: true} }
+func False() *Value { return &Value{Tag: TypeBool, BoolVal: false} }
+func Bool(b bool) *Value {
+	if b {
+		return True()
+	}
+	return False()
+}
+func Number(n float64) *Value { return &Value{Tag: TypeNumber, NumVal: n} }
+func String(s string) *Value  { return &Value{Tag: TypeString, StrVal: s} }
+func Array(items []*Value) *Value {
+	if items == nil {
+		items = []*Value{}
+	}
+	return &Value{Tag: TypeArray, ArrayVal: items}
+}
+func Object(m map[string]*Value) *Value {
+	if m == nil {
+		m = make(map[string]*Value)
+	}
+	return &Value{Tag: TypeObject, ObjVal: m}
+}
+
+// ─── Truth testing ────────────────────────────────────────────────────────────
+
+func (v *Value) Truthy() bool {
+	if v == nil {
+		return false
+	}
+	switch v.Tag {
+	case TypeNull:
+		return false
+	case TypeBool:
+		return v.BoolVal
+	case TypeNumber:
+		return v.NumVal != 0 && !math.IsNaN(v.NumVal)
+	case TypeString:
+		return v.StrVal != ""
+	case TypeArray:
+		return true
+	case TypeObject:
+		return true
+	case TypeFunction, TypeBuiltin, TypeClass:
+		return true
+	}
+	return true
+}
+
+// IsNull returns true if the value is null.
+func (v *Value) IsNull() bool {
+	return v == nil || v.Tag == TypeNull
+}
+
+// ─── Equality ─────────────────────────────────────────────────────────────────
+
+func (a *Value) Equal(b *Value) bool {
+	if a == nil || a.Tag == TypeNull {
+		return b == nil || b.Tag == TypeNull
+	}
+	if b == nil || b.Tag == TypeNull {
+		return false
+	}
+	if a.Tag != b.Tag {
+		// number == string coercion: not done in Xenly (strict equality)
+		return false
+	}
+	switch a.Tag {
+	case TypeNumber:
+		return a.NumVal == b.NumVal
+	case TypeString:
+		return a.StrVal == b.StrVal
+	case TypeBool:
+		return a.BoolVal == b.BoolVal
+	case TypeArray:
+		return &a == &b // reference equality
+	case TypeObject:
+		return &a == &b
+	}
+	return false
+}
+
+// ─── String conversion ────────────────────────────────────────────────────────
+
+func (v *Value) String() string {
+	if v == nil {
+		return "null"
+	}
+	switch v.Tag {
+	case TypeNull:
+		return "null"
+	case TypeNumber:
+		if math.IsNaN(v.NumVal) {
+			return "NaN"
+		}
+		if math.IsInf(v.NumVal, 1) {
+			return "Inf"
+		}
+		if math.IsInf(v.NumVal, -1) {
+			return "-Inf"
+		}
+		// Match C interpreter: whole numbers print as integer, floats as %g (6 sig figs)
+		if v.NumVal == math.Trunc(v.NumVal) && math.Abs(v.NumVal) < 1e15 {
+			return strconv.FormatInt(int64(v.NumVal), 10)
+		}
+		return fmt.Sprintf("%g", v.NumVal)
+	case TypeString:
+		return v.StrVal
+	case TypeBool:
+		if v.BoolVal {
+			return "true"
+		}
+		return "false"
+	case TypeArray:
+		parts := make([]string, len(v.ArrayVal))
+		for i, e := range v.ArrayVal {
+			parts[i] = e.String()
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	case TypeObject:
+		parts := make([]string, 0, len(v.ObjVal))
+		for k, val := range v.ObjVal {
+			parts = append(parts, fmt.Sprintf("%s: %s", k, val.String()))
+		}
+		return "{" + strings.Join(parts, ", ") + "}"
+	case TypeFunction:
+		if v.FnVal != nil {
+			return fmt.Sprintf("<fn %s>", v.FnVal.Name)
+		}
+		return "<fn>"
+	case TypeBuiltin:
+		return "<builtin>"
+	case TypeClass:
+		if v.ClassVal != nil {
+			return fmt.Sprintf("<class %s>", v.ClassVal.Name)
+		}
+		return "<class>"
+	case TypeInstance:
+		if v.InstVal != nil {
+			return fmt.Sprintf("<%s instance>", v.InstVal.Class.Name)
+		}
+		return "<instance>"
+	case TypeVariant:
+		if len(v.VarFields) == 0 {
+			return v.VarTag
+		}
+		parts := make([]string, len(v.VarFields))
+		for i, f := range v.VarFields {
+			parts[i] = f.String()
+		}
+		return fmt.Sprintf("%s(%s)", v.VarTag, strings.Join(parts, ", "))
+	}
+	return "?"
+}
+
+// TypeName returns the Xenly type name of the value.
+func (v *Value) TypeName() string {
+	if v == nil {
+		return "null"
+	}
+	switch v.Tag {
+	case TypeNull:
+		return "null"
+	case TypeNumber:
+		return "number"
+	case TypeString:
+		return "string"
+	case TypeBool:
+		return "bool"
+	case TypeFunction, TypeBuiltin:
+		return "function"
+	case TypeArray:
+		return "array"
+	case TypeObject:
+		return "object"
+	case TypeClass:
+		return "class"
+	case TypeInstance:
+		if v.InstVal != nil {
+			return v.InstVal.Class.Name
+		}
+		return "object"
+	case TypeVariant:
+		return v.VarTag
+	}
+	return "unknown"
+}
+
+// ─── Environment ──────────────────────────────────────────────────────────────
+
+// Env is a lexical scope environment.
+type Env struct {
+	vars   map[string]*envEntry
+	parent *Env
+}
+
+type envEntry struct {
+	value   *Value
+	isConst bool
+}
+
+// NewEnv creates a new environment.
+func NewEnv(parent *Env) *Env {
+	return &Env{vars: make(map[string]*envEntry), parent: parent}
+}
+
+// Define declares a new variable in the current scope.
+func (e *Env) Define(name string, val *Value, isConst bool) {
+	if val == nil {
+		val = Null()
+	}
+	e.vars[name] = &envEntry{value: val, isConst: isConst}
+}
+
+// Set assigns to an existing variable (searching up the scope chain).
+func (e *Env) Set(name string, val *Value) error {
+	for cur := e; cur != nil; cur = cur.parent {
+		if entry, ok := cur.vars[name]; ok {
+			if entry.isConst {
+				return fmt.Errorf("cannot assign to constant %q", name)
+			}
+			if val == nil {
+				val = Null()
+			}
+			entry.value = val
+			return nil
+		}
+	}
+	// Auto-define at current scope if not found (global fallback)
+	if val == nil {
+		val = Null()
+	}
+	e.vars[name] = &envEntry{value: val}
+	return nil
+}
+
+// Get retrieves a variable's value (searching up the scope chain).
+func (e *Env) Get(name string) (*Value, bool) {
+	for cur := e; cur != nil; cur = cur.parent {
+		if entry, ok := cur.vars[name]; ok {
+			return entry.value, true
+		}
+	}
+	return nil, false
+}
+
+// MustGet retrieves a variable or returns null.
+func (e *Env) MustGet(name string) *Value {
+	v, ok := e.Get(name)
+	if !ok {
+		return Null()
+	}
+	return v
+}

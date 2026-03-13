@@ -21,9 +21,10 @@
 | `v0.1.0-nanopreview1` | April 9, 2024      | [`6ee4dcf`](https://github.com/Magayaga/xenly/commit/6ee4dcfad1e0b96e0594d70301613e8e97956227) |
 
 ## Xenly's `alpha` version
-| Version             | Released date        | Git Commit     |
-|:-------------------:|:--------------------:|:--------------:|
-|`v0.1.0-alpha1`      | TBA                  | -              |
+| Version             | Released date        | Git Commit     | Tag |
+|:-------------------:|:--------------------:|:--------------:|:---:|
+|`v0.1.0-alpha1`      | March 13, 2026       | [`bea774c`](https://github.com/Magayaga/xenly/commit/bea774cab1e1a5081a5eda434c15374483ca33d9) | [Open](https://github.com/Magayaga/xenly/releases/tag/v0.1.0-alpha1) |
+|`v0.1.0-alpha2`      | TBA                  | -              |
 
 ## Copyright
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.

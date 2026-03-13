@@ -20,11 +20,15 @@ Xenly programming language should be command-line interfaces, web servers, and d
 
 ![Introduction to Xenly](assets/xenly_introduction.gif)
 
-| Operating systems | Interpreter (`xenly`) | Native compiler (`xenlyc`) | Xenly Virtual Machine (`xenlybyc` and `xenlyrun`)   |
-|:-----------------:|:---------------------:|:--------------------------:|:---------------------------------------------------:|
-| Linux             | Yes                   | Yes                        | -                                                   |
-| Apple macOS       | Yes                   | Yes                        | -                                                   |
-| Windows Subsystem for Linux | Yes         | Yes                        | -                                                   |
+## Operating system supports
+The **Xenly** programming language supports **macOS**, **Windows**, and **Linux** operating systems, and **Windows Subsystem for Linux**.
+
+|   Operating systems  | Interpreter (`xenly`) | Native compiler (`xenlyc`) | Xenly Virtual Machine (`xenlybyc` and `xenlyrun`)   |
+|:--------------------:|:---------------------:|:--------------------------:|:---------------------------------------------------:|
+| Linux 🐧             | Yes                   | Yes                        | Yes                                                 |
+| Apple macOS 🍎       | Yes                   | Yes                        | Yes                                                 |
+| Windows Subsystem for Linux 🪟 | Yes         | Yes                        | Yes                                                 |
+| Windows 🪟           | No (Not available)    | No (Not available)         | Yes                                                 |
 
 ## Examples
 ### Hello, World! program
@@ -122,6 +126,7 @@ The Xenly source code is organized as follows:
 | `docs/`                      | Official website for the Xenly programming language         |
 | `examples/`                  | Example code for the Xenly programming language             |
 | `src/`                       | Source code for the Xenly programming language              |
+| `xvm/`                       | XVM's source code for the Xenly programming language        |
 
 If you are new to the **Xenly**, you should check out these additional resources.
 
@@ -133,6 +138,10 @@ If you are new to the **Xenly**, you should check out these additional resources
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
+
+
+
+
 
 
 
