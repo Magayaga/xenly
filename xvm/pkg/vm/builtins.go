@@ -370,7 +370,7 @@ func RegisterBuiltins(env *Env) {
 		}),
 		"fdatasync": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 1 { return Number(-1), nil }
-			err := syscall.Fdatasync(int(a[0].NumVal))
+			err := sysFdatasync(int(a[0].NumVal))
 			if err != nil { return Number(-1), nil }
 			return Number(0), nil
 		}),
@@ -434,14 +434,14 @@ func RegisterBuiltins(env *Env) {
 			if len(a) < 1 || a[0].Tag != TypeArray { return Number(-1), nil }
 			timeout := -1
 			if len(a) >= 2 { timeout = int(a[1].NumVal) }
-			fds := make([]syscall.PollFd, len(a[0].ArrayVal))
+			fds := make([]sysPollFd, len(a[0].ArrayVal))
 			for i, pair := range a[0].ArrayVal {
 				if pair.Tag == TypeArray && len(pair.ArrayVal) >= 2 {
 					fds[i].Fd = int32(pair.ArrayVal[0].NumVal)
 					fds[i].Events = int16(pair.ArrayVal[1].NumVal)
 				}
 			}
-			n, err := syscall.Poll(fds, timeout)
+			n, err := sysPoll(fds, timeout)
 			if err != nil { return Number(-1), nil }
 			return Number(float64(n)), nil
 		}),
@@ -476,7 +476,7 @@ func RegisterBuiltins(env *Env) {
 			return Array([]*Value{
 				Number(float64(st.Size)), Number(float64(st.Mode)),
 				Number(float64(st.Uid)), Number(float64(st.Gid)),
-				Number(float64(st.Mtim.Sec)), Number(float64(st.Atim.Sec)),
+				Number(sysStatMtime(st)), Number(sysStatAtime(st)),
 				Number(float64(st.Nlink)),
 			}), nil
 		}),
@@ -487,7 +487,7 @@ func RegisterBuiltins(env *Env) {
 			return Array([]*Value{
 				Number(float64(st.Size)), Number(float64(st.Mode)),
 				Number(float64(st.Uid)), Number(float64(st.Gid)),
-				Number(float64(st.Mtim.Sec)), Number(float64(st.Atim.Sec)),
+				Number(sysStatMtime(st)), Number(sysStatAtime(st)),
 				Number(float64(st.Nlink)),
 			}), nil
 		}),
@@ -710,27 +710,20 @@ func RegisterBuiltins(env *Env) {
 
 		// ── Level 5: Time & Clocks ──────────────────────────────────────
 		"clock_realtime": builtin(func(a []*Value) (*Value, error) {
-			var ts syscall.Timespec
-			syscall.ClockGettime(syscall.CLOCK_REALTIME, &ts)
-			return Array([]*Value{Number(float64(ts.Sec)), Number(float64(ts.Nsec))}), nil
+			sec, nsec := sysClockRealtime()
+			return Array([]*Value{Number(float64(sec)), Number(float64(nsec))}), nil
 		}),
 		"clock_monotonic": builtin(func(a []*Value) (*Value, error) {
-			var ts syscall.Timespec
-			syscall.ClockGettime(syscall.CLOCK_MONOTONIC, &ts)
-			return Array([]*Value{Number(float64(ts.Sec)), Number(float64(ts.Nsec))}), nil
+			sec, nsec := sysClockMonotonic()
+			return Array([]*Value{Number(float64(sec)), Number(float64(nsec))}), nil
 		}),
 		"clock_process": builtin(func(a []*Value) (*Value, error) {
-			var ts syscall.Timespec
-			syscall.ClockGettime(syscall.CLOCK_PROCESS_CPUTIME_ID, &ts)
-			return Array([]*Value{Number(float64(ts.Sec)), Number(float64(ts.Nsec))}), nil
+			sec, nsec := sysClockProcess()
+			return Array([]*Value{Number(float64(sec)), Number(float64(nsec))}), nil
 		}),
 		"nanosleep": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 { return Number(-1), nil }
-			req := syscall.Timespec{Sec: int64(a[0].NumVal), Nsec: int64(a[1].NumVal)}
-			var rem syscall.Timespec
-			err := syscall.Nanosleep(&req, &rem)
-			if err != nil { return Number(-1), nil }
-			return Number(0), nil
+			return Number(float64(sysNanosleep(int64(a[0].NumVal), int64(a[1].NumVal)))), nil
 		}),
 		"time": builtin(func(a []*Value) (*Value, error) {
 			return Number(float64(time.Now().Unix())), nil
@@ -739,9 +732,8 @@ func RegisterBuiltins(env *Env) {
 			return Number(float64(time.Now().UnixNano()) / 1e9), nil
 		}),
 		"gettimeofday": builtin(func(a []*Value) (*Value, error) {
-			var tv syscall.Timeval
-			syscall.Gettimeofday(&tv)
-			return Array([]*Value{Number(float64(tv.Sec)), Number(float64(tv.Usec))}), nil
+			sec, usec := sysGettimeofday()
+			return Array([]*Value{Number(float64(sec)), Number(float64(usec))}), nil
 		}),
 		"sleep": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 1 { return Number(0), nil }
@@ -756,18 +748,10 @@ func RegisterBuiltins(env *Env) {
 
 		// ── Level 6: System Info & Environment ─────────────────────────
 		"uname": builtin(func(a []*Value) (*Value, error) {
-			var u syscall.Utsname
-			if err := syscall.Uname(&u); err != nil { return Null(), nil }
-			toStr := func(b [65]int8) string {
-				s := make([]byte, 0, 65)
-				for _, c := range b { if c == 0 { break }; s = append(s, byte(c)) }
-				return string(s)
-			}
-			return Array([]*Value{
-				String(toStr(u.Sysname)), String(toStr(u.Nodename)),
-				String(toStr(u.Release)), String(toStr(u.Version)),
-				String(toStr(u.Machine)),
-			}), nil
+			fields := sysUname()
+			result := make([]*Value, len(fields))
+			for i, f := range fields { result[i] = String(f) }
+			return Array(result), nil
 		}),
 		"hostname": builtin(func(a []*Value) (*Value, error) {
 			h, err := os.Hostname()
@@ -781,14 +765,14 @@ func RegisterBuiltins(env *Env) {
 			return Number(float64(runtime.NumCPU())), nil
 		}),
 		"phys_pages": builtin(func(a []*Value) (*Value, error) {
-			var si syscall.Sysinfo_t
-			if err := syscall.Sysinfo(&si); err != nil { return Number(0), nil }
-			return Number(float64(si.Totalram / uint64(si.Unit) / 4096)), nil
+			total, _, err := sysSysinfo()
+			if err != nil { return Number(0), nil }
+			return Number(float64(total)), nil
 		}),
 		"avphys_pages": builtin(func(a []*Value) (*Value, error) {
-			var si syscall.Sysinfo_t
-			if err := syscall.Sysinfo(&si); err != nil { return Number(0), nil }
-			return Number(float64(si.Freeram / uint64(si.Unit) / 4096)), nil
+			_, free, err := sysSysinfo()
+			if err != nil { return Number(0), nil }
+			return Number(float64(free)), nil
 		}),
 		"PAGE_SIZE": builtin(func(a []*Value) (*Value, error) {
 			return Number(float64(syscall.Getpagesize())), nil
