@@ -6,6 +6,7 @@ package vm
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -15,6 +16,13 @@ import (
 	"strings"
 	"time"
 )
+
+// stdout is the writer used by print/OP_PRINT. Defaults to os.Stdout.
+// SetStdout replaces it (e.g. with a bufio.Writer for Windows flushing).
+var stdout io.Writer = os.Stdout
+
+// SetStdout replaces the output writer used by all print operations.
+func SetStdout(w io.Writer) { stdout = w }
 
 // RegisterBuiltins installs all built-in functions and modules into env.
 func RegisterBuiltins(env *Env) {
@@ -531,27 +539,30 @@ func RegisterBuiltins(env *Env) {
 		// io.write(v, ...) — print without newline
 		"write": builtin(func(a []*Value) (*Value, error) {
 			for _, v := range a {
-				fmt.Print(v.String())
+				fmt.Fprint(stdout, v.String())
 			}
 			return Null(), nil
 		}),
 		// io.writeln(v?, ...) — print with newline
 		"writeln": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 {
-				fmt.Println()
+				fmt.Fprintln(stdout)
 			} else {
 				parts := make([]string, len(a))
 				for i, v := range a {
 					parts[i] = v.String()
 				}
-				fmt.Println(strings.Join(parts, " "))
+				fmt.Fprintln(stdout, strings.Join(parts, " "))
 			}
 			return Null(), nil
 		}),
 		// io.readln(prompt?) — read a line from stdin
 		"readln": builtin(func(a []*Value) (*Value, error) {
 			if len(a) > 0 {
-				fmt.Print(a[0].String())
+				fmt.Fprint(stdout, a[0].String())
+				if f, ok := stdout.(interface{ Flush() error }); ok {
+					f.Flush()
+				}
 			}
 			var line string
 			fmt.Scanln(&line)
@@ -563,7 +574,7 @@ func RegisterBuiltins(env *Env) {
 			for i, v := range a {
 				parts[i] = v.String()
 			}
-			fmt.Println(strings.Join(parts, " "))
+			fmt.Fprintln(stdout, strings.Join(parts, " "))
 			return Null(), nil
 		}),
 	})
@@ -803,13 +814,16 @@ func builtinPrint(args []*Value) (*Value, error) {
 	for i, a := range args {
 		parts[i] = a.String()
 	}
-	fmt.Println(strings.Join(parts, " "))
+	fmt.Fprintln(stdout, strings.Join(parts, " "))
 	return Null(), nil
 }
 
 func builtinInput(args []*Value) (*Value, error) {
 	if len(args) > 0 {
-		fmt.Print(args[0].String())
+		fmt.Fprint(stdout, args[0].String())
+		if f, ok := stdout.(interface{ Flush() error }); ok {
+			f.Flush()
+		}
 	}
 	var line string
 	fmt.Scanln(&line)
