@@ -538,11 +538,14 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			for i, v := range vals {
 				parts[i] = v.String()
 			}
-			fmt.Println(strings.Join(parts, " "))
+			fmt.Fprintln(stdout, strings.Join(parts, " "))
 		case bytecode.OP_INPUT:
 			hasPrompt := readU8(&ip)
 			if hasPrompt != 0 {
-				fmt.Print(pop().String())
+				fmt.Fprint(stdout, pop().String())
+				if f, ok := stdout.(interface{ Flush() error }); ok {
+					f.Flush()
+				}
 			}
 			line, _ := xvm.reader.ReadString('\n')
 			push(String(strings.TrimRight(line, "\r\n")))
