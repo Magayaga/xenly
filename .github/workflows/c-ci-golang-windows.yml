@@ -29,3 +29,7 @@ jobs:
         run: Measure-Command { ./xvm/bin/xenlybyc examples/hello.xe -o hello.xebc }
       - name: run hello test (1)
         run: Measure-Command { ./xvm/bin/xenlyrun hello.xebc }
+      - name: sys_demo test (2)
+        run: Measure-Command { ./xvm/bin/xenlybyc examples/sys_demo.xe -o sys_demo.xebc }
+      - name: run sys_demo test (2)
+        run: Measure-Command { ./xvm/bin/xenlyrun sys_demo.xebc }
