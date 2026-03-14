@@ -672,7 +672,8 @@ func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *C
 	case TypeClass:
 		return xvm.instantiateClassVal(callee.ClassVal, args)
 	}
-	return Null(), fmt.Errorf("XVM: value of type %q is not callable", callee.TypeName())
+	// Debug: show what value is being attempted to be called
+	return Null(), fmt.Errorf("XVM: value of type %q is not callable (value: %s)", callee.TypeName(), callee.String())
 }
 
 func (xvm *XVM) callFn(fn *FunctionVal, args []*Value, thisVal *Value, class *ClassVal) (*Value, error) {
