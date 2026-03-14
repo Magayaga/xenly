@@ -33,11 +33,12 @@ The **Xenly** programming language supports **macOS**, **Windows**, and **Linux*
 ## How Much Faster?
 Here are times to run `xenly` and `xenlyc` on some Xenly's example codes on GitHub of varying sizes:
 
-1. `xenlyc` vs `xvm`
+1. `xenly`, `xenlyc`, and `xvm`
    | Example codes | Size (LOC) | `xenly` | `xenlyc` | `xvm` (`xenlybyc` + `xenlyrun`) |
    |:-------------:|:----------:|:-------:|:--------:|:-------------------------------:|
    | `hello.xe`    | 3          | 0.051s  | 0.034s   | 0.004s                          |
    | `sys_demo.xe` | 159        | 0.078s  | 0.094s   | 135.861s                        |
+   | Billion nested loops | 8   | -       | 3.562s   | -                               |
    
    
 ## Examples
