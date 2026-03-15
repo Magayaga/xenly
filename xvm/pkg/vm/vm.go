@@ -692,50 +692,73 @@ func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *C
 	case TypeClass:
 		return xvm.instantiateClassVal(callee.ClassVal, args)
 
-	// ── Handle array "call" as index access ──────────────────────────────
+	// ── Handle array "call" as index/slice access ────────────────────────
 	// Some compilers/parsers emit OP_CALL when a value is followed by
 	// parenthesized arguments.  If the callee is an array and there is
 	// exactly one argument, treat it as index-get so `arr(0)` → `arr[0]`.
 	case TypeArray:
-		if len(args) == 1 {
-			return xvm.indexGet(callee, args[0]), nil
-		}
-		if len(args) == 2 {
-			// Treat as slice: arr(start, end)
-			arr := callee.ArrayVal
-			start := int(args[0].NumVal)
-			end := int(args[1].NumVal)
-			if start < 0 {
-				start = len(arr) + start
-			}
-			if end < 0 {
-				end = len(arr) + end
-			}
-			if start < 0 {
-				start = 0
-			}
-			if end > len(arr) {
-				end = len(arr)
-			}
-			if start >= end {
-				return Array(nil), nil
-			}
-			newArr := make([]*Value, end-start)
-			copy(newArr, arr[start:end])
-			return Array(newArr), nil
-		}
-		// Zero args: return the array itself (identity)
 		if len(args) == 0 {
 			return callee, nil
 		}
-		return Null(), fmt.Errorf("XVM: array is not callable with %d arguments", len(args))
-
-	// ── Handle string "call" as char access ──────────────────────────────
-	case TypeString:
-		if len(args) >= 1 {
+		if len(args) == 1 {
 			return xvm.indexGet(callee, args[0]), nil
 		}
-		return callee, nil
+		// 2+ args: treat as slice(start, end), ignore extra args
+		arr := callee.ArrayVal
+		start := int(args[0].NumVal)
+		end := len(arr)
+		if len(args) >= 2 {
+			end = int(args[1].NumVal)
+		}
+		if start < 0 {
+			start = len(arr) + start
+		}
+		if end < 0 {
+			end = len(arr) + end
+		}
+		if start < 0 {
+			start = 0
+		}
+		if end > len(arr) {
+			end = len(arr)
+		}
+		if start >= end {
+			return Array(nil), nil
+		}
+		newArr := make([]*Value, end-start)
+		copy(newArr, arr[start:end])
+		return Array(newArr), nil
+
+	// ── Handle string "call" as char/slice access ────────────────────────
+	case TypeString:
+		if len(args) == 0 {
+			return callee, nil
+		}
+		if len(args) == 1 {
+			return xvm.indexGet(callee, args[0]), nil
+		}
+		runes := []rune(callee.StrVal)
+		start := int(args[0].NumVal)
+		end := len(runes)
+		if len(args) >= 2 {
+			end = int(args[1].NumVal)
+		}
+		if start < 0 {
+			start = len(runes) + start
+		}
+		if end < 0 {
+			end = len(runes) + end
+		}
+		if start < 0 {
+			start = 0
+		}
+		if end > len(runes) {
+			end = len(runes)
+		}
+		if start >= end {
+			return String(""), nil
+		}
+		return String(string(runes[start:end])), nil
 
 	// ── Handle object "call" — look for __call field ─────────────────────
 	case TypeObject:
