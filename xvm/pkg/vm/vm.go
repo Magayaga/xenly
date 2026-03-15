@@ -688,14 +688,7 @@ func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *C
 	if callee == nil || callee.Tag == TypeNull {
 		return Null(), fmt.Errorf("XVM: attempt to call null value")
 	}
-
-	// Debug: print what we're trying to call
-	fmt.Fprintf(os.Stderr, "DEBUG callValue: callee type=%s, value=%s, args count=%d\n",
-		callee.TypeName(), callee.String(), len(args))
-	for i, arg := range args {
-		fmt.Fprintf(os.Stderr, "DEBUG arg[%d]: type=%s, value=%s\n", i, arg.TypeName(), arg.String())
-	}
-
+	
 	switch callee.Tag {
 	case TypeFunction:
 		return xvm.callFn(callee.FnVal, args, thisVal, class)
