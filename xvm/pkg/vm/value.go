@@ -111,7 +111,8 @@ func Object(m map[string]*Value) *Value {
 	return &Value{Tag: TypeObject, ObjVal: m}
 }
 
-// Clone creates a deep copy of a value, similar to value_clone() in C
+// Clone creates a deep copy of a value. Use sparingly - only when needed for isolation.
+// For performance-critical paths, consider using shallow copy or reference sharing.
 func (v *Value) Clone() *Value {
 	if v == nil {
 		return nil
@@ -127,10 +128,26 @@ func (v *Value) Clone() *Value {
 	case TypeBool:
 		return Bool(v.BoolVal)
 	case TypeArray:
-		// Deep clone array elements
+		// For arrays, we can optimize by using shallow copy when safe
+		// Deep clone only if elements are mutable types
 		if v.ArrayVal == nil {
 			return Array(nil)
 		}
+		// Check if we can use shallow copy (all elements are immutable)
+		canShallow := true
+		for _, item := range v.ArrayVal {
+			if item.Tag == TypeArray || item.Tag == TypeObject {
+				canShallow = false
+				break
+			}
+		}
+		if canShallow {
+			// Shallow copy - much faster
+			cloned := make([]*Value, len(v.ArrayVal))
+			copy(cloned, v.ArrayVal)
+			return Array(cloned)
+		}
+		// Fall back to deep clone for mutable elements
 		cloned := make([]*Value, len(v.ArrayVal))
 		for i, item := range v.ArrayVal {
 			cloned[i] = item.Clone()

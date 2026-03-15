@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"xvm/pkg/bytecode"
@@ -24,9 +25,24 @@ type XVM struct {
 	module  *bytecode.Module
 	global  *Env
 	classes []*ClassVal
-	fns     []*FunctionVal
+	poolStr []string
+	poolVal []*Value
 	reader  *bufio.Reader
 }
+
+// Value pools for reducing GC pressure
+var (
+	stringPool = sync.Pool{
+		New: func() interface{} {
+			return make([]string, 0, 8)
+		},
+	}
+	valuePool = sync.Pool{
+		New: func() interface{} {
+			return make([]*Value, 0, 8)
+		},
+	}
+)
 
 // NewXVM creates a new XVM from a compiled module.
 func NewXVM(mod *bytecode.Module) *XVM {
@@ -197,7 +213,12 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		case bytecode.OP_ADD:
 			b, a := pop(), pop()
 			if a.Tag == TypeString || b.Tag == TypeString {
-				push(String(a.String() + b.String()))
+				// Use strings.Builder for efficient concatenation
+				var builder strings.Builder
+				builder.Grow(len(a.String()) + len(b.String())) // Pre-allocate
+				builder.WriteString(a.String())
+				builder.WriteString(b.String())
+				push(String(builder.String()))
 			} else {
 				push(Number(a.NumVal + b.NumVal))
 			}
@@ -530,13 +551,17 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		// ── Built-in I/O ─────────────────────────────────────────────────────
 		case bytecode.OP_PRINT:
 			count := int(readU8(&ip))
-			parts := make([]string, count)
+			// Use pool to reduce allocations
+			parts := stringPool.Get().([]string)
+			defer stringPool.Put(parts[:0]) // Reset but keep capacity
+			parts = parts[:0]               // Clear slice
+
 			vals := make([]*Value, count)
 			for i := count - 1; i >= 0; i-- {
 				vals[i] = pop()
 			}
-			for i, v := range vals {
-				parts[i] = v.String()
+			for _, v := range vals {
+				parts = append(parts, v.String())
 			}
 			fmt.Fprintln(stdout, strings.Join(parts, " "))
 		case bytecode.OP_INPUT:
@@ -926,7 +951,12 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 	switch name {
 	case "push":
 		for _, a := range args {
-			arr.ArrayVal = append(arr.ArrayVal, a.Clone())
+			// Only clone mutable types for performance
+			if a.Tag == TypeArray || a.Tag == TypeObject {
+				arr.ArrayVal = append(arr.ArrayVal, a.Clone())
+			} else {
+				arr.ArrayVal = append(arr.ArrayVal, a)
+			}
 		}
 		return arr, true, nil
 	case "pop":
@@ -944,10 +974,15 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		arr.ArrayVal = arr.ArrayVal[1:]
 		return v, true, nil
 	case "unshift":
-		// Clone all values being added
+		// Performance optimization: only clone when necessary
 		clonedArgs := make([]*Value, len(args))
 		for i, a := range args {
-			clonedArgs[i] = a.Clone()
+			// Only clone mutable types
+			if a.Tag == TypeArray || a.Tag == TypeObject {
+				clonedArgs[i] = a.Clone()
+			} else {
+				clonedArgs[i] = a
+			}
 		}
 		newItems := append(clonedArgs, arr.ArrayVal...)
 		arr.ArrayVal = newItems

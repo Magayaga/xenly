@@ -432,7 +432,12 @@ func RegisterBuiltins(env *Env) {
 		"of": builtin(func(a []*Value) (*Value, error) {
 			items := make([]*Value, len(a))
 			for i, v := range a {
-				items[i] = v.Clone()
+				// Only clone mutable types for performance
+				if v.Tag == TypeArray || v.Tag == TypeObject {
+					items[i] = v.Clone()
+				} else {
+					items[i] = v
+				}
 			}
 			return Array(items), nil
 		}),
@@ -510,8 +515,15 @@ func RegisterBuiltins(env *Env) {
 			if len(a) < 1 || a[0].Tag != TypeArray {
 				return Null(), nil
 			}
+			// Performance optimization: only clone when necessary
 			for i := 1; i < len(a); i++ {
-				a[0].ArrayVal = append(a[0].ArrayVal, a[i].Clone())
+				val := a[i]
+				// Only clone mutable types to prevent reference sharing issues
+				if val.Tag == TypeArray || val.Tag == TypeObject {
+					a[0].ArrayVal = append(a[0].ArrayVal, val.Clone())
+				} else {
+					a[0].ArrayVal = append(a[0].ArrayVal, val)
+				}
 			}
 			return a[0], nil
 		}),
@@ -520,10 +532,16 @@ func RegisterBuiltins(env *Env) {
 			if len(a) < 1 || a[0].Tag != TypeArray {
 				return Null(), nil
 			}
-			// Clone all values being added
+			// Performance optimization: only clone when necessary
 			clonedArgs := make([]*Value, len(a)-1)
 			for i := 1; i < len(a); i++ {
-				clonedArgs[i-1] = a[i].Clone()
+				val := a[i]
+				// Only clone mutable types
+				if val.Tag == TypeArray || val.Tag == TypeObject {
+					clonedArgs[i-1] = val.Clone()
+				} else {
+					clonedArgs[i-1] = val
+				}
 			}
 			newItems := append(clonedArgs, a[0].ArrayVal...)
 			a[0].ArrayVal = newItems
@@ -554,7 +572,12 @@ func RegisterBuiltins(env *Env) {
 			for _, arr := range a {
 				if arr.Tag == TypeArray {
 					for _, item := range arr.ArrayVal {
-						items = append(items, item.Clone())
+						// Only clone mutable types
+						if item.Tag == TypeArray || item.Tag == TypeObject {
+							items = append(items, item.Clone())
+						} else {
+							items = append(items, item)
+						}
 					}
 				}
 			}
@@ -587,7 +610,12 @@ func RegisterBuiltins(env *Env) {
 			}
 			result := make([]*Value, end-start)
 			for i := start; i < end; i++ {
-				result[i-start] = arr[i].Clone()
+				// Only clone mutable types for performance
+				if arr[i].Tag == TypeArray || arr[i].Tag == TypeObject {
+					result[i-start] = arr[i].Clone()
+				} else {
+					result[i-start] = arr[i]
+				}
 			}
 			return Array(result), nil
 		}),
@@ -669,8 +697,15 @@ func RegisterBuiltins(env *Env) {
 				fill = a[1]
 			}
 			items := make([]*Value, n)
-			for i := range items {
-				items[i] = fill.Clone()
+			// Performance: only clone if fill value is mutable
+			if fill.Tag == TypeArray || fill.Tag == TypeObject {
+				for i := range items {
+					items[i] = fill.Clone()
+				}
+			} else {
+				for i := range items {
+					items[i] = fill
+				}
 			}
 			return Array(items), nil
 		}),
