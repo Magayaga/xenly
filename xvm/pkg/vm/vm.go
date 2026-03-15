@@ -24,9 +24,8 @@ import (
 type XVM struct {
 	module  *bytecode.Module
 	global  *Env
+	fns     []*FunctionVal
 	classes []*ClassVal
-	poolStr []string
-	poolVal []*Value
 	reader  *bufio.Reader
 }
 
