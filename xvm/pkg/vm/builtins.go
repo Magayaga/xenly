@@ -6,6 +6,7 @@ package vm
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -15,6 +16,13 @@ import (
 	"strings"
 	"time"
 )
+
+// stdout is the writer used by print/OP_PRINT. Defaults to os.Stdout.
+// SetStdout replaces it (e.g. with a bufio.Writer for Windows flushing).
+var stdout io.Writer = os.Stdout
+
+// SetStdout replaces the output writer used by all print operations.
+func SetStdout(w io.Writer) { stdout = w }
 
 // RegisterBuiltins installs all built-in functions and modules into env.
 func RegisterBuiltins(env *Env) {
@@ -35,38 +43,154 @@ func RegisterBuiltins(env *Env) {
 
 	// ── Math module ────────────────────────────────────────────────────────
 	mathObj := Object(map[string]*Value{
-		"PI":    Number(math.Pi),
-		"E":     Number(math.E),
-		"TAU":   Number(2 * math.Pi),
-		"INF":   Number(math.Inf(1)),
-		"NAN":   Number(math.NaN()),
-		"abs":   builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Abs(a[0].NumVal)), nil }),
-		"sqrt":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Sqrt(a[0].NumVal)), nil }),
-		"cbrt":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Cbrt(a[0].NumVal)), nil }),
-		"pow":   builtin(func(a []*Value) (*Value, error) { if len(a)<2 {return Number(0),nil}; return Number(math.Pow(a[0].NumVal, a[1].NumVal)), nil }),
-		"exp":   builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(1),nil}; return Number(math.Exp(a[0].NumVal)), nil }),
-		"log":   builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Log(a[0].NumVal)), nil }),
-		"log2":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Log2(a[0].NumVal)), nil }),
-		"log10": builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Log10(a[0].NumVal)), nil }),
-		"sin":   builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Sin(a[0].NumVal)), nil }),
-		"cos":   builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(1),nil}; return Number(math.Cos(a[0].NumVal)), nil }),
-		"tan":   builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Tan(a[0].NumVal)), nil }),
-		"asin":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Asin(a[0].NumVal)), nil }),
-		"acos":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Acos(a[0].NumVal)), nil }),
-		"atan":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Atan(a[0].NumVal)), nil }),
-		"atan2": builtin(func(a []*Value) (*Value, error) { if len(a)<2 {return Number(0),nil}; return Number(math.Atan2(a[0].NumVal, a[1].NumVal)), nil }),
-		"sinh":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Sinh(a[0].NumVal)), nil }),
-		"cosh":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(1),nil}; return Number(math.Cosh(a[0].NumVal)), nil }),
-		"tanh":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Tanh(a[0].NumVal)), nil }),
-		"floor": builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Floor(a[0].NumVal)), nil }),
-		"ceil":  builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Ceil(a[0].NumVal)), nil }),
-		"round": builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Round(a[0].NumVal)), nil }),
-		"trunc": builtin(func(a []*Value) (*Value, error) { if len(a)==0 {return Number(0),nil}; return Number(math.Trunc(a[0].NumVal)), nil }),
+		"PI":  Number(math.Pi),
+		"E":   Number(math.E),
+		"TAU": Number(2 * math.Pi),
+		"INF": Number(math.Inf(1)),
+		"NAN": Number(math.NaN()),
+		"abs": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Abs(a[0].NumVal)), nil
+		}),
+		"sqrt": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Sqrt(a[0].NumVal)), nil
+		}),
+		"cbrt": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Cbrt(a[0].NumVal)), nil
+		}),
+		"pow": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 {
+				return Number(0), nil
+			}
+			return Number(math.Pow(a[0].NumVal, a[1].NumVal)), nil
+		}),
+		"exp": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(1), nil
+			}
+			return Number(math.Exp(a[0].NumVal)), nil
+		}),
+		"log": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Log(a[0].NumVal)), nil
+		}),
+		"log2": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Log2(a[0].NumVal)), nil
+		}),
+		"log10": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Log10(a[0].NumVal)), nil
+		}),
+		"sin": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Sin(a[0].NumVal)), nil
+		}),
+		"cos": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(1), nil
+			}
+			return Number(math.Cos(a[0].NumVal)), nil
+		}),
+		"tan": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Tan(a[0].NumVal)), nil
+		}),
+		"asin": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Asin(a[0].NumVal)), nil
+		}),
+		"acos": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Acos(a[0].NumVal)), nil
+		}),
+		"atan": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Atan(a[0].NumVal)), nil
+		}),
+		"atan2": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 {
+				return Number(0), nil
+			}
+			return Number(math.Atan2(a[0].NumVal, a[1].NumVal)), nil
+		}),
+		"sinh": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Sinh(a[0].NumVal)), nil
+		}),
+		"cosh": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(1), nil
+			}
+			return Number(math.Cosh(a[0].NumVal)), nil
+		}),
+		"tanh": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Tanh(a[0].NumVal)), nil
+		}),
+		"floor": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Floor(a[0].NumVal)), nil
+		}),
+		"ceil": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Ceil(a[0].NumVal)), nil
+		}),
+		"round": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Round(a[0].NumVal)), nil
+		}),
+		"trunc": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(math.Trunc(a[0].NumVal)), nil
+		}),
 		"sign": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return Number(0), nil }
+			if len(a) == 0 {
+				return Number(0), nil
+			}
 			v := a[0].NumVal
-			if v == 0 { return Number(0), nil }
-			if v > 0 { return Number(1), nil }
+			if v == 0 {
+				return Number(0), nil
+			}
+			if v > 0 {
+				return Number(1), nil
+			}
 			return Number(-1), nil
 		}),
 		"min": builtin(func(a []*Value) (*Value, error) {
@@ -97,11 +221,15 @@ func RegisterBuiltins(env *Env) {
 			return Number(rand.Float64()), nil
 		}),
 		"isNaN": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return False(), nil }
+			if len(a) == 0 {
+				return False(), nil
+			}
 			return Bool(math.IsNaN(a[0].NumVal)), nil
 		}),
 		"isFinite": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return False(), nil }
+			if len(a) == 0 {
+				return False(), nil
+			}
 			return Bool(!math.IsInf(a[0].NumVal, 0) && !math.IsNaN(a[0].NumVal)), nil
 		}),
 		"hypot": builtin(func(a []*Value) (*Value, error) {
@@ -144,9 +272,12 @@ func RegisterBuiltins(env *Env) {
 				return Number(0), nil
 			}
 			x, y := math.Abs(a[0].NumVal), math.Abs(a[1].NumVal)
-			if x == 0 || y == 0 { return Number(0), nil }
+			if x == 0 || y == 0 {
+				return Number(0), nil
+			}
 			gcd := x
-			for tmp := y; tmp != 0; gcd, tmp = tmp, math.Mod(gcd, tmp) {}
+			for tmp := y; tmp != 0; gcd, tmp = tmp, math.Mod(gcd, tmp) {
+			}
 			return Number(x * y / gcd), nil
 		}),
 	})
@@ -216,10 +347,8 @@ func RegisterBuiltins(env *Env) {
 	})
 	env.Define("Array", arrObj, true)
 
-
 	// ── sys module ──────────────────────────────────────────────────────
 	registerSysModule(env)
-
 
 	// ── json module ───────────────────────────────────────────────────────
 	jsonObj := Object(map[string]*Value{
@@ -302,7 +431,14 @@ func RegisterBuiltins(env *Env) {
 		// array.of(a, b, c, ...) → [a, b, c]
 		"of": builtin(func(a []*Value) (*Value, error) {
 			items := make([]*Value, len(a))
-			copy(items, a)
+			for i, v := range a {
+				// Only clone mutable types for performance
+				if v.Tag == TypeArray || v.Tag == TypeObject {
+					items[i] = v.Clone()
+				} else {
+					items[i] = v
+				}
+			}
 			return Array(items), nil
 		}),
 		// array.empty() → []
@@ -370,17 +506,46 @@ func RegisterBuiltins(env *Env) {
 				idx = len(arr) + idx
 			}
 			if idx >= 0 && idx < len(arr) {
-				arr[idx] = a[2]
+				arr[idx] = a[2].Clone()
 			}
 			return a[0], nil
 		}),
-		// array.push(arr, val) → new_length  (mutates in-place)
+		// array.push(arr, val...) → arr  (mutates in-place, returns array for chaining)
 		"push": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 || a[0].Tag != TypeArray {
-				return Number(0), nil
+			if len(a) < 1 || a[0].Tag != TypeArray {
+				return Null(), nil
 			}
-			a[0].ArrayVal = append(a[0].ArrayVal, a[1])
-			return Number(float64(len(a[0].ArrayVal))), nil
+			// Performance optimization: only clone when necessary
+			for i := 1; i < len(a); i++ {
+				val := a[i]
+				// Only clone mutable types to prevent reference sharing issues
+				if val.Tag == TypeArray || val.Tag == TypeObject {
+					a[0].ArrayVal = append(a[0].ArrayVal, val.Clone())
+				} else {
+					a[0].ArrayVal = append(a[0].ArrayVal, val)
+				}
+			}
+			return a[0], nil
+		}),
+		// array.unshift(arr, val...) → arr  (mutates in-place, returns array for chaining)
+		"unshift": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 1 || a[0].Tag != TypeArray {
+				return Null(), nil
+			}
+			// Performance optimization: only clone when necessary
+			clonedArgs := make([]*Value, len(a)-1)
+			for i := 1; i < len(a); i++ {
+				val := a[i]
+				// Only clone mutable types
+				if val.Tag == TypeArray || val.Tag == TypeObject {
+					clonedArgs[i-1] = val.Clone()
+				} else {
+					clonedArgs[i-1] = val
+				}
+			}
+			newItems := append(clonedArgs, a[0].ArrayVal...)
+			a[0].ArrayVal = newItems
+			return a[0], nil
 		}),
 		// array.pop(arr) → last element (mutates)
 		"pop": builtin(func(a []*Value) (*Value, error) {
@@ -406,7 +571,14 @@ func RegisterBuiltins(env *Env) {
 			var items []*Value
 			for _, arr := range a {
 				if arr.Tag == TypeArray {
-					items = append(items, arr.ArrayVal...)
+					for _, item := range arr.ArrayVal {
+						// Only clone mutable types
+						if item.Tag == TypeArray || item.Tag == TypeObject {
+							items = append(items, item.Clone())
+						} else {
+							items = append(items, item)
+						}
+					}
 				}
 			}
 			return Array(items), nil
@@ -437,7 +609,14 @@ func RegisterBuiltins(env *Env) {
 				end = len(arr)
 			}
 			result := make([]*Value, end-start)
-			copy(result, arr[start:end])
+			for i := start; i < end; i++ {
+				// Only clone mutable types for performance
+				if arr[i].Tag == TypeArray || arr[i].Tag == TypeObject {
+					result[i-start] = arr[i].Clone()
+				} else {
+					result[i-start] = arr[i]
+				}
+			}
 			return Array(result), nil
 		}),
 		// array.join(arr, sep?) → string
@@ -518,8 +697,15 @@ func RegisterBuiltins(env *Env) {
 				fill = a[1]
 			}
 			items := make([]*Value, n)
-			for i := range items {
-				items[i] = fill
+			// Performance: only clone if fill value is mutable
+			if fill.Tag == TypeArray || fill.Tag == TypeObject {
+				for i := range items {
+					items[i] = fill.Clone()
+				}
+			} else {
+				for i := range items {
+					items[i] = fill
+				}
 			}
 			return Array(items), nil
 		}),
@@ -531,27 +717,30 @@ func RegisterBuiltins(env *Env) {
 		// io.write(v, ...) — print without newline
 		"write": builtin(func(a []*Value) (*Value, error) {
 			for _, v := range a {
-				fmt.Print(v.String())
+				fmt.Fprint(stdout, v.String())
 			}
 			return Null(), nil
 		}),
 		// io.writeln(v?, ...) — print with newline
 		"writeln": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 {
-				fmt.Println()
+				fmt.Fprintln(stdout)
 			} else {
 				parts := make([]string, len(a))
 				for i, v := range a {
 					parts[i] = v.String()
 				}
-				fmt.Println(strings.Join(parts, " "))
+				fmt.Fprintln(stdout, strings.Join(parts, " "))
 			}
 			return Null(), nil
 		}),
 		// io.readln(prompt?) — read a line from stdin
 		"readln": builtin(func(a []*Value) (*Value, error) {
 			if len(a) > 0 {
-				fmt.Print(a[0].String())
+				fmt.Fprint(stdout, a[0].String())
+				if f, ok := stdout.(interface{ Flush() error }); ok {
+					f.Flush()
+				}
 			}
 			var line string
 			fmt.Scanln(&line)
@@ -563,7 +752,7 @@ func RegisterBuiltins(env *Env) {
 			for i, v := range a {
 				parts[i] = v.String()
 			}
-			fmt.Println(strings.Join(parts, " "))
+			fmt.Fprintln(stdout, strings.Join(parts, " "))
 			return Null(), nil
 		}),
 	})
@@ -572,73 +761,113 @@ func RegisterBuiltins(env *Env) {
 	// ── string module ─────────────────────────────────────────────────────
 	stringObj := Object(map[string]*Value{
 		"len": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return Number(0), nil }
+			if len(a) == 0 {
+				return Number(0), nil
+			}
 			return Number(float64(len([]rune(a[0].String())))), nil
 		}),
 		"toString": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			return String(a[0].String()), nil
 		}),
 		"toNumber": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return Number(0), nil }
+			if len(a) == 0 {
+				return Number(0), nil
+			}
 			v, err := strconv.ParseFloat(strings.TrimSpace(a[0].String()), 64)
-			if err != nil { return Number(0), nil }
+			if err != nil {
+				return Number(0), nil
+			}
 			return Number(v), nil
 		}),
 		"upper": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			return String(strings.ToUpper(a[0].String())), nil
 		}),
 		"lower": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			return String(strings.ToLower(a[0].String())), nil
 		}),
 		"contains": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return False(), nil }
+			if len(a) < 2 {
+				return False(), nil
+			}
 			return Bool(strings.Contains(a[0].String(), a[1].String())), nil
 		}),
 		"startsWith": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return False(), nil }
+			if len(a) < 2 {
+				return False(), nil
+			}
 			return Bool(strings.HasPrefix(a[0].String(), a[1].String())), nil
 		}),
 		"endsWith": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return False(), nil }
+			if len(a) < 2 {
+				return False(), nil
+			}
 			return Bool(strings.HasSuffix(a[0].String(), a[1].String())), nil
 		}),
 		"indexOf": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return Number(-1), nil }
+			if len(a) < 2 {
+				return Number(-1), nil
+			}
 			return Number(float64(strings.Index(a[0].String(), a[1].String()))), nil
 		}),
 		"lastIndexOf": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return Number(-1), nil }
+			if len(a) < 2 {
+				return Number(-1), nil
+			}
 			return Number(float64(strings.LastIndex(a[0].String(), a[1].String()))), nil
 		}),
 		"charAt": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return String(""), nil }
+			if len(a) < 2 {
+				return String(""), nil
+			}
 			runes := []rune(a[0].String())
 			idx := int(a[1].NumVal)
-			if idx < 0 { idx = len(runes) + idx }
-			if idx < 0 || idx >= len(runes) { return String(""), nil }
+			if idx < 0 {
+				idx = len(runes) + idx
+			}
+			if idx < 0 || idx >= len(runes) {
+				return String(""), nil
+			}
 			return String(string(runes[idx])), nil
 		}),
 		"charCodeAt": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return Number(0), nil }
+			if len(a) < 2 {
+				return Number(0), nil
+			}
 			runes := []rune(a[0].String())
 			idx := int(a[1].NumVal)
-			if idx < 0 { idx = len(runes) + idx }
-			if idx < 0 || idx >= len(runes) { return Number(math.NaN()), nil }
+			if idx < 0 {
+				idx = len(runes) + idx
+			}
+			if idx < 0 || idx >= len(runes) {
+				return Number(math.NaN()), nil
+			}
 			return Number(float64(runes[idx])), nil
 		}),
 		"fromCharCode": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			return String(string(rune(int(a[0].NumVal)))), nil
 		}),
 		"repeat": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return String(""), nil }
+			if len(a) < 2 {
+				return String(""), nil
+			}
 			return String(strings.Repeat(a[0].String(), int(a[1].NumVal))), nil
 		}),
 		"reverse": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			runes := []rune(a[0].String())
 			for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
 				runes[i], runes[j] = runes[j], runes[i]
@@ -646,90 +875,154 @@ func RegisterBuiltins(env *Env) {
 			return String(string(runes)), nil
 		}),
 		"trim": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			return String(strings.TrimSpace(a[0].String())), nil
 		}),
 		"trimStart": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			return String(strings.TrimLeftFunc(a[0].String(), func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' })), nil
 		}),
 		"trimEnd": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			return String(strings.TrimRightFunc(a[0].String(), func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' })), nil
 		}),
 		"replace": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 3 { return safeArg(a, 0), nil }
+			if len(a) < 3 {
+				return safeArg(a, 0), nil
+			}
 			return String(strings.Replace(a[0].String(), a[1].String(), a[2].String(), 1)), nil
 		}),
 		"replaceAll": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 3 { return safeArg(a, 0), nil }
+			if len(a) < 3 {
+				return safeArg(a, 0), nil
+			}
 			return String(strings.ReplaceAll(a[0].String(), a[1].String(), a[2].String())), nil
 		}),
 		"substr": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return String(""), nil }
+			if len(a) < 2 {
+				return String(""), nil
+			}
 			runes := []rune(a[0].String())
 			start := int(a[1].NumVal)
-			if start < 0 { start = 0 }
+			if start < 0 {
+				start = 0
+			}
 			end := len(runes)
-			if len(a) >= 3 { end = start + int(a[2].NumVal) }
-			if end > len(runes) { end = len(runes) }
-			if start >= end { return String(""), nil }
+			if len(a) >= 3 {
+				end = start + int(a[2].NumVal)
+			}
+			if end > len(runes) {
+				end = len(runes)
+			}
+			if start >= end {
+				return String(""), nil
+			}
 			return String(string(runes[start:end])), nil
 		}),
 		"slice": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return String(""), nil }
+			if len(a) < 2 {
+				return String(""), nil
+			}
 			runes := []rune(a[0].String())
 			start := int(a[1].NumVal)
 			end := len(runes)
-			if len(a) >= 3 { end = int(a[2].NumVal) }
-			if start < 0 { start = len(runes) + start }
-			if end < 0 { end = len(runes) + end }
-			if start < 0 { start = 0 }
-			if end > len(runes) { end = len(runes) }
-			if start >= end { return String(""), nil }
+			if len(a) >= 3 {
+				end = int(a[2].NumVal)
+			}
+			if start < 0 {
+				start = len(runes) + start
+			}
+			if end < 0 {
+				end = len(runes) + end
+			}
+			if start < 0 {
+				start = 0
+			}
+			if end > len(runes) {
+				end = len(runes)
+			}
+			if start >= end {
+				return String(""), nil
+			}
 			return String(string(runes[start:end])), nil
 		}),
 		"padStart": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return safeArg(a, 0), nil }
+			if len(a) < 2 {
+				return safeArg(a, 0), nil
+			}
 			s := a[0].String()
 			n := int(a[1].NumVal)
 			pad := " "
-			if len(a) >= 3 { pad = a[2].String() }
-			for len([]rune(s)) < n { s = pad + s }
+			if len(a) >= 3 {
+				pad = a[2].String()
+			}
+			for len([]rune(s)) < n {
+				s = pad + s
+			}
 			runes := []rune(s)
-			if len(runes) > n { s = string(runes[len(runes)-n:]) }
+			if len(runes) > n {
+				s = string(runes[len(runes)-n:])
+			}
 			return String(s), nil
 		}),
 		"padEnd": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return safeArg(a, 0), nil }
+			if len(a) < 2 {
+				return safeArg(a, 0), nil
+			}
 			s := a[0].String()
 			n := int(a[1].NumVal)
 			pad := " "
-			if len(a) >= 3 { pad = a[2].String() }
-			for len([]rune(s)) < n { s = s + pad }
+			if len(a) >= 3 {
+				pad = a[2].String()
+			}
+			for len([]rune(s)) < n {
+				s = s + pad
+			}
 			runes := []rune(s)
-			if len(runes) > n { s = string(runes[:n]) }
+			if len(runes) > n {
+				s = string(runes[:n])
+			}
 			return String(s), nil
 		}),
 		"split": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 { return Array(nil), nil }
+			if len(a) < 2 {
+				return Array(nil), nil
+			}
 			parts := strings.Split(a[0].String(), a[1].String())
 			items := make([]*Value, len(parts))
-			for i, p := range parts { items[i] = String(p) }
+			for i, p := range parts {
+				items[i] = String(p)
+			}
 			return Array(items), nil
 		}),
 		"join": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			// string.join(arr, sep)
-			if a[0].Tag != TypeArray { return String(""), nil }
+			if a[0].Tag != TypeArray {
+				return String(""), nil
+			}
 			sep := ""
-			if len(a) > 1 { sep = a[1].String() }
+			if len(a) > 1 {
+				sep = a[1].String()
+			}
 			parts := make([]string, len(a[0].ArrayVal))
-			for i, v := range a[0].ArrayVal { parts[i] = v.String() }
+			for i, v := range a[0].ArrayVal {
+				parts[i] = v.String()
+			}
 			return String(strings.Join(parts, sep)), nil
 		}),
 		"format": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return String(""), nil }
+			if len(a) == 0 {
+				return String(""), nil
+			}
 			// Simple: string.format(fmt, args...) — basic %s/%d/%f substitution
 			result := a[0].String()
 			for _, arg := range a[1:] {
@@ -749,13 +1042,17 @@ func RegisterBuiltins(env *Env) {
 		}),
 		"exit": builtin(func(a []*Value) (*Value, error) {
 			code := 0
-			if len(a) > 0 { code = int(a[0].NumVal) }
+			if len(a) > 0 {
+				code = int(a[0].NumVal)
+			}
 			os.Exit(code)
 			return Null(), nil
 		}),
 		"args": builtin(func(a []*Value) (*Value, error) {
 			items := make([]*Value, len(os.Args))
-			for i, arg := range os.Args { items[i] = String(arg) }
+			for i, arg := range os.Args {
+				items[i] = String(arg)
+			}
 			return Array(items), nil
 		}),
 		"env": builtin(func(a []*Value) (*Value, error) {
@@ -765,7 +1062,9 @@ func RegisterBuiltins(env *Env) {
 			return Null(), nil
 		}),
 		"getenv": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 { return Null(), nil }
+			if len(a) == 0 {
+				return Null(), nil
+			}
 			return String(os.Getenv(a[0].String())), nil
 		}),
 		"getcwd": builtin(func(a []*Value) (*Value, error) {
@@ -803,13 +1102,16 @@ func builtinPrint(args []*Value) (*Value, error) {
 	for i, a := range args {
 		parts[i] = a.String()
 	}
-	fmt.Println(strings.Join(parts, " "))
+	fmt.Fprintln(stdout, strings.Join(parts, " "))
 	return Null(), nil
 }
 
 func builtinInput(args []*Value) (*Value, error) {
 	if len(args) > 0 {
-		fmt.Print(args[0].String())
+		fmt.Fprint(stdout, args[0].String())
+		if f, ok := stdout.(interface{ Flush() error }); ok {
+			f.Flush()
+		}
 	}
 	var line string
 	fmt.Scanln(&line)

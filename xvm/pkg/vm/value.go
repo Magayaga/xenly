@@ -31,19 +31,19 @@ const (
 
 // Value is a dynamically typed runtime value.
 type Value struct {
-	Tag      ValueType
-	NumVal   float64
-	StrVal   string
-	BoolVal  bool
-	FnVal    *FunctionVal
-	BuiltinV BuiltinFn
-	ArrayVal []*Value
-	ObjVal   map[string]*Value
-	ClassVal *ClassVal
-	InstVal  *InstanceVal
-	VarTag   string    // for TypeVariant
-	VarFields []*Value  // for TypeVariant
-	IterVal  *IterVal
+	Tag       ValueType
+	NumVal    float64
+	StrVal    string
+	BoolVal   bool
+	FnVal     *FunctionVal
+	BuiltinV  BuiltinFn
+	ArrayVal  []*Value
+	ObjVal    map[string]*Value
+	ClassVal  *ClassVal
+	InstVal   *InstanceVal
+	VarTag    string   // for TypeVariant
+	VarFields []*Value // for TypeVariant
+	IterVal   *IterVal
 }
 
 // BuiltinFn is the signature for native built-in functions.
@@ -109,6 +109,123 @@ func Object(m map[string]*Value) *Value {
 		m = make(map[string]*Value)
 	}
 	return &Value{Tag: TypeObject, ObjVal: m}
+}
+
+// Clone creates a deep copy of a value. Use sparingly - only when needed for isolation.
+// For performance-critical paths, consider using shallow copy or reference sharing.
+func (v *Value) Clone() *Value {
+	if v == nil {
+		return nil
+	}
+
+	switch v.Tag {
+	case TypeNull:
+		return Null()
+	case TypeNumber:
+		return Number(v.NumVal)
+	case TypeString:
+		return String(v.StrVal)
+	case TypeBool:
+		return Bool(v.BoolVal)
+	case TypeArray:
+		// For arrays, we can optimize by using shallow copy when safe
+		// Deep clone only if elements are mutable types
+		if v.ArrayVal == nil {
+			return Array(nil)
+		}
+		// Check if we can use shallow copy (all elements are immutable)
+		canShallow := true
+		for _, item := range v.ArrayVal {
+			if item.Tag == TypeArray || item.Tag == TypeObject {
+				canShallow = false
+				break
+			}
+		}
+		if canShallow {
+			// Shallow copy - much faster
+			cloned := make([]*Value, len(v.ArrayVal))
+			copy(cloned, v.ArrayVal)
+			return Array(cloned)
+		}
+		// Fall back to deep clone for mutable elements
+		cloned := make([]*Value, len(v.ArrayVal))
+		for i, item := range v.ArrayVal {
+			cloned[i] = item.Clone()
+		}
+		return Array(cloned)
+	case TypeObject:
+		// Deep clone object properties
+		if v.ObjVal == nil {
+			return Object(nil)
+		}
+		cloned := make(map[string]*Value)
+		for k, val := range v.ObjVal {
+			cloned[k] = val.Clone()
+		}
+		return Object(cloned)
+	case TypeFunction:
+		// Functions are reference types, shallow copy is fine
+		return &Value{
+			Tag:   TypeFunction,
+			FnVal: v.FnVal,
+		}
+	case TypeBuiltin:
+		// Builtins are reference types
+		return &Value{
+			Tag:      TypeBuiltin,
+			BuiltinV: v.BuiltinV,
+		}
+	case TypeClass:
+		// Classes are reference types
+		return &Value{
+			Tag:      TypeClass,
+			ClassVal: v.ClassVal,
+		}
+	case TypeInstance:
+		// Deep clone instance fields
+		if v.InstVal == nil {
+			return &Value{Tag: TypeInstance, InstVal: nil}
+		}
+		clonedFields := make(map[string]*Value)
+		for k, val := range v.InstVal.Fields {
+			clonedFields[k] = val.Clone()
+		}
+		clonedInst := &InstanceVal{
+			Class:  v.InstVal.Class,
+			Fields: clonedFields,
+		}
+		return &Value{Tag: TypeInstance, InstVal: clonedInst}
+	case TypeVariant:
+		// Deep clone variant fields
+		if v.VarFields == nil {
+			return &Value{Tag: TypeVariant, VarTag: v.VarTag, VarFields: nil}
+		}
+		clonedFields := make([]*Value, len(v.VarFields))
+		for i, field := range v.VarFields {
+			clonedFields[i] = field.Clone()
+		}
+		return &Value{
+			Tag:       TypeVariant,
+			VarTag:    v.VarTag,
+			VarFields: clonedFields,
+		}
+	case TypeIterator:
+		// Deep clone iterator items
+		if v.IterVal == nil {
+			return &Value{Tag: TypeIterator, IterVal: nil}
+		}
+		clonedItems := make([]*Value, len(v.IterVal.Items))
+		for i, item := range v.IterVal.Items {
+			clonedItems[i] = item.Clone()
+		}
+		clonedIter := &IterVal{
+			Items: clonedItems,
+			Index: v.IterVal.Index,
+		}
+		return &Value{Tag: TypeIterator, IterVal: clonedIter}
+	default:
+		return Null()
+	}
 }
 
 // ─── Truth testing ────────────────────────────────────────────────────────────

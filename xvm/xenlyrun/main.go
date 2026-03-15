@@ -20,6 +20,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -94,6 +95,13 @@ func xvmMachine() string {
 }
 
 func main() {
+	// Wrap stdout in a buffered writer and flush on exit.
+	// This is essential on Windows where Go's os.Stdout may not auto-flush
+	// when the process exits normally (especially under PowerShell / cmd).
+	stdout := bufio.NewWriter(os.Stdout)
+	vm.SetStdout(stdout)
+	defer stdout.Flush()
+
 	var (
 		inputFile string
 		runMode   bool   // --run: compile .xe and execute directly

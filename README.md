@@ -30,6 +30,17 @@ The **Xenly** programming language supports **macOS**, **Windows**, and **Linux*
 | Windows Subsystem for Linux 🪟 | Yes         | Yes                        | Yes                                                 |
 | Windows 🪟           | No (Not available)    | No (Not available)         | Yes                                                 |
 
+## How Much Faster?
+Here are times to run `xenly` and `xenlyc` on some Xenly's example codes on GitHub of varying sizes:
+
+1. `xenly`, `xenlyc`, and `xvm`
+   | Example codes | Size (LOC) | `xenly` | `xenlyc` | `xvm` (`xenlybyc` + `xenlyrun`) |
+   |:-------------:|:----------:|:-------:|:--------:|:-------------------------------:|
+   | `hello.xe`    | 3          | 0.051s  | 0.034s   | 0.004s                          |
+   | `sys_demo.xe` | 159        | 0.078s  | 0.094s   | 135.861s                        |
+   | Billion nested loops | 8   | -       | 3.562s   | -                               |
+   
+   
 ## Examples
 ### Hello, World! program
 The following shows how a **"Hello, World!"** program is written in Xenly programming language:
