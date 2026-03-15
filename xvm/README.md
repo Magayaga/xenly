@@ -5,7 +5,7 @@
 ## Filename extensions
 
 * `.xe` and `.xenly` (**Xenly source file**) — It is the source file for the Xenly programming language.
-* `.xebc` (**Xenly bytecode**) - a file containing Xenly bytecode that can be executed on the XVM.
+* `.xebc` (**Xenly bytecode** or **Xenly byteclass**) - a file containing Xenly bytecode that can be executed on the XVM.
 
 ## Getting started
 1. Install Go 1.21+ from [go.dev/dl](https://go.dev/dl) if you don't have it:
@@ -14,8 +14,9 @@
    $ go version
    ```
 
-2. Build the **XVM**:
+2. Build the **XVM** and run the program (makefile or batchfile):
    ```bash
+   # Run the program (makefile or batchfile)
    $ make
    ```
 
