@@ -2,14 +2,14 @@
  * XENLY - Xenly Virtual Machine (XVM)
  * xenlyrun — Xenly Virtual Machine Launcher
  *
- * Loads compiled XVM bytecode (.xyc) and executes it using the
+ * Loads compiled XVM bytecode (.xebc) and executes it using the
  * Xenly Virtual Machine (XVM).
  *
  * Created, designed, and developed by Cyril John Magayaga.
  * XVM Go implementation — available for Windows, macOS, and Linux.
  *
  * Usage:
- *   xenlyrun <file.xyc> [args...]
+ *   xenlyrun <file.xebc> [args...]
  *   xenlyrun --run <file.xe>     (compile and run in one step)
  *   xenlyrun --version | --help
  *
@@ -58,9 +58,9 @@ func reset() string {
 func printUsage(prog string) {
 	fmt.Printf("\n  %sxenlyrun%s  Xenly Virtual Machine  %sv%s%s\n",
 		col("1;36"), reset(), col("1;33"), xvmVersion, reset())
-	fmt.Printf("\n  %sUsage:%s   %s [options] <file.xyc> [args...]\n", col("1;33"), reset(), prog)
+	fmt.Printf("\n  %sUsage:%s   %s [options] <file.xebc> [args...]\n", col("1;33"), reset(), prog)
 	fmt.Printf("\n  %sOptions:%s\n", col("1;33"), reset())
-	fmt.Printf("    %s--run <file.xe>%s   Compile .xe and run immediately  %s(no .xyc written)%s\n",
+	fmt.Printf("    %s--run <file.xe>%s   Compile .xe and run immediately  %s(no .xebc written)%s\n",
 		col("1"), reset(), col("2"), reset())
 	fmt.Printf("    %s--no-color%s        Disable ANSI colour output\n", col("1"), reset())
 	fmt.Printf("    %s--time%s            Show execution time\n", col("1"), reset())
@@ -71,7 +71,7 @@ func printUsage(prog string) {
 	fmt.Printf("    %s-v, --version%s     Show version\n", col("1"), reset())
 	fmt.Printf("    %s--author%s          Show author information\n", col("1"), reset())
 	fmt.Printf("\n  %sExamples:%s\n", col("1;32"), reset())
-	fmt.Printf("    %s hello.xyc              %s→ run compiled bytecode\n", prog, col("2"))
+	fmt.Printf("    %s hello.xebc              %s→ run compiled bytecode\n", prog, col("2"))
 	fmt.Printf("    %s%s --run hello.xe        %s→ compile + run\n", reset(), prog, col("2"))
 	fmt.Printf("    %s%s --run hello.xe -- arg1%s→ pass args to program\n%s\n",
 		reset(), prog, col("2"), reset())
@@ -79,7 +79,7 @@ func printUsage(prog string) {
 
 func printVersion() {
 	fmt.Printf("\n  %sxenlyrun%s v%s  (Xenly Virtual Machine)\n", col("1;36"), reset(), xvmVersion)
-	fmt.Printf("  Executes .xyc XVM bytecode programs\n")
+	fmt.Printf("  Executes .xebc XVM bytecode programs\n")
 	fmt.Printf("  Supported platforms: Windows, macOS, Linux\n\n")
 }
 
@@ -179,11 +179,11 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		// ── Load .xyc bytecode ──────────────────────────────────────────
+		// ── Load .xebc bytecode ──────────────────────────────────────────
 		if filepath.Ext(inputFile) == ".xe" {
 			// Convenience: user passed .xe to xenlyrun — auto-compile
 			fmt.Fprintf(os.Stderr, "%s[xenlyrun]%s note: compiling .xe on the fly "+
-				"(use xenlybyc to save .xyc)\n", col("1;33"), reset())
+				"(use xenlybyc to save .xebc)\n", col("1;33"), reset())
 			var err error
 			mod, err = compileSource(inputFile)
 			if err != nil {

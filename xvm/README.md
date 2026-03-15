@@ -1,6 +1,8 @@
-# `xvm`
+# `xvm` / **Xenly Virtual Machine**
 
 **XVM**, also known as **Xenly Virtual Machine**, is a virtual machine that enables a computer to run Xenly programs and programs written in other languages that are also compiled into Xenly bytecode. The XVM is detailed by a specification that formally describes what is required in a Xenly implementation. It was available for the **Windows**, **macOS**, and **Linux** operating systems.
+
+It is written in **Go** programming language.
 
 ## Filename extensions
 
