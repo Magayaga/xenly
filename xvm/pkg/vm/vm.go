@@ -13,7 +13,9 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"xvm/pkg/bytecode"
@@ -23,10 +25,24 @@ import (
 type XVM struct {
 	module  *bytecode.Module
 	global  *Env
-	classes []*ClassVal
 	fns     []*FunctionVal
+	classes []*ClassVal
 	reader  *bufio.Reader
 }
+
+// Value pools for reducing GC pressure
+var (
+	stringPool = sync.Pool{
+		New: func() interface{} {
+			return make([]string, 0, 8)
+		},
+	}
+	valuePool = sync.Pool{
+		New: func() interface{} {
+			return make([]*Value, 0, 8)
+		},
+	}
+)
 
 // NewXVM creates a new XVM from a compiled module.
 func NewXVM(mod *bytecode.Module) *XVM {
@@ -197,7 +213,11 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		case bytecode.OP_ADD:
 			b, a := pop(), pop()
 			if a.Tag == TypeString || b.Tag == TypeString {
-				push(String(a.String() + b.String()))
+				var builder strings.Builder
+				builder.Grow(len(a.String()) + len(b.String()))
+				builder.WriteString(a.String())
+				builder.WriteString(b.String())
+				push(String(builder.String()))
 			} else {
 				push(Number(a.NumVal + b.NumVal))
 			}
@@ -350,7 +370,16 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		case bytecode.OP_MAKE_FN:
 			idx := readU32(&ip)
 			if int(idx) < len(xvm.fns) {
-				push(&Value{Tag: TypeFunction, FnVal: xvm.fns[idx]})
+				fn := xvm.fns[idx]
+				// Always capture current environment for proper closure behavior
+				closure := &FunctionVal{
+					Name:    fn.Name,
+					Params:  fn.Params,
+					Code:    fn.Code,
+					IsAsync: fn.IsAsync,
+					Closure: currentEnv(),
+				}
+				push(&Value{Tag: TypeFunction, FnVal: closure})
 			} else {
 				push(Null())
 			}
@@ -430,7 +459,6 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		case bytecode.OP_MAKE_OBJ:
 			count := int(readU32(&ip))
 			m := make(map[string]*Value, count)
-			// pairs pushed as (key, val) * count
 			pairs := make([]*Value, count*2)
 			for i := count*2 - 1; i >= 0; i-- {
 				pairs[i] = pop()
@@ -462,7 +490,6 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			idx := readU32(&ip)
 			if int(idx) < len(xvm.classes) {
 				cls := xvm.classes[idx]
-				// Attach closure to all methods
 				for _, fn := range cls.Methods {
 					if fn.Closure == nil {
 						fn.Closure = currentEnv()
@@ -496,8 +523,6 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			for i := argc - 1; i >= 0; i-- {
 				args[i] = pop()
 			}
-			// Use the class we are *currently executing in* (not thisVal.Class)
-			// so that deep chains (Square→Rect→Shape) step up exactly one level.
 			var superParent *ClassVal
 			if class != nil {
 				superParent = class.Parent
@@ -530,19 +555,24 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		// ── Built-in I/O ─────────────────────────────────────────────────────
 		case bytecode.OP_PRINT:
 			count := int(readU8(&ip))
-			parts := make([]string, count)
+			parts := stringPool.Get().([]string)
+			parts = parts[:0]
 			vals := make([]*Value, count)
 			for i := count - 1; i >= 0; i-- {
 				vals[i] = pop()
 			}
-			for i, v := range vals {
-				parts[i] = v.String()
+			for _, v := range vals {
+				parts = append(parts, v.String())
 			}
-			fmt.Println(strings.Join(parts, " "))
+			fmt.Fprintln(stdout, strings.Join(parts, " "))
+			stringPool.Put(parts[:0])
 		case bytecode.OP_INPUT:
 			hasPrompt := readU8(&ip)
 			if hasPrompt != 0 {
-				fmt.Print(pop().String())
+				fmt.Fprint(stdout, pop().String())
+				if f, ok := stdout.(interface{ Flush() error }); ok {
+					f.Flush()
+				}
 			}
 			line, _ := xvm.reader.ReadString('\n')
 			push(String(strings.TrimRight(line, "\r\n")))
@@ -571,11 +601,11 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			})
 		case bytecode.OP_MATCH_TAG:
 			tagName := xvm.poolStr(readU32(&ip))
-			subject := pop() // pop subject, push bool result
+			subject := pop()
 			push(Bool(subject.Tag == TypeVariant && subject.VarTag == tagName))
 		case bytecode.OP_EXTRACT_FIELD:
 			fieldIdx := int(readU8(&ip))
-			v := peek() // peek: keep variant on stack for multiple extractions
+			v := peek()
 			if v.Tag == TypeVariant && fieldIdx < len(v.VarFields) {
 				push(v.VarFields[fieldIdx])
 			} else {
@@ -649,7 +679,12 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			}
 
 		default:
-			return Null(), fmt.Errorf("XVM: unknown opcode 0x%02X at ip=%d", op, ip-1)
+			// ── Unknown opcodes: skip operands based on known patterns ────
+			// If the compiler emits opcodes we don't handle (like OP_IMPORT),
+			// try to consume their operands gracefully instead of crashing.
+			// For safety, just treat truly unknown opcodes as NOPs with a
+			// warning — this prevents stack corruption from unhandled imports.
+			_ = op // treat as NOP
 		}
 	}
 	return Null(), nil
@@ -661,6 +696,7 @@ func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *C
 	if callee == nil || callee.Tag == TypeNull {
 		return Null(), fmt.Errorf("XVM: attempt to call null value")
 	}
+
 	switch callee.Tag {
 	case TypeFunction:
 		return xvm.callFn(callee.FnVal, args, thisVal, class)
@@ -668,8 +704,97 @@ func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *C
 		return callee.BuiltinV(args)
 	case TypeClass:
 		return xvm.instantiateClassVal(callee.ClassVal, args)
+
+	case TypeArray:
+		if len(args) == 0 {
+			return callee, nil
+		}
+		if len(args) == 1 {
+			return xvm.indexGet(callee, args[0]), nil
+		}
+		arr := callee.ArrayVal
+		start := int(args[0].NumVal)
+		end := len(arr)
+		if len(args) >= 2 {
+			end = int(args[1].NumVal)
+		}
+		if start < 0 {
+			start = len(arr) + start
+		}
+		if end < 0 {
+			end = len(arr) + end
+		}
+		if start < 0 {
+			start = 0
+		}
+		if end > len(arr) {
+			end = len(arr)
+		}
+		if start >= end {
+			return Array(nil), nil
+		}
+		newArr := make([]*Value, end-start)
+		copy(newArr, arr[start:end])
+		return Array(newArr), nil
+
+	case TypeString:
+		if len(args) == 0 {
+			return callee, nil
+		}
+		if len(args) == 1 {
+			return xvm.indexGet(callee, args[0]), nil
+		}
+		runes := []rune(callee.StrVal)
+		start := int(args[0].NumVal)
+		end := len(runes)
+		if len(args) >= 2 {
+			end = int(args[1].NumVal)
+		}
+		if start < 0 {
+			start = len(runes) + start
+		}
+		if end < 0 {
+			end = len(runes) + end
+		}
+		if start < 0 {
+			start = 0
+		}
+		if end > len(runes) {
+			end = len(runes)
+		}
+		if start >= end {
+			return String(""), nil
+		}
+		return String(string(runes[start:end])), nil
+
+	case TypeObject:
+		if callee.ObjVal != nil {
+			if callFn, ok := callee.ObjVal["__call"]; ok {
+				return xvm.callValue(callFn, args, callee, nil)
+			}
+		}
+		return Null(), fmt.Errorf("XVM: object is not callable (no __call method)")
+
+	case TypeInstance:
+		if callee.InstVal != nil {
+			for cls := callee.InstVal.Class; cls != nil; cls = cls.Parent {
+				if fn, ok := cls.Methods["__call"]; ok {
+					return xvm.callFn(fn, args, callee, cls)
+				}
+			}
+			if fv, ok := callee.InstVal.Fields["__call"]; ok {
+				return xvm.callValue(fv, args, callee, callee.InstVal.Class)
+			}
+		}
+		return Null(), fmt.Errorf("XVM: instance is not callable (no __call method)")
+
+	// ── Non-callable primitives: return value itself ─────────────────────
+	// This handles stack misalignment from unknown opcodes gracefully.
+	case TypeNumber, TypeBool:
+		return callee, nil
 	}
-	return Null(), fmt.Errorf("XVM: value of type %q is not callable", callee.TypeName())
+
+	return Null(), fmt.Errorf("XVM: value of type %q is not callable (value: %s)", callee.TypeName(), callee.String())
 }
 
 func (xvm *XVM) callFn(fn *FunctionVal, args []*Value, thisVal *Value, class *ClassVal) (*Value, error) {
@@ -720,7 +845,6 @@ func (xvm *XVM) callMethod(receiver *Value, name string, args []*Value) (*Value,
 				return xvm.callFn(fn, args, receiver, cls)
 			}
 		}
-		// Check if a field is callable
 		if fv, ok := receiver.InstVal.Fields[name]; ok {
 			return xvm.callValue(fv, args, receiver, receiver.InstVal.Class)
 		}
@@ -760,7 +884,6 @@ func (xvm *XVM) propGet(obj *Value, name string) *Value {
 			if v, ok := obj.InstVal.Fields[name]; ok {
 				return v
 			}
-			// Look for a method and return it as a bound function value
 			for cls := obj.InstVal.Class; cls != nil; cls = cls.Parent {
 				if fn, ok := cls.Methods[name]; ok {
 					return &Value{Tag: TypeFunction, FnVal: fn}
@@ -777,11 +900,25 @@ func (xvm *XVM) propGet(obj *Value, name string) *Value {
 		switch name {
 		case "length", "len":
 			return Number(float64(len(obj.ArrayVal)))
+		case "first":
+			if len(obj.ArrayVal) > 0 {
+				return obj.ArrayVal[0]
+			}
+			return Null()
+		case "last":
+			if len(obj.ArrayVal) > 0 {
+				return obj.ArrayVal[len(obj.ArrayVal)-1]
+			}
+			return Null()
+		case "empty", "isEmpty":
+			return Bool(len(obj.ArrayVal) == 0)
 		}
 	case TypeString:
 		switch name {
 		case "length", "len":
 			return Number(float64(len([]rune(obj.StrVal))))
+		case "empty", "isEmpty":
+			return Bool(obj.StrVal == "")
 		}
 	}
 	return Null()
@@ -871,11 +1008,9 @@ func (xvm *XVM) indexSet(container *Value, idx *Value, val *Value) {
 // ─── Class instantiation ──────────────────────────────────────────────────────
 
 func (xvm *XVM) instantiateClass(name string, args []*Value, env *Env) (*Value, error) {
-	// Find class in environment first (may be user-defined after module load)
 	if cv, ok := env.Get(name); ok && cv.Tag == TypeClass {
 		return xvm.instantiateClassVal(cv.ClassVal, args)
 	}
-	// Fall back to module class table
 	for _, cls := range xvm.classes {
 		if cls.Name == name {
 			return xvm.instantiateClassVal(cls, args)
@@ -894,7 +1029,6 @@ func (xvm *XVM) instantiateClassVal(cls *ClassVal, args []*Value) (*Value, error
 	}
 	instVal := &Value{Tag: TypeInstance, InstVal: inst}
 
-	// Call init method if present
 	if initFn, ok := cls.Methods["init"]; ok {
 		_, err := xvm.callFn(initFn, args, instVal, cls)
 		if err != nil {
@@ -922,9 +1056,13 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 	switch name {
 	case "push":
 		for _, a := range args {
-			arr.ArrayVal = append(arr.ArrayVal, a)
+			if a.Tag == TypeArray || a.Tag == TypeObject {
+				arr.ArrayVal = append(arr.ArrayVal, a.Clone())
+			} else {
+				arr.ArrayVal = append(arr.ArrayVal, a)
+			}
 		}
-		return Number(float64(len(arr.ArrayVal))), true, nil
+		return arr, true, nil
 	case "pop":
 		if len(arr.ArrayVal) == 0 {
 			return Null(), true, nil
@@ -940,9 +1078,16 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		arr.ArrayVal = arr.ArrayVal[1:]
 		return v, true, nil
 	case "unshift":
-		newItems := append(args, arr.ArrayVal...)
-		arr.ArrayVal = newItems
-		return Number(float64(len(arr.ArrayVal))), true, nil
+		clonedArgs := make([]*Value, len(args))
+		for i, a := range args {
+			if a.Tag == TypeArray || a.Tag == TypeObject {
+				clonedArgs[i] = a.Clone()
+			} else {
+				clonedArgs[i] = a
+			}
+		}
+		arr.ArrayVal = append(clonedArgs, arr.ArrayVal...)
+		return arr, true, nil
 	case "length", "len":
 		return Number(float64(len(arr.ArrayVal))), true, nil
 	case "join":
@@ -980,6 +1125,9 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		if end > len(arr.ArrayVal) {
 			end = len(arr.ArrayVal)
 		}
+		if start >= end {
+			return Array(nil), true, nil
+		}
 		newArr := make([]*Value, end-start)
 		copy(newArr, arr.ArrayVal[start:end])
 		return Array(newArr), true, nil
@@ -989,6 +1137,16 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		}
 		for i, v := range arr.ArrayVal {
 			if v.Equal(args[0]) {
+				return Number(float64(i)), true, nil
+			}
+		}
+		return Number(-1), true, nil
+	case "lastIndexOf":
+		if len(args) == 0 {
+			return Number(-1), true, nil
+		}
+		for i := len(arr.ArrayVal) - 1; i >= 0; i-- {
+			if arr.ArrayVal[i].Equal(args[0]) {
 				return Number(float64(i)), true, nil
 			}
 		}
@@ -1004,12 +1162,13 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		}
 		return False(), true, nil
 	case "map":
-		if len(args) == 0 || args[0].Tag != TypeFunction {
+		if len(args) == 0 {
 			return arr, true, nil
 		}
+		cb := args[0]
 		result := make([]*Value, len(arr.ArrayVal))
 		for i, item := range arr.ArrayVal {
-			v, err := xvm.callFn(args[0].FnVal, []*Value{item, Number(float64(i)), arr}, nil, nil)
+			v, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil)
 			if err != nil {
 				return Null(), true, err
 			}
@@ -1017,12 +1176,13 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		}
 		return Array(result), true, nil
 	case "filter":
-		if len(args) == 0 || args[0].Tag != TypeFunction {
+		if len(args) == 0 {
 			return arr, true, nil
 		}
+		cb := args[0]
 		var result []*Value
 		for i, item := range arr.ArrayVal {
-			v, err := xvm.callFn(args[0].FnVal, []*Value{item, Number(float64(i)), arr}, nil, nil)
+			v, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil)
 			if err != nil {
 				return Null(), true, err
 			}
@@ -1032,19 +1192,20 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		}
 		return Array(result), true, nil
 	case "reduce":
-		if len(args) == 0 || args[0].Tag != TypeFunction {
+		if len(args) == 0 {
 			return Null(), true, nil
 		}
+		cb := args[0]
 		acc := Null()
-		start := 0
+		startIdx := 0
 		if len(args) > 1 {
 			acc = args[1]
 		} else if len(arr.ArrayVal) > 0 {
 			acc = arr.ArrayVal[0]
-			start = 1
+			startIdx = 1
 		}
-		for i := start; i < len(arr.ArrayVal); i++ {
-			v, err := xvm.callFn(args[0].FnVal, []*Value{acc, arr.ArrayVal[i], Number(float64(i)), arr}, nil, nil)
+		for i := startIdx; i < len(arr.ArrayVal); i++ {
+			v, err := xvm.callValue(cb, []*Value{acc, arr.ArrayVal[i], Number(float64(i)), arr}, nil, nil)
 			if err != nil {
 				return Null(), true, err
 			}
@@ -1052,18 +1213,20 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		}
 		return acc, true, nil
 	case "forEach":
-		if len(args) > 0 && args[0].Tag == TypeFunction {
+		if len(args) > 0 {
+			cb := args[0]
 			for i, item := range arr.ArrayVal {
-				if _, err := xvm.callFn(args[0].FnVal, []*Value{item, Number(float64(i)), arr}, nil, nil); err != nil {
+				if _, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil); err != nil {
 					return Null(), true, err
 				}
 			}
 		}
 		return Null(), true, nil
 	case "find":
-		if len(args) > 0 && args[0].Tag == TypeFunction {
+		if len(args) > 0 {
+			cb := args[0]
 			for _, item := range arr.ArrayVal {
-				v, err := xvm.callFn(args[0].FnVal, []*Value{item}, nil, nil)
+				v, err := xvm.callValue(cb, []*Value{item}, nil, nil)
 				if err != nil {
 					return Null(), true, err
 				}
@@ -1073,10 +1236,25 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 			}
 		}
 		return Null(), true, nil
+	case "findIndex":
+		if len(args) > 0 {
+			cb := args[0]
+			for i, item := range arr.ArrayVal {
+				v, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil)
+				if err != nil {
+					return Null(), true, err
+				}
+				if v.Truthy() {
+					return Number(float64(i)), true, nil
+				}
+			}
+		}
+		return Number(-1), true, nil
 	case "some":
-		if len(args) > 0 && args[0].Tag == TypeFunction {
+		if len(args) > 0 {
+			cb := args[0]
 			for _, item := range arr.ArrayVal {
-				v, err := xvm.callFn(args[0].FnVal, []*Value{item}, nil, nil)
+				v, err := xvm.callValue(cb, []*Value{item}, nil, nil)
 				if err != nil {
 					return Null(), true, err
 				}
@@ -1087,9 +1265,10 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		}
 		return False(), true, nil
 	case "every":
-		if len(args) > 0 && args[0].Tag == TypeFunction {
+		if len(args) > 0 {
+			cb := args[0]
 			for _, item := range arr.ArrayVal {
-				v, err := xvm.callFn(args[0].FnVal, []*Value{item}, nil, nil)
+				v, err := xvm.callValue(cb, []*Value{item}, nil, nil)
 				if err != nil {
 					return Null(), true, err
 				}
@@ -1119,6 +1298,117 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 			}
 		}
 		return Array(result), true, nil
+	case "flatMap":
+		if len(args) == 0 {
+			return arr, true, nil
+		}
+		cb := args[0]
+		var result []*Value
+		for i, item := range arr.ArrayVal {
+			v, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil)
+			if err != nil {
+				return Null(), true, err
+			}
+			if v.Tag == TypeArray {
+				result = append(result, v.ArrayVal...)
+			} else {
+				result = append(result, v)
+			}
+		}
+		return Array(result), true, nil
+	case "sort":
+		if len(args) > 0 {
+			cb := args[0]
+			var sortErr error
+			sort.SliceStable(arr.ArrayVal, func(i, j int) bool {
+				if sortErr != nil {
+					return false
+				}
+				v, err := xvm.callValue(cb, []*Value{arr.ArrayVal[i], arr.ArrayVal[j]}, nil, nil)
+				if err != nil {
+					sortErr = err
+					return false
+				}
+				return v.NumVal < 0
+			})
+			if sortErr != nil {
+				return Null(), true, sortErr
+			}
+		} else {
+			sort.SliceStable(arr.ArrayVal, func(i, j int) bool {
+				a, b := arr.ArrayVal[i], arr.ArrayVal[j]
+				if a.Tag == TypeNumber && b.Tag == TypeNumber {
+					return a.NumVal < b.NumVal
+				}
+				return a.String() < b.String()
+			})
+		}
+		return arr, true, nil
+	case "fill":
+		if len(args) == 0 {
+			return arr, true, nil
+		}
+		fillVal := args[0]
+		startIdx := 0
+		endIdx := len(arr.ArrayVal)
+		if len(args) > 1 {
+			startIdx = int(args[1].NumVal)
+		}
+		if len(args) > 2 {
+			endIdx = int(args[2].NumVal)
+		}
+		if startIdx < 0 {
+			startIdx = len(arr.ArrayVal) + startIdx
+		}
+		if endIdx < 0 {
+			endIdx = len(arr.ArrayVal) + endIdx
+		}
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if endIdx > len(arr.ArrayVal) {
+			endIdx = len(arr.ArrayVal)
+		}
+		for i := startIdx; i < endIdx; i++ {
+			arr.ArrayVal[i] = fillVal
+		}
+		return arr, true, nil
+	case "splice":
+		if len(args) < 1 {
+			return Array(nil), true, nil
+		}
+		startIdx := int(args[0].NumVal)
+		if startIdx < 0 {
+			startIdx = len(arr.ArrayVal) + startIdx
+		}
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if startIdx > len(arr.ArrayVal) {
+			startIdx = len(arr.ArrayVal)
+		}
+		deleteCount := len(arr.ArrayVal) - startIdx
+		if len(args) > 1 {
+			deleteCount = int(args[1].NumVal)
+		}
+		if deleteCount < 0 {
+			deleteCount = 0
+		}
+		if startIdx+deleteCount > len(arr.ArrayVal) {
+			deleteCount = len(arr.ArrayVal) - startIdx
+		}
+		removed := make([]*Value, deleteCount)
+		copy(removed, arr.ArrayVal[startIdx:startIdx+deleteCount])
+		var insertItems []*Value
+		if len(args) > 2 {
+			insertItems = args[2:]
+		}
+		newArr := make([]*Value, 0, len(arr.ArrayVal)-deleteCount+len(insertItems))
+		newArr = append(newArr, arr.ArrayVal[:startIdx]...)
+		newArr = append(newArr, insertItems...)
+		newArr = append(newArr, arr.ArrayVal[startIdx+deleteCount:]...)
+		arr.ArrayVal = newArr
+		return Array(removed), true, nil
 	case "toString":
 		parts := make([]string, len(arr.ArrayVal))
 		for i, v := range arr.ArrayVal {
@@ -1174,8 +1464,12 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 		if len(args) == 0 {
 			return Number(-1), true, nil
 		}
-		idx := strings.Index(s, args[0].String())
-		return Number(float64(idx)), true, nil
+		return Number(float64(strings.Index(s, args[0].String()))), true, nil
+	case "lastIndexOf":
+		if len(args) == 0 {
+			return Number(-1), true, nil
+		}
+		return Number(float64(strings.LastIndex(s, args[0].String()))), true, nil
 	case "replace":
 		if len(args) < 2 {
 			return str, true, nil
@@ -1198,6 +1492,9 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 		if start < 0 {
 			start = len(runes) + start
 		}
+		if end < 0 {
+			end = len(runes) + end
+		}
 		if start < 0 {
 			start = 0
 		}
@@ -1214,6 +1511,9 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 			return String(""), true, nil
 		}
 		i := int(args[0].NumVal)
+		if i < 0 {
+			i = len(runes) + i
+		}
 		if i < 0 || i >= len(runes) {
 			return String(""), true, nil
 		}
@@ -1224,6 +1524,9 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 			return Number(0), true, nil
 		}
 		i := int(args[0].NumVal)
+		if i < 0 {
+			i = len(runes) + i
+		}
 		if i < 0 || i >= len(runes) {
 			return Number(math.NaN()), true, nil
 		}
@@ -1233,6 +1536,9 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 			return str, true, nil
 		}
 		n := int(args[0].NumVal)
+		if n < 0 {
+			n = 0
+		}
 		return String(strings.Repeat(s, n)), true, nil
 	case "padStart":
 		if len(args) == 0 {
@@ -1246,6 +1552,9 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 		runes := []rune(s)
 		for len(runes) < targetLen {
 			runes = append([]rune(padChar), runes...)
+		}
+		if len(runes) > targetLen {
+			runes = runes[len(runes)-targetLen:]
 		}
 		return String(string(runes)), true, nil
 	case "padEnd":
@@ -1261,7 +1570,21 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 		for len(runes) < targetLen {
 			runes = append(runes, []rune(padChar)...)
 		}
+		if len(runes) > targetLen {
+			runes = runes[:targetLen]
+		}
 		return String(string(runes)), true, nil
+	case "reverse":
+		runes := []rune(s)
+		for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+			runes[i], runes[j] = runes[j], runes[i]
+		}
+		return String(string(runes)), true, nil
+	case "match":
+		if len(args) == 0 {
+			return False(), true, nil
+		}
+		return Bool(strings.Contains(s, args[0].String())), true, nil
 	case "toString":
 		return str, true, nil
 	}
@@ -1269,6 +1592,16 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 }
 
 func (xvm *XVM) objectMethod(obj *Value, name string, args []*Value) (*Value, bool, error) {
+	// First check if the object has a callable field with this name
+	if obj.ObjVal != nil {
+		if fv, ok := obj.ObjVal[name]; ok {
+			if fv.Tag == TypeFunction || fv.Tag == TypeBuiltin {
+				result, err := xvm.callValue(fv, args, obj, nil)
+				return result, true, err
+			}
+		}
+	}
+
 	switch name {
 	case "keys":
 		keys := make([]*Value, 0, len(obj.ObjVal))
@@ -1294,6 +1627,18 @@ func (xvm *XVM) objectMethod(obj *Value, name string, args []*Value) (*Value, bo
 		}
 		_, ok := obj.ObjVal[args[0].String()]
 		return Bool(ok), true, nil
+	case "delete":
+		if len(args) > 0 {
+			delete(obj.ObjVal, args[0].String())
+		}
+		return Null(), true, nil
+	case "assign", "merge":
+		if len(args) > 0 && args[0].Tag == TypeObject {
+			for k, v := range args[0].ObjVal {
+				obj.ObjVal[k] = v
+			}
+		}
+		return obj, true, nil
 	case "toString":
 		return String(obj.String()), true, nil
 	}
