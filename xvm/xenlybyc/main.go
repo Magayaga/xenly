@@ -3,18 +3,18 @@
  * xenlybyc — Xenly Bytecode Compiler
  *
  * Translates human-readable Xenly source code (.xe) into
- * portable XVM bytecode (.xyc) that runs on the Xenly Virtual Machine.
+ * portable XVM bytecode (.xebc) that runs on the Xenly Virtual Machine.
  *
  * Created, designed, and developed by Cyril John Magayaga.
  * XVM Go implementation — available for Windows, macOS, and Linux.
  *
  * Usage:
- *   xenlybyc <source.xe> [-o output.xyc]
- *   xenlybyc --disasm  <source.xe | source.xyc>
+ *   xenlybyc <source.xe> [-o output.xebc]
+ *   xenlybyc --disasm  <source.xe | source.xebc>
  *   xenlybyc --version | --help
  *
  * Pipeline:
- *   source.xe → Lexer → Parser → AST → Compiler → .xyc (XVM bytecode)
+ *   source.xe → Lexer → Parser → AST → Compiler → .xebc (XVM bytecode)
  */
 package main
 
@@ -57,9 +57,9 @@ func printUsage(prog string) {
 		col("1;36"), reset(), col("1;33"), xvmVersion, reset())
 	fmt.Printf("\n  %sUsage:%s   %s [options] <file.xe>\n", col("1;33"), reset(), prog)
 	fmt.Printf("\n  %sOptions:%s\n", col("1;33"), reset())
-	fmt.Printf("    %s-o <file>%s        Output bytecode file  %s(default: <input>.xyc)%s\n",
+	fmt.Printf("    %s-o <file>%s        Output bytecode file  %s(default: <input>.xebc)%s\n",
 		col("1"), reset(), col("2"), reset())
-	fmt.Printf("    %s--disasm%s         Disassemble .xyc file and print to stdout\n", col("1"), reset())
+	fmt.Printf("    %s--disasm%s         Disassemble .xebc file and print to stdout\n", col("1"), reset())
 	fmt.Printf("    %s--emit-ast%s       Dump parsed AST to stdout, then exit\n", col("1"), reset())
 	fmt.Printf("    %s--emit-tokens%s    Dump lexer token stream, then exit\n", col("1"), reset())
 	fmt.Printf("    %s--no-color%s       Disable ANSI colour output\n", col("1"), reset())
@@ -68,15 +68,15 @@ func printUsage(prog string) {
 	fmt.Printf("    %s-v, --version%s    Show version\n", col("1"), reset())
 	fmt.Printf("    %s--author%s         Show author information\n", col("1"), reset())
 	fmt.Printf("\n  %sExamples:%s\n", col("1;32"), reset())
-	fmt.Printf("    %s hello.xe                 %s→ hello.xyc\n", prog, col("2"))
-	fmt.Printf("    %s%s hello.xe -o out.xyc     %s→ out.xyc\n", reset(), prog, col("2"))
-	fmt.Printf("    %s%s --disasm hello.xyc      %s→ disassembly listing\n", reset(), prog, col("2"))
+	fmt.Printf("    %s hello.xe                 %s→ hello.xebc\n", prog, col("2"))
+	fmt.Printf("    %s%s hello.xe -o out.xebc     %s→ out.xebc\n", reset(), prog, col("2"))
+	fmt.Printf("    %s%s --disasm hello.xebc      %s→ disassembly listing\n", reset(), prog, col("2"))
 	fmt.Printf("    %s%s --emit-ast hello.xe     %s→ AST dump\n%s\n", reset(), prog, col("2"), reset())
 }
 
 func printVersion() {
 	fmt.Printf("\n  %sxenlybyc%s v%s  (Xenly Bytecode Compiler)\n", col("1;36"), reset(), xvmVersion)
-	fmt.Printf("  Compiles .xe source → .xyc portable XVM bytecode\n")
+	fmt.Printf("  Compiles .xe source → .xebc portable XVM bytecode\n")
 	fmt.Printf("  Supported platforms: Windows, macOS, Linux\n\n")
 }
 
@@ -218,9 +218,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ── Write .xyc ──────────────────────────────────────────────────────
+	// ── Write .xebc ──────────────────────────────────────────────────────
 	if outputFile == "" {
-		outputFile = swapExt(inputFile, ".xyc")
+		outputFile = swapExt(inputFile, ".xebc")
 	}
 	if err := bytecode.Write(mod, outputFile); err != nil {
 		fmt.Fprintf(os.Stderr, "%s[xenlybyc]%s failed to write %q: %v\n",
