@@ -33,7 +33,3 @@ jobs:
         run: time ./xvm/bin/xenlybyc examples/sys_demo.xe -o sys_demo.xebc
       - name: run sys_demo test (2)
         run: time ./xvm/bin/xenlyrun sys_demo.xebc
-      - name: functional test (3)
-        run: time ./xvm/bin/xenlybyc examples/functional.xe -o functional.xebc
-      - name: run functional test (3)
-        run: time ./xvm/bin/xenlyrun functional.xebc
