@@ -431,7 +431,9 @@ func RegisterBuiltins(env *Env) {
 		// array.of(a, b, c, ...) → [a, b, c]
 		"of": builtin(func(a []*Value) (*Value, error) {
 			items := make([]*Value, len(a))
-			copy(items, a)
+			for i, v := range a {
+				items[i] = v.Clone()
+			}
 			return Array(items), nil
 		}),
 		// array.empty() → []
@@ -499,16 +501,32 @@ func RegisterBuiltins(env *Env) {
 				idx = len(arr) + idx
 			}
 			if idx >= 0 && idx < len(arr) {
-				arr[idx] = a[2]
+				arr[idx] = a[2].Clone()
 			}
 			return a[0], nil
 		}),
-		// array.push(arr, val) → arr  (mutates in-place, returns array for chaining)
+		// array.push(arr, val...) → arr  (mutates in-place, returns array for chaining)
 		"push": builtin(func(a []*Value) (*Value, error) {
-			if len(a) < 2 || a[0].Tag != TypeArray {
+			if len(a) < 1 || a[0].Tag != TypeArray {
 				return Null(), nil
 			}
-			a[0].ArrayVal = append(a[0].ArrayVal, a[1])
+			for i := 1; i < len(a); i++ {
+				a[0].ArrayVal = append(a[0].ArrayVal, a[i].Clone())
+			}
+			return a[0], nil
+		}),
+		// array.unshift(arr, val...) → arr  (mutates in-place, returns array for chaining)
+		"unshift": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 1 || a[0].Tag != TypeArray {
+				return Null(), nil
+			}
+			// Clone all values being added
+			clonedArgs := make([]*Value, len(a)-1)
+			for i := 1; i < len(a); i++ {
+				clonedArgs[i-1] = a[i].Clone()
+			}
+			newItems := append(clonedArgs, a[0].ArrayVal...)
+			a[0].ArrayVal = newItems
 			return a[0], nil
 		}),
 		// array.pop(arr) → last element (mutates)
@@ -535,7 +553,9 @@ func RegisterBuiltins(env *Env) {
 			var items []*Value
 			for _, arr := range a {
 				if arr.Tag == TypeArray {
-					items = append(items, arr.ArrayVal...)
+					for _, item := range arr.ArrayVal {
+						items = append(items, item.Clone())
+					}
 				}
 			}
 			return Array(items), nil
@@ -566,7 +586,9 @@ func RegisterBuiltins(env *Env) {
 				end = len(arr)
 			}
 			result := make([]*Value, end-start)
-			copy(result, arr[start:end])
+			for i := start; i < end; i++ {
+				result[i-start] = arr[i].Clone()
+			}
 			return Array(result), nil
 		}),
 		// array.join(arr, sep?) → string
@@ -648,7 +670,7 @@ func RegisterBuiltins(env *Env) {
 			}
 			items := make([]*Value, n)
 			for i := range items {
-				items[i] = fill
+				items[i] = fill.Clone()
 			}
 			return Array(items), nil
 		}),

@@ -926,9 +926,9 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 	switch name {
 	case "push":
 		for _, a := range args {
-			arr.ArrayVal = append(arr.ArrayVal, a)
+			arr.ArrayVal = append(arr.ArrayVal, a.Clone())
 		}
-		return Number(float64(len(arr.ArrayVal))), true, nil
+		return arr, true, nil
 	case "pop":
 		if len(arr.ArrayVal) == 0 {
 			return Null(), true, nil
@@ -944,9 +944,14 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		arr.ArrayVal = arr.ArrayVal[1:]
 		return v, true, nil
 	case "unshift":
-		newItems := append(args, arr.ArrayVal...)
+		// Clone all values being added
+		clonedArgs := make([]*Value, len(args))
+		for i, a := range args {
+			clonedArgs[i] = a.Clone()
+		}
+		newItems := append(clonedArgs, arr.ArrayVal...)
 		arr.ArrayVal = newItems
-		return Number(float64(len(arr.ArrayVal))), true, nil
+		return arr, true, nil
 	case "length", "len":
 		return Number(float64(len(arr.ArrayVal))), true, nil
 	case "join":
