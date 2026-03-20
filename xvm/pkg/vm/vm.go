@@ -1057,6 +1057,15 @@ func (xvm *XVM) builtinMethod(receiver *Value, name string, args []*Value) (*Val
 		return xvm.stringMethod(receiver, name, args)
 	case TypeObject:
 		return xvm.objectMethod(receiver, name, args)
+	case TypeVariant:
+		return xvm.variantMethod(receiver, name, args)
+	case TypeNull:
+		return xvm.nullMethod(name, args)
+	case TypeNumber, TypeBool:
+		// Primitive values are always "present" — support the functional
+		// Optional-style methods so code works uniformly regardless of
+		// whether a value is wrapped in a variant or not.
+		return xvm.primitiveOptionalMethod(receiver, name, args)
 	}
 	return nil, false, nil
 }
@@ -1651,5 +1660,224 @@ func (xvm *XVM) objectMethod(obj *Value, name string, args []*Value) (*Value, bo
 	case "toString":
 		return String(obj.String()), true, nil
 	}
+	return nil, false, nil
+}
+
+// ─── Variant method dispatch ──────────────────────────────────────────────────
+// Implements the Optional / ADT API on TypeVariant values.
+// Supports the Some(x) / None pattern used in functional.xe and elsewhere:
+//   some.getOr(default)  →  inner value (Some) or default (None)
+//   some.isSome()        →  true if tag != "None"
+//   some.isNone()        →  true if tag == "None"
+//   some.unwrap()        →  inner value or runtime error on None
+//   some.orElse(fn)      →  self (Some) or fn() result (None)
+//   some.map(fn)         →  Some(fn(inner)) or None  (functor map)
+//   some.tag()           →  variant tag string
+func (xvm *XVM) variantMethod(v *Value, name string, args []*Value) (*Value, bool, error) {
+	isNone := v.VarTag == "None" || len(v.VarFields) == 0
+	switch name {
+	case "isSome":
+		return Bool(v.VarTag != "None"), true, nil
+	case "isNone":
+		return Bool(v.VarTag == "None"), true, nil
+
+	case "unwrap":
+		if v.VarTag == "None" {
+			return Null(), true, fmt.Errorf("XVM: unwrap called on None")
+		}
+		if len(v.VarFields) > 0 {
+			return v.VarFields[0], true, nil
+		}
+		return Null(), true, nil
+
+	case "getOr":
+		if isNone {
+			if len(args) > 0 {
+				return args[0], true, nil
+			}
+			return Null(), true, nil
+		}
+		return v.VarFields[0], true, nil
+
+	case "orElse":
+		if isNone {
+			if len(args) > 0 {
+				result, err := xvm.callValue(args[0], []*Value{}, nil, nil)
+				return result, true, err
+			}
+			return Null(), true, nil
+		}
+		return v, true, nil
+
+	case "map":
+		// None.map(f) → None;  Some(x).map(f) → Some(f(x))
+		if isNone {
+			return v, true, nil
+		}
+		if len(args) == 0 {
+			return v, true, nil
+		}
+		inner := v.VarFields[0]
+		result, err := xvm.callValue(args[0], []*Value{inner}, nil, nil)
+		if err != nil {
+			return Null(), true, err
+		}
+		return &Value{Tag: TypeVariant, VarTag: "Some", VarFields: []*Value{result}}, true, nil
+
+	case "flatMap", "andThen":
+		// None.flatMap(f) → None;  Some(x).flatMap(f) → f(x)  (f returns a variant)
+		if isNone {
+			return v, true, nil
+		}
+		if len(args) == 0 {
+			return v, true, nil
+		}
+		inner := v.VarFields[0]
+		result, err := xvm.callValue(args[0], []*Value{inner}, nil, nil)
+		if err != nil {
+			return Null(), true, err
+		}
+		return result, true, nil
+
+	case "tag":
+		return String(v.VarTag), true, nil
+
+	case "toString":
+		return String(v.String()), true, nil
+	}
+	return nil, false, nil
+}
+
+// ─── Null method dispatch ─────────────────────────────────────────────────────
+// Allows null to participate safely in Optional-style chaining.
+// null.getOr(d)    → d          (null is absent)
+// null.isSome()    → false
+// null.isNone()    → true
+// null.unwrap()    → runtime error
+// null.orElse(fn)  → fn()       (invokes fallback)
+// null.map(fn)     → null       (propagates absence)
+func (xvm *XVM) nullMethod(name string, args []*Value) (*Value, bool, error) {
+	switch name {
+	case "getOr":
+		if len(args) > 0 {
+			return args[0], true, nil
+		}
+		return Null(), true, nil
+
+	case "orElse":
+		if len(args) > 0 {
+			result, err := xvm.callValue(args[0], []*Value{}, nil, nil)
+			return result, true, err
+		}
+		return Null(), true, nil
+
+	case "isSome":
+		return False(), true, nil
+	case "isNone":
+		return True(), true, nil
+
+	case "unwrap":
+		return Null(), true, fmt.Errorf("XVM: unwrap called on null")
+
+	case "map", "flatMap", "andThen":
+		// null propagates — the function is never called
+		return Null(), true, nil
+
+	case "toString":
+		return String("null"), true, nil
+	}
+	return nil, false, nil
+}
+
+// ─── Primitive Optional method dispatch ───────────────────────────────────────
+// Numbers and bools are always "present" values so they participate in Optional
+// chaining without any wrapping.  This makes code like:
+//
+//   const n = maybeNum.getOr(0)   // works whether maybeNum is a number or null
+//
+// work uniformly regardless of the runtime type.
+//
+// Also provides a small set of number-specific convenience methods.
+func (xvm *XVM) primitiveOptionalMethod(v *Value, name string, args []*Value) (*Value, bool, error) {
+	// ── Optional API (primitives are always present) ──────────────────────
+	switch name {
+	case "getOr":
+		return v, true, nil // present — ignore default
+	case "orElse":
+		return v, true, nil // present — skip fallback
+	case "isSome":
+		return True(), true, nil
+	case "isNone":
+		return False(), true, nil
+	case "unwrap":
+		return v, true, nil // trivially unwraps to itself
+	case "map":
+		if len(args) == 0 {
+			return v, true, nil
+		}
+		result, err := xvm.callValue(args[0], []*Value{v}, nil, nil)
+		return result, true, err
+	case "flatMap", "andThen":
+		if len(args) == 0 {
+			return v, true, nil
+		}
+		result, err := xvm.callValue(args[0], []*Value{v}, nil, nil)
+		return result, true, err
+	case "toString":
+		return String(v.String()), true, nil
+	}
+
+	// ── Number-specific methods ───────────────────────────────────────────
+	if v.Tag == TypeNumber {
+		switch name {
+		case "toFixed":
+			prec := 2
+			if len(args) > 0 {
+				prec = int(args[0].NumVal)
+			}
+			if prec < 0 {
+				prec = 0
+			}
+			return String(fmt.Sprintf("%.*f", prec, v.NumVal)), true, nil
+		case "toInt":
+			return Number(float64(int64(v.NumVal))), true, nil
+		case "abs":
+			return Number(math.Abs(v.NumVal)), true, nil
+		case "floor":
+			return Number(math.Floor(v.NumVal)), true, nil
+		case "ceil":
+			return Number(math.Ceil(v.NumVal)), true, nil
+		case "round":
+			return Number(math.Round(v.NumVal)), true, nil
+		case "sqrt":
+			return Number(math.Sqrt(v.NumVal)), true, nil
+		case "pow":
+			if len(args) > 0 {
+				return Number(math.Pow(v.NumVal, args[0].NumVal)), true, nil
+			}
+			return v, true, nil
+		case "clamp":
+			if len(args) >= 2 {
+				lo, hi := args[0].NumVal, args[1].NumVal
+				val := v.NumVal
+				if val < lo {
+					val = lo
+				} else if val > hi {
+					val = hi
+				}
+				return Number(val), true, nil
+			}
+			return v, true, nil
+		}
+	}
+
+	// ── Bool-specific methods ─────────────────────────────────────────────
+	if v.Tag == TypeBool {
+		switch name {
+		case "not":
+			return Bool(!v.BoolVal), true, nil
+		}
+	}
+
 	return nil, false, nil
 }
