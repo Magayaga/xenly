@@ -94,6 +94,15 @@ typedef enum {
     NODE_INVARIANT,         // invariant (condition) — class invariant
     NODE_ASSERT,            // assert(condition, message) — runtime assertion
 
+    // ── Imperative control flow ───────────────────────────────────────────────
+    NODE_UNLESS,            // unless (cond) { body }   — executes body when cond is FALSE
+    NODE_REPEAT,            // repeat N { body }         — counted loop (N times)
+    NODE_FOREVER,           // forever { body }          — infinite loop; break exits
+
+    // ── Declarative / functional ─────────────────────────────────────────────
+    NODE_PIPE_FORWARD,      // expr |> fn                — pipe: passes LHS as first arg to RHS fn
+    NODE_WHERE,             // expr where id = val, ...  — local binding clause
+
     // Concurrency
 
     // Modular programming
