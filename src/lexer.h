@@ -69,6 +69,15 @@ typedef enum {
     TOKEN_INVARIANT,    // invariant (class invariant)
     TOKEN_ASSERT,       // assert (runtime assertion)
 
+    // ── Imperative control flow ───────────────────────────────────────────
+    TOKEN_UNLESS,       // unless (cond) { body }  — inverse if, no else branch
+    TOKEN_REPEAT,       // repeat N { body }        — counted loop
+    TOKEN_FOREVER,      // forever { body }         — infinite loop (break to exit)
+
+    // ── Declarative / functional ──────────────────────────────────────────
+    TOKEN_PIPE_FORWARD, // |>   — pipe-forward: expr |> fn
+    TOKEN_WHERE,        // where — local binding clause: expr where x = val
+
     // Operators
     TOKEN_PLUS,         // +
     TOKEN_MINUS,        // -
