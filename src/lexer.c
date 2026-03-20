@@ -126,6 +126,12 @@ static const Keyword keywords[] = {
     { "ensures",  TOKEN_ENSURES },
     { "invariant", TOKEN_INVARIANT },
     { "assert",   TOKEN_ASSERT },
+    // ── Imperative ────────────────────────────────────────────────────────
+    { "unless",   TOKEN_UNLESS },
+    { "repeat",   TOKEN_REPEAT },
+    { "forever",  TOKEN_FOREVER },
+    // ── Declarative ───────────────────────────────────────────────────────
+    { "where",    TOKEN_WHERE },
     { "in",         TOKEN_IN },
     { "and",     TOKEN_AND },
     { "or",     TOKEN_OR },
@@ -397,7 +403,9 @@ Token lexer_next_token(Lexer *l) {
         case '.': return make_token(TOKEN_DOT,       ".", startLine, startCol);
         case ':': return make_token(TOKEN_COLON,     ":", startLine, startCol);
         case ';': return make_token(TOKEN_SEMICOLON,";", startLine, startCol);
-        case '|': return make_token(TOKEN_PIPE,      "|", startLine, startCol);
+        case '|':
+            if (n == '>') { lexer_advance(l); return make_token(TOKEN_PIPE_FORWARD, "|>", startLine, startCol); }
+            return make_token(TOKEN_PIPE,      "|", startLine, startCol);
         case '&': return make_token(TOKEN_AMPERSAND, "&", startLine, startCol);
         case '^': return make_token(TOKEN_CARET,     "^", startLine, startCol);
         case '~': return make_token(TOKEN_TILDE,     "~", startLine, startCol);
@@ -440,6 +448,9 @@ const char *token_type_name(TokenType type) {
         case TOKEN_TYPEOF: return "TYPEOF"; case TOKEN_INSTANCEOF: return "INSTANCEOF";
         case TOKEN_CONST: return "CONST"; case TOKEN_LET: return "LET"; case TOKEN_ENUM: return "ENUM";
         case TOKEN_MATCH: return "MATCH"; case TOKEN_PIPE: return "|";
+        case TOKEN_UNLESS: return "UNLESS"; case TOKEN_REPEAT: return "REPEAT";
+        case TOKEN_FOREVER: return "FOREVER"; case TOKEN_WHERE: return "WHERE";
+        case TOKEN_PIPE_FORWARD: return "|>";
         case TOKEN_IN: return "IN";
         case TOKEN_PLUS: return "+"; case TOKEN_MINUS: return "-";
         case TOKEN_STAR: return "*"; case TOKEN_SLASH: return "/";
