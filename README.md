@@ -31,18 +31,16 @@ The **Xenly** programming language supports **macOS**, **Windows**, and **Linux*
 | Windows 🪟           | No (Not available)    | No (Not available)         | Yes                                                 |
 
 ## How Much Faster?
-Here are times to run `xenly` and `xenlyc` on some Xenly's example codes on GitHub of varying sizes:
+Here are times to run `xenly`, `xenlyc`, and `xvm` on some Xenly's example codes on GitHub of varying sizes:
 
-1. `xenly`, `xenlyc`, and `xvm`
    | Example codes | Size (LOC) | `xenly` | `xenlyc` | `xvm` (`xenlybyc` + `xenlyrun`) |
    |:-------------:|:----------:|:-------:|:--------:|:-------------------------------:|
    | `hello.xe`    | 3          | 0.051s  | 0.034s   | 0.004s                          |
    | `sys_demo.xe` | 159        | 0.078s  | 0.094s   | 135.861s                        |
    | Billion nested loops | 8   | -       | 3.562s   | -                               |
    
-   
 ## Examples
-### Hello, World! program
+### 1. Hello, World! program
 The following shows how a **"Hello, World!"** program is written in Xenly programming language:
 
 ```rust
@@ -50,7 +48,7 @@ The following shows how a **"Hello, World!"** program is written in Xenly progra
 print("Hello, World!")
 ```
 
-### Variables
+### 2. Variables
 A **Xenly** variable is created the moment you first assign a value to it.
 
 ```javascript
@@ -59,7 +57,7 @@ const hi = "Hello, World!"
 print(hi)
 ```
 
-### Xenly's standard library
+### 3. Xenly's standard library
 **Xenly** comes with a standard library that helps establish a set of common types used by **Xenly** libraries and programs.
 ```typescript
 // import modules

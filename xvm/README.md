@@ -19,22 +19,23 @@ It is written in **Go** programming language.
 2. Build the **XVM** and run the program (makefile or batchfile):
    ```bash
    # Run the program (makefile or batchfile)
-   $ make
+   $ make # linux or macOS
+   $ ./main.bat # windows
    ```
 
-3. Cross-compile for other platforms:
+   or cross-compile for other platforms:
    ```bash
    $ make cross-windows-amd64
    $ make cross-darwin-arm64
    $ make cross-all   
    ```
 
-4. **`xvm`** can be compiled into a bytecode executable:
+3. **`xvm`** can be compiled into a bytecode executable:
    ```bash
    $ ./bin/xenlybyc examples/hello.xe -o hello.xebc
    ```
 
-5. **xvm** can be executed:
+4. **xvm** can be executed:
    ```bash
    $ ./bin/xenlyrun hello.xebc
    ```

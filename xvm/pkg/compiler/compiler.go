@@ -1,4 +1,13 @@
 /*
+ * XENLY VIRTUAL MACHINE (XVM) - high-performance of the Virtual Machine
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in Go programming language.
+ *
+ * It is available for the Linux, macOS, and Windows operating systems.
+ *
+ */
+/*
  * XENLY - Xenly Virtual Machine (XVM)
  * Compiler: AST → bytecode
  */
@@ -1017,11 +1026,13 @@ func (c *Compiler) compileNullish(n *ASTNode) {
 }
 
 func (c *Compiler) compileFnCall(n *ASTNode) {
-	// Push arguments, push function, call
+	// Push function first, then arguments.
+	// OP_CALL pops args (high-to-low index), then pops callee — so callee must be
+	// deepest on the stack (pushed first) and args on top (pushed last).
+	c.emitOp4(bytecode.OP_LOAD, c.constString(n.StrVal))
 	for _, arg := range n.Children {
 		c.compileExpr(arg)
 	}
-	c.emitOp4(bytecode.OP_LOAD, c.constString(n.StrVal))
 	c.emitOp1(bytecode.OP_CALL, uint8(len(n.Children)))
 }
 
@@ -1038,10 +1049,11 @@ func (c *Compiler) compileMethodCall(n *ASTNode) {
 
 func (c *Compiler) compileCallExpr(n *ASTNode) {
 	// n.Children[0] = callee expr, n.Children[1..] = args
+	// Push callee first (deepest), then args on top — matching OP_CALL's pop order.
+	c.compileExpr(n.Children[0])
 	for _, arg := range n.Children[1:] {
 		c.compileExpr(arg)
 	}
-	c.compileExpr(n.Children[0])
 	c.emitOp1(bytecode.OP_CALL, uint8(len(n.Children)-1))
 }
 

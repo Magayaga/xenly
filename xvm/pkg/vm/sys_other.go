@@ -1,3 +1,12 @@
+/*
+ * XENLY VIRTUAL MACHINE (XVM) - high-performance of the Virtual Machine
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in Go programming language.
+ *
+ * It is available for the Linux, macOS, and Windows operating systems.
+ *
+ */
 //go:build !linux && !darwin && !windows
 
 package vm
