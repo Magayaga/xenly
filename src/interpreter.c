@@ -2689,6 +2689,86 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         return eval(interp, call, env);
     }
 
+    // ── unless (cond) { body } ───────────────────────────────────────────────
+    // Imperative: body runs only when condition is falsy.
+    case NODE_UNLESS: {
+        Value *cond = eval(interp, node->children[0], env);
+        int is_truthy = 0;
+        if (cond) {
+            if (cond->type == VAL_BOOL)        is_truthy = cond->boolean;
+            else if (cond->type == VAL_NUMBER) is_truthy = (cond->num != 0.0);
+            else if (cond->type == VAL_STRING) is_truthy = (cond->str && cond->str[0] != '\0');
+            else if (cond->type != VAL_NULL)   is_truthy = 1;
+        }
+        value_destroy(cond);
+        if (!is_truthy) {
+            Value *r = eval(interp, node->children[1], env);
+            if (r && (r->type == VAL_BREAK || r->type == VAL_CONTINUE || r->type == VAL_RETURN))
+                return r;
+            value_destroy(r);
+        }
+        return value_null();
+    }
+
+    // ── repeat N { body } ────────────────────────────────────────────────────
+    // Imperative counted loop: evaluates body exactly N times.
+    // 'break' exits early; 'continue' advances to the next iteration.
+    case NODE_REPEAT: {
+        Value *count_val = eval(interp, node->children[0], env);
+        long long n = (count_val && count_val->type == VAL_NUMBER) ? (long long)count_val->num : 0;
+        value_destroy(count_val);
+        for (long long i = 0; i < n; i++) {
+            Value *r = eval(interp, node->children[1], env);
+            if (r && r->type == VAL_BREAK)    { value_destroy(r); break; }
+            if (r && r->type == VAL_CONTINUE) { value_destroy(r); continue; }
+            if (r && r->type == VAL_RETURN)   return r;
+            value_destroy(r);
+        }
+        return value_null();
+    }
+
+    // ── forever { body } ─────────────────────────────────────────────────────
+    // Imperative infinite loop.  Use 'break' to exit, 'return' to return a value.
+    case NODE_FOREVER: {
+        for (;;) {
+            Value *r = eval(interp, node->children[0], env);
+            if (r && r->type == VAL_BREAK)  { value_destroy(r); break; }
+            if (r && r->type == VAL_RETURN) return r;
+            value_destroy(r);
+        }
+        return value_null();
+    }
+
+    // ── expr |> fn ───────────────────────────────────────────────────────────
+    // Declarative pipe-forward: passes LHS as first argument to RHS function.
+    // Chains:  a |> f |> g  evaluates as  g(f(a)).
+    case NODE_PIPE_FORWARD: {
+        Value *arg   = eval(interp, node->children[0], env);
+        Value *fn    = eval(interp, node->children[1], env);
+        Value *fargs[1] = { arg };
+        Value *result   = call_value(interp, fn, fargs, 1);
+        value_destroy(arg);
+        value_destroy(fn);
+        return result ? result : value_null();
+    }
+
+    // ── expr where id = val [, id = val ...] ─────────────────────────────────
+    // Declarative local-binding clause: bindings evaluated in a fresh scope,
+    // then the body expression is evaluated inside that same scope.
+    // children[0]   = body expression
+    // children[1..n] = NODE_VAR_DECL nodes (str_value = name, children[0] = value expr)
+    case NODE_WHERE: {
+        Environment *where_env = env_create(env);
+        for (size_t i = 1; i < node->child_count; i++) {
+            ASTNode *bind = node->children[i];
+            Value *val = eval(interp, bind->children[0], where_env);
+            env_set(where_env, bind->str_value, val);
+        }
+        Value *result = eval(interp, node->children[0], where_env);
+        env_destroy(where_env);
+        return result ? result : value_null();
+    }
+
     default:
         return value_null();
     }
