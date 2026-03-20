@@ -88,6 +88,24 @@ const (
 	NodeTupleLiteral  // (a, b, c)
 	NodeNamespaceAccess // Ns.member
 	NodeSpread        // ...expr
+
+	// ── Imperative control flow ───────────────────────────────────────────
+	NodeUnless  // unless (cond) { body }   — executes body when cond is false
+	NodeRepeat  // repeat N { body }         — counted loop (N times)
+	NodeForever // forever { body }          — infinite loop; break/return exit
+
+	// ── Declarative / functional ─────────────────────────────────────────
+	// NodePipeForward: expr |> fn
+	//   children[0] = value expression (left of |>)
+	//   children[1] = function expression (right of |>)
+	//   Desugars to: fn(expr)  — fn called with expr as its first argument.
+	NodePipeForward
+
+	// NodeWhere: expr where id = val [, id = val ...]
+	//   children[0]   = body expression
+	//   children[1..n] = NodeVarDecl binding nodes (StrVal = name, Children[0] = value expr)
+	//   Evaluated in a fresh inner scope; bindings visible only inside body.
+	NodeWhere
 )
 
 // ASTNode is a node in the abstract syntax tree.
