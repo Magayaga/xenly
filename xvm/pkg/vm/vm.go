@@ -181,33 +181,39 @@ func (xvm *XVM) Run() error {
 
 // exec runs a bytecode chunk inside a given environment.
 func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*Value, error) {
-	// ── Fixed-size value stack ────────────────────────────────────────────────
-	// Using a fixed [2048]*Value array with an integer top pointer eliminates
-	// all slice-append overhead (no capacity checks, no backing array reallocations,
-	// no slice-header writes).  2048 entries = ~8 nested call levels × 256 stack
-	// depth, which is ample for all practical Xenly programs.
-	var stackArr [2048]*Value
-	sp := 0 // stack pointer: stackArr[0..sp-1] are live
+	// ── Hybrid value stack ────────────────────────────────────────────────────
+	// stackBuf is a stack-allocated backing array for the initial []*Value slice.
+	// For typical programs the slice never grows beyond stackBufSize, so no heap
+	// allocation is needed for the value stack.  If a program pushes more than
+	// stackBufSize values without consuming them (e.g. huge array literals or
+	// deeply nested expressions), append transparently moves to the heap — still
+	// correct, just one allocation instead of a panic.
+	const stackBufSize = 512
+	var stackBuf [stackBufSize]*Value
+	stack := stackBuf[:0:stackBufSize] // len=0, cap=512, backed by stackBuf
 
 	push := func(v *Value) {
 		if v == nil {
 			v = valNull
 		}
-		stackArr[sp] = v
-		sp++
+		stack = append(stack, v)
 	}
 	pop := func() *Value {
-		if sp == 0 {
+		n := len(stack)
+		if n == 0 {
 			return valNull
 		}
-		sp--
-		return stackArr[sp]
+		v := stack[n-1]
+		stack[n-1] = nil // clear reference for GC
+		stack = stack[:n-1]
+		return v
 	}
 	peek := func() *Value {
-		if sp == 0 {
+		n := len(stack)
+		if n == 0 {
 			return valNull
 		}
-		return stackArr[sp-1]
+		return stack[n-1]
 	}
 
 	scopes := make([]*Env, 1, 16)
@@ -259,8 +265,8 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		case bytecode.OP_DUP:
 			push(peek())
 		case bytecode.OP_SWAP:
-			if sp >= 2 {
-				stackArr[sp-1], stackArr[sp-2] = stackArr[sp-2], stackArr[sp-1]
+			if n := len(stack); n >= 2 {
+				stack[n-1], stack[n-2] = stack[n-2], stack[n-1]
 			}
 
 		// ── Literals ────────────────────────────────────────────────────────
