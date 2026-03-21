@@ -231,13 +231,13 @@ func RegisterBuiltins(env *Env) {
 		}),
 		"isNaN": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 {
-				return False(), nil
+				return valFalse, nil
 			}
 			return Bool(math.IsNaN(a[0].NumVal)), nil
 		}),
 		"isFinite": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 {
-				return False(), nil
+				return valFalse, nil
 			}
 			return Bool(!math.IsInf(a[0].NumVal, 0) && !math.IsNaN(a[0].NumVal)), nil
 		}),
@@ -249,14 +249,14 @@ func RegisterBuiltins(env *Env) {
 		}),
 		"clamp": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 3 {
-				return Null(), nil
+				return valNull, nil
 			}
 			v, lo, hi := a[0].NumVal, a[1].NumVal, a[2].NumVal
 			return Number(math.Max(lo, math.Min(hi, v))), nil
 		}),
 		"lerp": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 3 {
-				return Null(), nil
+				return valNull, nil
 			}
 			return Number(a[0].NumVal + (a[1].NumVal-a[0].NumVal)*a[2].NumVal), nil
 		}),
@@ -316,7 +316,7 @@ func RegisterBuiltins(env *Env) {
 	arrObj := Object(map[string]*Value{
 		"isArray": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 {
-				return False(), nil
+				return valFalse, nil
 			}
 			return Bool(a[0].Tag == TypeArray), nil
 		}),
@@ -342,7 +342,7 @@ func RegisterBuiltins(env *Env) {
 		}),
 		"sort": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 || a[0].Tag != TypeArray {
-				return Null(), nil
+				return valNull, nil
 			}
 			arr := a[0].ArrayVal
 			sort.Slice(arr, func(i, j int) bool {
@@ -384,7 +384,7 @@ func RegisterBuiltins(env *Env) {
 			if len(a) > 0 {
 				time.Sleep(time.Duration(a[0].NumVal) * time.Millisecond)
 			}
-			return Null(), nil
+			return valNull, nil
 		}),
 		"format": builtin(func(a []*Value) (*Value, error) {
 			return String(time.Now().Format("2006-01-02 15:04:05")), nil
@@ -420,13 +420,13 @@ func RegisterBuiltins(env *Env) {
 	})
 	native(env, "isNaN", func(args []*Value) (*Value, error) {
 		if len(args) == 0 {
-			return True(), nil
+			return valTrue, nil
 		}
 		return Bool(math.IsNaN(args[0].NumVal)), nil
 	})
 	native(env, "isFinite", func(args []*Value) (*Value, error) {
 		if len(args) == 0 {
-			return False(), nil
+			return valFalse, nil
 		}
 		v := args[0].NumVal
 		return Bool(!math.IsInf(v, 0) && !math.IsNaN(v)), nil
@@ -492,7 +492,7 @@ func RegisterBuiltins(env *Env) {
 		// array.get(arr, idx) → value
 		"get": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 || a[0].Tag != TypeArray {
-				return Null(), nil
+				return valNull, nil
 			}
 			idx := int(a[1].NumVal)
 			arr := a[0].ArrayVal
@@ -500,14 +500,14 @@ func RegisterBuiltins(env *Env) {
 				idx = len(arr) + idx
 			}
 			if idx < 0 || idx >= len(arr) {
-				return Null(), nil
+				return valNull, nil
 			}
 			return arr[idx], nil
 		}),
 		// array.set(arr, idx, val) → arr  (mutates in-place)
 		"set": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 3 || a[0].Tag != TypeArray {
-				return Null(), nil
+				return valNull, nil
 			}
 			idx := int(a[1].NumVal)
 			arr := a[0].ArrayVal
@@ -522,7 +522,7 @@ func RegisterBuiltins(env *Env) {
 		// array.push(arr, val...) → arr  (mutates in-place, returns array for chaining)
 		"push": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 1 || a[0].Tag != TypeArray {
-				return Null(), nil
+				return valNull, nil
 			}
 			// Performance optimization: only clone when necessary
 			for i := 1; i < len(a); i++ {
@@ -539,7 +539,7 @@ func RegisterBuiltins(env *Env) {
 		// array.unshift(arr, val...) → arr  (mutates in-place, returns array for chaining)
 		"unshift": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 1 || a[0].Tag != TypeArray {
-				return Null(), nil
+				return valNull, nil
 			}
 			// Performance optimization: only clone when necessary
 			clonedArgs := make([]*Value, len(a)-1)
@@ -559,7 +559,7 @@ func RegisterBuiltins(env *Env) {
 		// array.pop(arr) → last element (mutates)
 		"pop": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 || a[0].Tag != TypeArray || len(a[0].ArrayVal) == 0 {
-				return Null(), nil
+				return valNull, nil
 			}
 			n := len(a[0].ArrayVal) - 1
 			v := a[0].ArrayVal[n]
@@ -569,7 +569,7 @@ func RegisterBuiltins(env *Env) {
 		// array.shift(arr) → first element (mutates)
 		"shift": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 || a[0].Tag != TypeArray || len(a[0].ArrayVal) == 0 {
-				return Null(), nil
+				return valNull, nil
 			}
 			v := a[0].ArrayVal[0]
 			a[0].ArrayVal = a[0].ArrayVal[1:]
@@ -646,7 +646,7 @@ func RegisterBuiltins(env *Env) {
 		// array.reverse(arr) → arr (mutates)
 		"reverse": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 || a[0].Tag != TypeArray {
-				return Null(), nil
+				return valNull, nil
 			}
 			arr := a[0].ArrayVal
 			for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
@@ -657,14 +657,14 @@ func RegisterBuiltins(env *Env) {
 		// array.contains(arr, val) → bool
 		"contains": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 || a[0].Tag != TypeArray {
-				return False(), nil
+				return valFalse, nil
 			}
 			for _, v := range a[0].ArrayVal {
 				if v.Equal(a[1]) {
-					return True(), nil
+					return valTrue, nil
 				}
 			}
-			return False(), nil
+			return valFalse, nil
 		}),
 		// array.indexOf(arr, val) → number
 		"indexOf": builtin(func(a []*Value) (*Value, error) {
@@ -701,7 +701,7 @@ func RegisterBuiltins(env *Env) {
 				return Array(nil), nil
 			}
 			n := int(a[0].NumVal)
-			fill := Null()
+			fill := valNull
 			if len(a) > 1 {
 				fill = a[1]
 			}
@@ -728,7 +728,7 @@ func RegisterBuiltins(env *Env) {
 			for _, v := range a {
 				fmt.Fprint(stdout, v.String())
 			}
-			return Null(), nil
+			return valNull, nil
 		}),
 		// io.writeln(v?, ...) — print with newline
 		"writeln": builtin(func(a []*Value) (*Value, error) {
@@ -741,7 +741,7 @@ func RegisterBuiltins(env *Env) {
 				}
 				fmt.Fprintln(stdout, strings.Join(parts, " "))
 			}
-			return Null(), nil
+			return valNull, nil
 		}),
 		// io.readln(prompt?) — read a line from stdin
 		"readln": builtin(func(a []*Value) (*Value, error) {
@@ -762,7 +762,7 @@ func RegisterBuiltins(env *Env) {
 				parts[i] = v.String()
 			}
 			fmt.Fprintln(stdout, strings.Join(parts, " "))
-			return Null(), nil
+			return valNull, nil
 		}),
 	})
 	env.Define("io", ioObj, true)
@@ -805,19 +805,19 @@ func RegisterBuiltins(env *Env) {
 		}),
 		"contains": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 {
-				return False(), nil
+				return valFalse, nil
 			}
 			return Bool(strings.Contains(a[0].String(), a[1].String())), nil
 		}),
 		"startsWith": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 {
-				return False(), nil
+				return valFalse, nil
 			}
 			return Bool(strings.HasPrefix(a[0].String(), a[1].String())), nil
 		}),
 		"endsWith": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 {
-				return False(), nil
+				return valFalse, nil
 			}
 			return Bool(strings.HasSuffix(a[0].String(), a[1].String())), nil
 		}),
@@ -1055,7 +1055,7 @@ func RegisterBuiltins(env *Env) {
 				code = int(a[0].NumVal)
 			}
 			os.Exit(code)
-			return Null(), nil
+			return valNull, nil
 		}),
 		"args": builtin(func(a []*Value) (*Value, error) {
 			items := make([]*Value, len(os.Args))
@@ -1068,11 +1068,11 @@ func RegisterBuiltins(env *Env) {
 			if len(a) > 0 {
 				return String(os.Getenv(a[0].String())), nil
 			}
-			return Null(), nil
+			return valNull, nil
 		}),
 		"getenv": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 {
-				return Null(), nil
+				return valNull, nil
 			}
 			return String(os.Getenv(a[0].String())), nil
 		}),
@@ -1101,7 +1101,7 @@ func safeArg(args []*Value, i int) *Value {
 	if i < len(args) {
 		return args[i]
 	}
-	return Null()
+	return valNull
 }
 
 // ─── core built-ins ───────────────────────────────────────────────────────────
@@ -1112,7 +1112,7 @@ func builtinPrint(args []*Value) (*Value, error) {
 		parts[i] = a.String()
 	}
 	fmt.Fprintln(stdout, strings.Join(parts, " "))
-	return Null(), nil
+	return valNull, nil
 }
 
 func builtinInput(args []*Value) (*Value, error) {
@@ -1182,7 +1182,7 @@ func builtinNum(args []*Value) (*Value, error) {
 
 func builtinBool(args []*Value) (*Value, error) {
 	if len(args) == 0 {
-		return False(), nil
+		return valFalse, nil
 	}
 	return Bool(args[0].Truthy()), nil
 }
@@ -1211,10 +1211,10 @@ func builtinRange(args []*Value) (*Value, error) {
 
 func builtinSleep(args []*Value) (*Value, error) {
 	if len(args) == 0 {
-		return Null(), nil
+		return valNull, nil
 	}
 	time.Sleep(time.Duration(args[0].NumVal) * time.Millisecond)
-	return Null(), nil
+	return valNull, nil
 }
 
 func builtinExit(args []*Value) (*Value, error) {
@@ -1223,21 +1223,21 @@ func builtinExit(args []*Value) (*Value, error) {
 		code = int(args[0].NumVal)
 	}
 	os.Exit(code)
-	return Null(), nil
+	return valNull, nil
 }
 
 func builtinAssert(args []*Value) (*Value, error) {
 	if len(args) == 0 {
-		return Null(), nil
+		return valNull, nil
 	}
 	if !args[0].Truthy() {
 		msg := "assertion failed"
 		if len(args) > 1 {
 			msg = args[1].String()
 		}
-		return Null(), fmt.Errorf("%s", msg)
+		return valNull, fmt.Errorf("%s", msg)
 	}
-	return Null(), nil
+	return valNull, nil
 }
 
 func builtinError(args []*Value) (*Value, error) {
@@ -1245,7 +1245,7 @@ func builtinError(args []*Value) (*Value, error) {
 	if len(args) > 0 {
 		msg = args[0].String()
 	}
-	return Null(), fmt.Errorf("%s", msg)
+	return valNull, fmt.Errorf("%s", msg)
 }
 
 // ─── JSON stringify ────────────────────────────────────────────────────────────
