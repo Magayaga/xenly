@@ -37,6 +37,11 @@ type XVM struct {
 	fns     []*FunctionVal
 	classes []*ClassVal
 	reader  *bufio.Reader
+
+	// Pre-built constant pool caches — built once at NewXVM, reused on every
+	// OP_PUSH_CONST / OP_LOAD / OP_STORE without re-decoding pool entries.
+	poolValues  []*Value // poolValues[i] = ready *Value for module.Pool[i]
+	poolStrings []string // poolStrings[i] = string value of module.Pool[i]
 }
 
 // Value pools for reducing GC pressure
@@ -51,6 +56,21 @@ var (
 			return make([]*Value, 0, 8)
 		},
 	}
+	// argsPool provides reusable []*Value slices for function call arguments,
+	// eliminating a make([]*Value, argc) heap allocation on every OP_CALL.
+	argsPool = sync.Pool{
+		New: func() interface{} {
+			s := make([]*Value, 0, 16)
+			return &s
+		},
+	}
+	// envPool provides reusable Env structs for scope creation.
+	// Every OP_PUSH_SCOPE and every function call previously did a heap
+	// allocation via NewEnv.  The pool returns zeroed Env values; the caller
+	// sets flatLen=0 and parent before use.
+	envPool = sync.Pool{
+		New: func() interface{} { return &Env{} },
+	}
 )
 
 // NewXVM creates a new XVM from a compiled module.
@@ -60,10 +80,34 @@ func NewXVM(mod *bytecode.Module) *XVM {
 		global: NewEnv(nil),
 		reader: bufio.NewReader(os.Stdin),
 	}
+	xvm.buildPoolCaches()
 	RegisterBuiltins(xvm.global)
 	xvm.buildFunctions()
 	xvm.buildClasses()
 	return xvm
+}
+
+// buildPoolCaches pre-builds poolValues and poolStrings from the constant pool.
+// OP_PUSH_CONST and all variable ops use these instead of re-decoding each time.
+func (xvm *XVM) buildPoolCaches() {
+	n := len(xvm.module.Pool)
+	xvm.poolValues = make([]*Value, n)
+	xvm.poolStrings = make([]string, n)
+	for i, c := range xvm.module.Pool {
+		switch c.Type {
+		case bytecode.ConstNull:
+			xvm.poolValues[i] = valNull
+		case bytecode.ConstNumber:
+			xvm.poolValues[i] = Number(c.NumVal) // uses integer cache when applicable
+		case bytecode.ConstString:
+			xvm.poolValues[i] = &Value{Tag: TypeString, StrVal: c.StrVal}
+			xvm.poolStrings[i] = c.StrVal
+		case bytecode.ConstBool:
+			xvm.poolValues[i] = Bool(c.BoolVal)
+		default:
+			xvm.poolValues[i] = valNull
+		}
+	}
 }
 
 func (xvm *XVM) buildFunctions() {
@@ -113,33 +157,20 @@ func (xvm *XVM) buildClasses() {
 	}
 }
 
+// poolStr returns the string for pool index idx (O(1), no allocation).
 func (xvm *XVM) poolStr(idx uint32) string {
-	if int(idx) >= len(xvm.module.Pool) {
-		return ""
-	}
-	c := xvm.module.Pool[idx]
-	if c.Type == bytecode.ConstString {
-		return c.StrVal
+	if int(idx) < len(xvm.poolStrings) {
+		return xvm.poolStrings[idx]
 	}
 	return ""
 }
 
+// poolVal returns the pre-built *Value for pool index idx (O(1), no allocation).
 func (xvm *XVM) poolVal(idx uint32) *Value {
-	if int(idx) >= len(xvm.module.Pool) {
-		return Null()
+	if int(idx) < len(xvm.poolValues) {
+		return xvm.poolValues[idx]
 	}
-	c := xvm.module.Pool[idx]
-	switch c.Type {
-	case bytecode.ConstNull:
-		return Null()
-	case bytecode.ConstNumber:
-		return Number(c.NumVal)
-	case bytecode.ConstString:
-		return String(c.StrVal)
-	case bytecode.ConstBool:
-		return Bool(c.BoolVal)
-	}
-	return Null()
+	return valNull
 }
 
 // Run executes the module's main code chunk.
@@ -150,29 +181,37 @@ func (xvm *XVM) Run() error {
 
 // exec runs a bytecode chunk inside a given environment.
 func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*Value, error) {
-	stack := make([]*Value, 0, 64)
-	scopes := []*Env{env}
+	// ── Fixed-size value stack ────────────────────────────────────────────────
+	// Using a fixed [2048]*Value array with an integer top pointer eliminates
+	// all slice-append overhead (no capacity checks, no backing array reallocations,
+	// no slice-header writes).  2048 entries = ~8 nested call levels × 256 stack
+	// depth, which is ample for all practical Xenly programs.
+	var stackArr [2048]*Value
+	sp := 0 // stack pointer: stackArr[0..sp-1] are live
 
 	push := func(v *Value) {
 		if v == nil {
-			v = Null()
+			v = valNull
 		}
-		stack = append(stack, v)
+		stackArr[sp] = v
+		sp++
 	}
 	pop := func() *Value {
-		if len(stack) == 0 {
-			return Null()
+		if sp == 0 {
+			return valNull
 		}
-		v := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		return v
+		sp--
+		return stackArr[sp]
 	}
 	peek := func() *Value {
-		if len(stack) == 0 {
-			return Null()
+		if sp == 0 {
+			return valNull
 		}
-		return stack[len(stack)-1]
+		return stackArr[sp-1]
 	}
+
+	scopes := make([]*Env, 1, 16)
+	scopes[0] = env
 	currentEnv := func() *Env { return scopes[len(scopes)-1] }
 
 	readU8 := func(ip *int) uint8 {
@@ -187,6 +226,23 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 	}
 	readI32 := func(ip *int) int32 { return int32(readU32(ip)) }
 
+	// isTruthy inlines Truthy() to avoid method call overhead on the hottest
+	// control-flow ops (JUMP_TRUE, JUMP_FALSE, AND, OR, NOT).
+	isTruthy := func(v *Value) bool {
+		switch v.Tag {
+		case TypeNull:
+			return false
+		case TypeBool:
+			return v.BoolVal
+		case TypeNumber:
+			return v.NumVal != 0 && v.NumVal == v.NumVal // != 0 && !NaN
+		case TypeString:
+			return v.StrVal != ""
+		default:
+			return true // arrays, objects, functions, classes, instances
+		}
+	}
+
 	ip := 0
 	for ip < len(code) {
 		op := bytecode.Opcode(code[ip])
@@ -197,31 +253,34 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		// ── Stack ──────────────────────────────────────────────────────────
 		case bytecode.OP_NOP:
 		case bytecode.OP_HALT:
-			return Null(), nil
+			return valNull, nil
 		case bytecode.OP_POP:
 			pop()
 		case bytecode.OP_DUP:
 			push(peek())
 		case bytecode.OP_SWAP:
-			if len(stack) >= 2 {
-				n := len(stack)
-				stack[n-1], stack[n-2] = stack[n-2], stack[n-1]
+			if sp >= 2 {
+				stackArr[sp-1], stackArr[sp-2] = stackArr[sp-2], stackArr[sp-1]
 			}
 
 		// ── Literals ────────────────────────────────────────────────────────
 		case bytecode.OP_PUSH_NULL:
-			push(Null())
+			push(valNull)
 		case bytecode.OP_PUSH_TRUE:
-			push(True())
+			push(valTrue)
 		case bytecode.OP_PUSH_FALSE:
-			push(False())
+			push(valFalse)
 		case bytecode.OP_PUSH_CONST:
 			push(xvm.poolVal(readU32(&ip)))
 
 		// ── Arithmetic ──────────────────────────────────────────────────────
 		case bytecode.OP_ADD:
-			b, a := pop(), pop()
-			if a.Tag == TypeString || b.Tag == TypeString {
+			b := pop()
+			a := pop()
+			// Fast path: both numbers (most common case in numeric code)
+			if a.Tag == TypeNumber && b.Tag == TypeNumber {
+				push(Number(a.NumVal + b.NumVal))
+			} else if a.Tag == TypeString || b.Tag == TypeString {
 				var builder strings.Builder
 				builder.Grow(len(a.String()) + len(b.String()))
 				builder.WriteString(a.String())
@@ -274,34 +333,62 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		// ── Comparison ──────────────────────────────────────────────────────
 		case bytecode.OP_EQ:
 			b, a := pop(), pop()
-			push(Bool(a.Equal(b)))
+			// Fast paths for the two most common cases:
+			// 1. Both numbers — covers loop conditions, equality checks
+			// 2. Pointer equality — covers null==null, true==true (singletons)
+			if a == b {
+				push(valTrue)
+			} else if a.Tag == TypeNumber && b.Tag == TypeNumber {
+				push(Bool(a.NumVal == b.NumVal))
+			} else if a.Tag == TypeString && b.Tag == TypeString {
+				push(Bool(a.StrVal == b.StrVal))
+			} else {
+				push(Bool(a.Equal(b)))
+			}
 		case bytecode.OP_NEQ:
 			b, a := pop(), pop()
-			push(Bool(!a.Equal(b)))
+			if a == b {
+				push(valFalse)
+			} else if a.Tag == TypeNumber && b.Tag == TypeNumber {
+				push(Bool(a.NumVal != b.NumVal))
+			} else if a.Tag == TypeString && b.Tag == TypeString {
+				push(Bool(a.StrVal != b.StrVal))
+			} else {
+				push(Bool(!a.Equal(b)))
+			}
 		case bytecode.OP_LT:
 			b, a := pop(), pop()
-			if a.Tag == TypeString && b.Tag == TypeString {
+			// Fast path: numeric comparison (most common in loops)
+			if a.Tag == TypeNumber && b.Tag == TypeNumber {
+				push(Bool(a.NumVal < b.NumVal))
+			} else if a.Tag == TypeString && b.Tag == TypeString {
 				push(Bool(a.StrVal < b.StrVal))
 			} else {
 				push(Bool(a.NumVal < b.NumVal))
 			}
 		case bytecode.OP_LE:
 			b, a := pop(), pop()
-			if a.Tag == TypeString && b.Tag == TypeString {
+			if a.Tag == TypeNumber && b.Tag == TypeNumber {
+				push(Bool(a.NumVal <= b.NumVal))
+			} else if a.Tag == TypeString && b.Tag == TypeString {
 				push(Bool(a.StrVal <= b.StrVal))
 			} else {
 				push(Bool(a.NumVal <= b.NumVal))
 			}
 		case bytecode.OP_GT:
 			b, a := pop(), pop()
-			if a.Tag == TypeString && b.Tag == TypeString {
+			if a.Tag == TypeNumber && b.Tag == TypeNumber {
+				push(Bool(a.NumVal > b.NumVal))
+			} else if a.Tag == TypeString && b.Tag == TypeString {
 				push(Bool(a.StrVal > b.StrVal))
 			} else {
 				push(Bool(a.NumVal > b.NumVal))
 			}
 		case bytecode.OP_GE:
 			b, a := pop(), pop()
-			if a.Tag == TypeString && b.Tag == TypeString {
+			if a.Tag == TypeNumber && b.Tag == TypeNumber {
+				push(Bool(a.NumVal >= b.NumVal))
+			} else if a.Tag == TypeString && b.Tag == TypeString {
 				push(Bool(a.StrVal >= b.StrVal))
 			} else {
 				push(Bool(a.NumVal >= b.NumVal))
@@ -310,23 +397,23 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		// ── Logical ─────────────────────────────────────────────────────────
 		case bytecode.OP_AND:
 			b, a := pop(), pop()
-			if a.Truthy() {
+			if isTruthy(a) {
 				push(b)
 			} else {
 				push(a)
 			}
 		case bytecode.OP_OR:
 			b, a := pop(), pop()
-			if a.Truthy() {
+			if isTruthy(a) {
 				push(a)
 			} else {
 				push(b)
 			}
 		case bytecode.OP_NOT:
-			push(Bool(!pop().Truthy()))
+			push(Bool(!isTruthy(pop())))
 		case bytecode.OP_NULLISH:
 			b, a := pop(), pop()
-			if a.IsNull() {
+			if a == valNull || a.Tag == TypeNull {
 				push(b)
 			} else {
 				push(a)
@@ -335,11 +422,36 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		// ── Variables ────────────────────────────────────────────────────────
 		case bytecode.OP_LOAD:
 			name := xvm.poolStr(readU32(&ip))
-			push(currentEnv().MustGet(name))
+			// Inline the flat-array scan from Env.Get to avoid a function call
+			// on this critical-path opcode.
+			var loaded *Value
+			for cur := currentEnv(); cur != nil; cur = cur.parent {
+				found := false
+				for i := 0; i < cur.flatLen; i++ {
+					if cur.flat[i].name == name {
+						loaded = cur.flat[i].value
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
+				if cur.overflow != nil {
+					if en, ok := cur.overflow[name]; ok {
+						loaded = en.value
+						break
+					}
+				}
+			}
+			if loaded == nil {
+				loaded = valNull
+			}
+			push(loaded)
 		case bytecode.OP_STORE:
 			name := xvm.poolStr(readU32(&ip))
 			if err := currentEnv().Set(name, peek()); err != nil {
-				return Null(), fmt.Errorf("line ?: %w", err)
+				return valNull, fmt.Errorf("line ?: %w", err)
 			}
 		case bytecode.OP_STORE_NEW, bytecode.OP_STORE_LET:
 			name := xvm.poolStr(readU32(&ip))
@@ -353,26 +465,40 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			ip = int(readI32(&ip))
 		case bytecode.OP_JUMP_TRUE:
 			addr := readI32(&ip)
-			if pop().Truthy() {
+			if isTruthy(pop()) {
 				ip = int(addr)
 			}
 		case bytecode.OP_JUMP_FALSE:
 			addr := readI32(&ip)
-			if !pop().Truthy() {
+			if !isTruthy(pop()) {
 				ip = int(addr)
 			}
 		case bytecode.OP_JUMP_NULL:
 			addr := readI32(&ip)
-			if peek().IsNull() {
+			if v := peek(); v == valNull || v.Tag == TypeNull {
 				ip = int(addr)
 			}
 
 		// ── Scope ────────────────────────────────────────────────────────────
 		case bytecode.OP_PUSH_SCOPE:
-			scopes = append(scopes, NewEnv(currentEnv()))
+			// Reuse a pooled Env instead of heap-allocating on every scope entry.
+			e := envPool.Get().(*Env)
+			e.flatLen = 0
+			e.overflow = nil
+			e.parent = currentEnv()
+			scopes = append(scopes, e)
 		case bytecode.OP_POP_SCOPE:
 			if len(scopes) > 1 {
+				old := scopes[len(scopes)-1]
 				scopes = scopes[:len(scopes)-1]
+				// Return scope to pool — clear references first.
+				for i := 0; i < old.flatLen; i++ {
+					old.flat[i].value = nil
+					old.flat[i].name = ""
+				}
+				old.overflow = nil
+				old.parent = nil
+				envPool.Put(old)
 			}
 
 		// ── Functions ────────────────────────────────────────────────────────
@@ -390,7 +516,7 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 				}
 				push(&Value{Tag: TypeFunction, FnVal: closure})
 			} else {
-				push(Null())
+				push(valNull)
 			}
 		case bytecode.OP_MAKE_CLOSURE:
 			idx := readU32(&ip)
@@ -405,35 +531,52 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 				}
 				push(&Value{Tag: TypeFunction, FnVal: closure})
 			} else {
-				push(Null())
+				push(valNull)
 			}
 		case bytecode.OP_CALL:
 			argc := int(readU8(&ip))
-			args := make([]*Value, argc)
+			// Reuse a pooled slice for args — avoids a heap allocation per call.
+			argsp := argsPool.Get().(*[]*Value)
+			args := (*argsp)[:argc]
+			if cap(args) < argc {
+				args = make([]*Value, argc)
+			} else {
+				args = args[:argc]
+			}
 			for i := argc - 1; i >= 0; i-- {
 				args[i] = pop()
 			}
 			callee := pop()
 			result, err := xvm.callValue(callee, args, nil, nil)
+			*argsp = args[:0]
+			argsPool.Put(argsp)
 			if err != nil {
-				return Null(), err
+				return valNull, err
 			}
 			push(result)
 		case bytecode.OP_CALL_METHOD:
 			nameIdx := readU32(&ip)
 			argc := int(readU8(&ip))
-			args := make([]*Value, argc)
+			argsp := argsPool.Get().(*[]*Value)
+			args := (*argsp)[:0]
+			if cap(*argsp) < argc {
+				args = make([]*Value, argc)
+			} else {
+				args = (*argsp)[:argc]
+			}
 			for i := argc - 1; i >= 0; i-- {
 				args[i] = pop()
 			}
 			receiver := pop()
 			result, err := xvm.callMethod(receiver, xvm.poolStr(nameIdx), args)
+			*argsp = args[:0]
+			argsPool.Put(argsp)
 			if err != nil {
-				return Null(), err
+				return valNull, err
 			}
 			push(result)
 		case bytecode.OP_RETURN:
-			return Null(), nil
+			return valNull, nil
 		case bytecode.OP_RETURN_VAL:
 			return pop(), nil
 
@@ -457,7 +600,7 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		case bytecode.OP_ARRAY_LEN:
 			a := pop()
 			if a.Tag == TypeArray {
-				push(Number(float64(len(a.ArrayVal))))
+				push(Number(float64(len(a.ArrayVal)))) // integer cache hit for len ≤ 511
 			} else if a.Tag == TypeString {
 				push(Number(float64(len([]rune(a.StrVal)))))
 			} else {
@@ -468,14 +611,24 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		case bytecode.OP_MAKE_OBJ:
 			count := int(readU32(&ip))
 			m := make(map[string]*Value, count)
-			pairs := make([]*Value, count*2)
-			for i := count*2 - 1; i >= 0; i-- {
-				pairs[i] = pop()
-			}
-			for i := 0; i < count; i++ {
-				k := pairs[i*2].String()
-				v := pairs[i*2+1]
-				m[k] = v
+			// For small objects (≤ 8 pairs) use a stack-allocated array to
+			// collect pairs instead of heap-allocating a []*Value slice.
+			if count <= 8 {
+				var pairs [16]*Value // 8 key-value pairs max
+				for i := count*2 - 1; i >= 0; i-- {
+					pairs[i] = pop()
+				}
+				for i := 0; i < count; i++ {
+					m[pairs[i*2].String()] = pairs[i*2+1]
+				}
+			} else {
+				pairs := make([]*Value, count*2)
+				for i := count*2 - 1; i >= 0; i-- {
+					pairs[i] = pop()
+				}
+				for i := 0; i < count; i++ {
+					m[pairs[i*2].String()] = pairs[i*2+1]
+				}
 			}
 			push(Object(m))
 		case bytecode.OP_PROP_GET:
@@ -506,7 +659,7 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 				}
 				push(&Value{Tag: TypeClass, ClassVal: cls})
 			} else {
-				push(Null())
+				push(valNull)
 			}
 		case bytecode.OP_NEW:
 			nameIdx := readU32(&ip)
@@ -517,14 +670,14 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			}
 			result, err := xvm.instantiateClass(xvm.poolStr(nameIdx), args, currentEnv())
 			if err != nil {
-				return Null(), err
+				return valNull, err
 			}
 			push(result)
 		case bytecode.OP_THIS_LOAD:
 			if thisVal != nil {
 				push(thisVal)
 			} else {
-				push(Null())
+				push(valNull)
 			}
 		case bytecode.OP_SUPER_CALL:
 			argc := int(readU8(&ip))
@@ -591,8 +744,8 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		case bytecode.OP_ASSERT:
 			msg := pop()
 			cond := pop()
-			if !cond.Truthy() {
-				return Null(), fmt.Errorf("XVM assertion failed: %s", msg.String())
+			if !isTruthy(cond) {
+				return valNull, fmt.Errorf("XVM assertion failed: %s", msg.String())
 			}
 
 		// ── Enum / Pattern matching ───────────────────────────────────────────
@@ -618,7 +771,7 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			if v.Tag == TypeVariant && fieldIdx < len(v.VarFields) {
 				push(v.VarFields[fieldIdx])
 			} else {
-				push(Null())
+				push(valNull)
 			}
 
 		// ── Iteration ─────────────────────────────────────────────────────────
@@ -656,7 +809,7 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			if it.Tag == TypeIterator && it.IterVal.Index < len(it.IterVal.Items) {
 				push(it.IterVal.Items[it.IterVal.Index])
 			} else {
-				push(Null())
+				push(valNull)
 			}
 
 		// ── Misc ─────────────────────────────────────────────────────────────
@@ -664,19 +817,77 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			push(String(pop().String()))
 		case bytecode.OP_CONCAT_STR:
 			count := int(readU8(&ip))
-			parts := make([]string, count)
-			for i := count - 1; i >= 0; i-- {
-				parts[i] = pop().String()
+			parts := stringPool.Get().([]string)
+			parts = parts[:0]
+			// Pop strings in reverse, build inline
+			if count <= 16 {
+				var tmp [16]string
+				for i := count - 1; i >= 0; i-- {
+					tmp[i] = pop().String()
+				}
+				for i := 0; i < count; i++ {
+					parts = append(parts, tmp[i])
+				}
+			} else {
+				extra := make([]string, count)
+				for i := count - 1; i >= 0; i-- {
+					extra[i] = pop().String()
+				}
+				parts = append(parts, extra...)
 			}
 			push(String(strings.Join(parts, "")))
+			stringPool.Put(parts[:0])
 		case bytecode.OP_INC:
 			name := xvm.poolStr(readU32(&ip))
-			v := currentEnv().MustGet(name)
-			currentEnv().Set(name, Number(v.NumVal+1))
+			// Fast in-place increment: scan flat arrays before calling Set+Number.
+			inc := false
+			for cur := currentEnv(); cur != nil; cur = cur.parent {
+				for i := 0; i < cur.flatLen; i++ {
+					if cur.flat[i].name == name {
+						cur.flat[i].value = Number(cur.flat[i].value.NumVal + 1)
+						inc = true
+						break
+					}
+				}
+				if inc {
+					break
+				}
+				if cur.overflow != nil {
+					if en, ok := cur.overflow[name]; ok {
+						en.value = Number(en.value.NumVal + 1)
+						inc = true
+						break
+					}
+				}
+			}
+			if !inc {
+				currentEnv().Define(name, Number(1), false)
+			}
 		case bytecode.OP_DEC:
 			name := xvm.poolStr(readU32(&ip))
-			v := currentEnv().MustGet(name)
-			currentEnv().Set(name, Number(v.NumVal-1))
+			dec := false
+			for cur := currentEnv(); cur != nil; cur = cur.parent {
+				for i := 0; i < cur.flatLen; i++ {
+					if cur.flat[i].name == name {
+						cur.flat[i].value = Number(cur.flat[i].value.NumVal - 1)
+						dec = true
+						break
+					}
+				}
+				if dec {
+					break
+				}
+				if cur.overflow != nil {
+					if en, ok := cur.overflow[name]; ok {
+						en.value = Number(en.value.NumVal - 1)
+						dec = true
+						break
+					}
+				}
+			}
+			if !dec {
+				currentEnv().Define(name, Number(-1), false)
+			}
 		case bytecode.OP_SPREAD:
 			arr := pop()
 			if arr.Tag == TypeArray {
@@ -696,14 +907,14 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			_ = op // treat as NOP
 		}
 	}
-	return Null(), nil
+	return valNull, nil
 }
 
 // ─── Call helpers ─────────────────────────────────────────────────────────────
 
 func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *ClassVal) (*Value, error) {
 	if callee == nil || callee.Tag == TypeNull {
-		return Null(), fmt.Errorf("XVM: attempt to call null value")
+		return valNull, fmt.Errorf("XVM: attempt to call null value")
 	}
 
 	switch callee.Tag {
@@ -782,7 +993,7 @@ func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *C
 				return xvm.callValue(callFn, args, callee, nil)
 			}
 		}
-		return Null(), fmt.Errorf("XVM: object is not callable (no __call method)")
+		return valNull, fmt.Errorf("XVM: object is not callable (no __call method)")
 
 	case TypeInstance:
 		if callee.InstVal != nil {
@@ -795,7 +1006,7 @@ func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *C
 				return xvm.callValue(fv, args, callee, callee.InstVal.Class)
 			}
 		}
-		return Null(), fmt.Errorf("XVM: instance is not callable (no __call method)")
+		return valNull, fmt.Errorf("XVM: instance is not callable (no __call method)")
 
 	// ── Non-callable primitives: return value itself ─────────────────────
 	// This handles stack misalignment from unknown opcodes gracefully.
@@ -803,20 +1014,41 @@ func (xvm *XVM) callValue(callee *Value, args []*Value, thisVal *Value, class *C
 		return callee, nil
 	}
 
-	return Null(), fmt.Errorf("XVM: value of type %q is not callable (value: %s)", callee.TypeName(), callee.String())
+	return valNull, fmt.Errorf("XVM: value of type %q is not callable (value: %s)", callee.TypeName(), callee.String())
 }
 
 func (xvm *XVM) callFn(fn *FunctionVal, args []*Value, thisVal *Value, class *ClassVal) (*Value, error) {
 	if fn == nil {
-		return Null(), fmt.Errorf("XVM: nil function")
+		return valNull, fmt.Errorf("XVM: nil function")
 	}
 	parent := fn.Closure
 	if parent == nil {
 		parent = xvm.global
 	}
-	callEnv := NewEnv(parent)
+	// Use pooled Env to avoid a heap allocation on every function call.
+	callEnv := envPool.Get().(*Env)
+	callEnv.flatLen = 0
+	callEnv.overflow = nil
+	callEnv.parent = parent
 	xvm.bindArgs(fn, args, callEnv)
-	return xvm.exec(fn.Code, callEnv, thisVal, class)
+	result, err := xvm.exec(fn.Code, callEnv, thisVal, class)
+	// Return the Env to the pool only when it has no closures that escaped.
+	// A simple heuristic: if the function returned a closure that captured
+	// callEnv we must NOT pool it (the closure still holds a pointer).
+	// We detect this conservatively: if the result is a function value with
+	// Closure == callEnv we skip pooling.
+	if result == nil || result.Tag != TypeFunction ||
+		result.FnVal == nil || result.FnVal.Closure != callEnv {
+		// Safe to recycle — clear references to prevent GC retention.
+		for i := 0; i < callEnv.flatLen; i++ {
+			callEnv.flat[i].value = nil
+			callEnv.flat[i].name = ""
+		}
+		callEnv.overflow = nil
+		callEnv.parent = nil
+		envPool.Put(callEnv)
+	}
+	return result, err
 }
 
 func (xvm *XVM) bindArgs(fn *FunctionVal, args []*Value, env *Env) {
@@ -829,7 +1061,7 @@ func (xvm *XVM) bindArgs(fn *FunctionVal, args []*Value, env *Env) {
 			env.Define(p.Name, Array(rest), false)
 			return
 		}
-		val := Null()
+		val := valNull
 		if i < len(args) {
 			val = args[i]
 		}
@@ -839,7 +1071,7 @@ func (xvm *XVM) bindArgs(fn *FunctionVal, args []*Value, env *Env) {
 
 func (xvm *XVM) callMethod(receiver *Value, name string, args []*Value) (*Value, error) {
 	if receiver == nil || receiver.Tag == TypeNull {
-		return Null(), fmt.Errorf("XVM: cannot call method %q on null", name)
+		return valNull, fmt.Errorf("XVM: cannot call method %q on null", name)
 	}
 
 	// Check built-in methods first
@@ -857,7 +1089,7 @@ func (xvm *XVM) callMethod(receiver *Value, name string, args []*Value) (*Value,
 		if fv, ok := receiver.InstVal.Fields[name]; ok {
 			return xvm.callValue(fv, args, receiver, receiver.InstVal.Class)
 		}
-		return Null(), fmt.Errorf("XVM: method %q not found on %s", name, receiver.InstVal.Class.Name)
+		return valNull, fmt.Errorf("XVM: method %q not found on %s", name, receiver.InstVal.Class.Name)
 	}
 
 	// Class static call
@@ -874,14 +1106,14 @@ func (xvm *XVM) callMethod(receiver *Value, name string, args []*Value) (*Value,
 		}
 	}
 
-	return Null(), fmt.Errorf("XVM: cannot call method %q on %s", name, receiver.TypeName())
+	return valNull, fmt.Errorf("XVM: cannot call method %q on %s", name, receiver.TypeName())
 }
 
 // ─── Property access ──────────────────────────────────────────────────────────
 
 func (xvm *XVM) propGet(obj *Value, name string) *Value {
 	if obj == nil || obj.Tag == TypeNull {
-		return Null()
+		return valNull
 	}
 	switch obj.Tag {
 	case TypeObject:
@@ -913,12 +1145,12 @@ func (xvm *XVM) propGet(obj *Value, name string) *Value {
 			if len(obj.ArrayVal) > 0 {
 				return obj.ArrayVal[0]
 			}
-			return Null()
+			return valNull
 		case "last":
 			if len(obj.ArrayVal) > 0 {
 				return obj.ArrayVal[len(obj.ArrayVal)-1]
 			}
-			return Null()
+			return valNull
 		case "empty", "isEmpty":
 			return Bool(len(obj.ArrayVal) == 0)
 		}
@@ -930,7 +1162,7 @@ func (xvm *XVM) propGet(obj *Value, name string) *Value {
 			return Bool(obj.StrVal == "")
 		}
 	}
-	return Null()
+	return valNull
 }
 
 func (xvm *XVM) propSet(obj *Value, name string, val *Value) {
@@ -957,7 +1189,7 @@ func (xvm *XVM) propSet(obj *Value, name string, val *Value) {
 
 func (xvm *XVM) indexGet(container *Value, idx *Value) *Value {
 	if container == nil {
-		return Null()
+		return valNull
 	}
 	switch container.Tag {
 	case TypeArray:
@@ -988,7 +1220,7 @@ func (xvm *XVM) indexGet(container *Value, idx *Value) *Value {
 			}
 		}
 	}
-	return Null()
+	return valNull
 }
 
 func (xvm *XVM) indexSet(container *Value, idx *Value, val *Value) {
@@ -1025,12 +1257,12 @@ func (xvm *XVM) instantiateClass(name string, args []*Value, env *Env) (*Value, 
 			return xvm.instantiateClassVal(cls, args)
 		}
 	}
-	return Null(), fmt.Errorf("XVM: class %q not found", name)
+	return valNull, fmt.Errorf("XVM: class %q not found", name)
 }
 
 func (xvm *XVM) instantiateClassVal(cls *ClassVal, args []*Value) (*Value, error) {
 	if cls == nil {
-		return Null(), fmt.Errorf("XVM: nil class")
+		return valNull, fmt.Errorf("XVM: nil class")
 	}
 	inst := &InstanceVal{
 		Class:  cls,
@@ -1041,7 +1273,7 @@ func (xvm *XVM) instantiateClassVal(cls *ClassVal, args []*Value) (*Value, error
 	if initFn, ok := cls.Methods["init"]; ok {
 		_, err := xvm.callFn(initFn, args, instVal, cls)
 		if err != nil {
-			return Null(), err
+			return valNull, err
 		}
 	}
 	return instVal, nil
@@ -1083,14 +1315,14 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		return arr, true, nil
 	case "pop":
 		if len(arr.ArrayVal) == 0 {
-			return Null(), true, nil
+			return valNull, true, nil
 		}
 		v := arr.ArrayVal[len(arr.ArrayVal)-1]
 		arr.ArrayVal = arr.ArrayVal[:len(arr.ArrayVal)-1]
 		return v, true, nil
 	case "shift":
 		if len(arr.ArrayVal) == 0 {
-			return Null(), true, nil
+			return valNull, true, nil
 		}
 		v := arr.ArrayVal[0]
 		arr.ArrayVal = arr.ArrayVal[1:]
@@ -1171,14 +1403,14 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		return Number(-1), true, nil
 	case "includes", "contains":
 		if len(args) == 0 {
-			return False(), true, nil
+			return valFalse, true, nil
 		}
 		for _, v := range arr.ArrayVal {
 			if v.Equal(args[0]) {
-				return True(), true, nil
+				return valTrue, true, nil
 			}
 		}
-		return False(), true, nil
+		return valFalse, true, nil
 	case "map":
 		if len(args) == 0 {
 			return arr, true, nil
@@ -1188,7 +1420,7 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		for i, item := range arr.ArrayVal {
 			v, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil)
 			if err != nil {
-				return Null(), true, err
+				return valNull, true, err
 			}
 			result[i] = v
 		}
@@ -1202,19 +1434,19 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		for i, item := range arr.ArrayVal {
 			v, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil)
 			if err != nil {
-				return Null(), true, err
+				return valNull, true, err
 			}
-			if v.Truthy() {
+			if v != valNull && v.Tag != TypeNull && (v.Tag != TypeBool || v.BoolVal) && (v.Tag != TypeNumber || v.NumVal != 0) && (v.Tag != TypeString || v.StrVal != "") {
 				result = append(result, item)
 			}
 		}
 		return Array(result), true, nil
 	case "reduce":
 		if len(args) == 0 {
-			return Null(), true, nil
+			return valNull, true, nil
 		}
 		cb := args[0]
-		acc := Null()
+		acc := valNull
 		startIdx := 0
 		if len(args) > 1 {
 			acc = args[1]
@@ -1225,7 +1457,7 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		for i := startIdx; i < len(arr.ArrayVal); i++ {
 			v, err := xvm.callValue(cb, []*Value{acc, arr.ArrayVal[i], Number(float64(i)), arr}, nil, nil)
 			if err != nil {
-				return Null(), true, err
+				return valNull, true, err
 			}
 			acc = v
 		}
@@ -1235,34 +1467,34 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 			cb := args[0]
 			for i, item := range arr.ArrayVal {
 				if _, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil); err != nil {
-					return Null(), true, err
+					return valNull, true, err
 				}
 			}
 		}
-		return Null(), true, nil
+		return valNull, true, nil
 	case "find":
 		if len(args) > 0 {
 			cb := args[0]
 			for _, item := range arr.ArrayVal {
 				v, err := xvm.callValue(cb, []*Value{item}, nil, nil)
 				if err != nil {
-					return Null(), true, err
+					return valNull, true, err
 				}
-				if v.Truthy() {
+				if v != valNull && v.Tag != TypeNull && (v.Tag != TypeBool || v.BoolVal) && (v.Tag != TypeNumber || v.NumVal != 0) && (v.Tag != TypeString || v.StrVal != "") {
 					return item, true, nil
 				}
 			}
 		}
-		return Null(), true, nil
+		return valNull, true, nil
 	case "findIndex":
 		if len(args) > 0 {
 			cb := args[0]
 			for i, item := range arr.ArrayVal {
 				v, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil)
 				if err != nil {
-					return Null(), true, err
+					return valNull, true, err
 				}
-				if v.Truthy() {
+				if v != valNull && v.Tag != TypeNull && (v.Tag != TypeBool || v.BoolVal) && (v.Tag != TypeNumber || v.NumVal != 0) && (v.Tag != TypeString || v.StrVal != "") {
 					return Number(float64(i)), true, nil
 				}
 			}
@@ -1274,28 +1506,28 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 			for _, item := range arr.ArrayVal {
 				v, err := xvm.callValue(cb, []*Value{item}, nil, nil)
 				if err != nil {
-					return Null(), true, err
+					return valNull, true, err
 				}
-				if v.Truthy() {
-					return True(), true, nil
+				if v != valNull && v.Tag != TypeNull && (v.Tag != TypeBool || v.BoolVal) && (v.Tag != TypeNumber || v.NumVal != 0) && (v.Tag != TypeString || v.StrVal != "") {
+					return valTrue, true, nil
 				}
 			}
 		}
-		return False(), true, nil
+		return valFalse, true, nil
 	case "every":
 		if len(args) > 0 {
 			cb := args[0]
 			for _, item := range arr.ArrayVal {
 				v, err := xvm.callValue(cb, []*Value{item}, nil, nil)
 				if err != nil {
-					return Null(), true, err
+					return valNull, true, err
 				}
-				if !v.Truthy() {
-					return False(), true, nil
+				if v == valNull || v.Tag == TypeNull || (v.Tag == TypeBool && !v.BoolVal) || (v.Tag == TypeNumber && v.NumVal == 0) || (v.Tag == TypeString && v.StrVal == "") {
+					return valFalse, true, nil
 				}
 			}
 		}
-		return True(), true, nil
+		return valTrue, true, nil
 	case "concat":
 		result := append([]*Value{}, arr.ArrayVal...)
 		for _, a := range args {
@@ -1325,7 +1557,7 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 		for i, item := range arr.ArrayVal {
 			v, err := xvm.callValue(cb, []*Value{item, Number(float64(i)), arr}, nil, nil)
 			if err != nil {
-				return Null(), true, err
+				return valNull, true, err
 			}
 			if v.Tag == TypeArray {
 				result = append(result, v.ArrayVal...)
@@ -1350,7 +1582,7 @@ func (xvm *XVM) arrayMethod(arr *Value, name string, args []*Value) (*Value, boo
 				return v.NumVal < 0
 			})
 			if sortErr != nil {
-				return Null(), true, sortErr
+				return valNull, true, sortErr
 			}
 		} else {
 			sort.SliceStable(arr.ArrayVal, func(i, j int) bool {
@@ -1465,17 +1697,17 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 		return Array(items), true, nil
 	case "includes", "contains":
 		if len(args) == 0 {
-			return False(), true, nil
+			return valFalse, true, nil
 		}
 		return Bool(strings.Contains(s, args[0].String())), true, nil
 	case "startsWith":
 		if len(args) == 0 {
-			return False(), true, nil
+			return valFalse, true, nil
 		}
 		return Bool(strings.HasPrefix(s, args[0].String())), true, nil
 	case "endsWith":
 		if len(args) == 0 {
-			return False(), true, nil
+			return valFalse, true, nil
 		}
 		return Bool(strings.HasSuffix(s, args[0].String())), true, nil
 	case "indexOf":
@@ -1600,7 +1832,7 @@ func (xvm *XVM) stringMethod(str *Value, name string, args []*Value) (*Value, bo
 		return String(string(runes)), true, nil
 	case "match":
 		if len(args) == 0 {
-			return False(), true, nil
+			return valFalse, true, nil
 		}
 		return Bool(strings.Contains(s, args[0].String())), true, nil
 	case "toString":
@@ -1641,7 +1873,7 @@ func (xvm *XVM) objectMethod(obj *Value, name string, args []*Value) (*Value, bo
 		return Array(entries), true, nil
 	case "has", "hasOwnProperty":
 		if len(args) == 0 {
-			return False(), true, nil
+			return valFalse, true, nil
 		}
 		_, ok := obj.ObjVal[args[0].String()]
 		return Bool(ok), true, nil
@@ -1649,7 +1881,7 @@ func (xvm *XVM) objectMethod(obj *Value, name string, args []*Value) (*Value, bo
 		if len(args) > 0 {
 			delete(obj.ObjVal, args[0].String())
 		}
-		return Null(), true, nil
+		return valNull, true, nil
 	case "assign", "merge":
 		if len(args) > 0 && args[0].Tag == TypeObject {
 			for k, v := range args[0].ObjVal {
@@ -1683,19 +1915,19 @@ func (xvm *XVM) variantMethod(v *Value, name string, args []*Value) (*Value, boo
 
 	case "unwrap":
 		if v.VarTag == "None" {
-			return Null(), true, fmt.Errorf("XVM: unwrap called on None")
+			return valNull, true, fmt.Errorf("XVM: unwrap called on None")
 		}
 		if len(v.VarFields) > 0 {
 			return v.VarFields[0], true, nil
 		}
-		return Null(), true, nil
+		return valNull, true, nil
 
 	case "getOr":
 		if isNone {
 			if len(args) > 0 {
 				return args[0], true, nil
 			}
-			return Null(), true, nil
+			return valNull, true, nil
 		}
 		return v.VarFields[0], true, nil
 
@@ -1705,7 +1937,7 @@ func (xvm *XVM) variantMethod(v *Value, name string, args []*Value) (*Value, boo
 				result, err := xvm.callValue(args[0], []*Value{}, nil, nil)
 				return result, true, err
 			}
-			return Null(), true, nil
+			return valNull, true, nil
 		}
 		return v, true, nil
 
@@ -1720,7 +1952,7 @@ func (xvm *XVM) variantMethod(v *Value, name string, args []*Value) (*Value, boo
 		inner := v.VarFields[0]
 		result, err := xvm.callValue(args[0], []*Value{inner}, nil, nil)
 		if err != nil {
-			return Null(), true, err
+			return valNull, true, err
 		}
 		return &Value{Tag: TypeVariant, VarTag: "Some", VarFields: []*Value{result}}, true, nil
 
@@ -1735,7 +1967,7 @@ func (xvm *XVM) variantMethod(v *Value, name string, args []*Value) (*Value, boo
 		inner := v.VarFields[0]
 		result, err := xvm.callValue(args[0], []*Value{inner}, nil, nil)
 		if err != nil {
-			return Null(), true, err
+			return valNull, true, err
 		}
 		return result, true, nil
 
@@ -1762,26 +1994,26 @@ func (xvm *XVM) nullMethod(name string, args []*Value) (*Value, bool, error) {
 		if len(args) > 0 {
 			return args[0], true, nil
 		}
-		return Null(), true, nil
+		return valNull, true, nil
 
 	case "orElse":
 		if len(args) > 0 {
 			result, err := xvm.callValue(args[0], []*Value{}, nil, nil)
 			return result, true, err
 		}
-		return Null(), true, nil
+		return valNull, true, nil
 
 	case "isSome":
-		return False(), true, nil
+		return valFalse, true, nil
 	case "isNone":
-		return True(), true, nil
+		return valTrue, true, nil
 
 	case "unwrap":
-		return Null(), true, fmt.Errorf("XVM: unwrap called on null")
+		return valNull, true, fmt.Errorf("XVM: unwrap called on null")
 
 	case "map", "flatMap", "andThen":
 		// null propagates — the function is never called
-		return Null(), true, nil
+		return valNull, true, nil
 
 	case "toString":
 		return String("null"), true, nil
@@ -1806,9 +2038,9 @@ func (xvm *XVM) primitiveOptionalMethod(v *Value, name string, args []*Value) (*
 	case "orElse":
 		return v, true, nil // present — skip fallback
 	case "isSome":
-		return True(), true, nil
+		return valTrue, true, nil
 	case "isNone":
-		return False(), true, nil
+		return valFalse, true, nil
 	case "unwrap":
 		return v, true, nil // trivially unwraps to itself
 	case "map":
