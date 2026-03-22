@@ -100,3 +100,9 @@ jobs:
       run: time ./xenlyc examples/async.xe -o async
     - name: async test (15)
       run: time ./async
+    - name: xenly test (16)
+      run: time ./xenly examples/xui.xe
+    - name: xenlyc test (16)
+      run: time ./xenlyc examples/xui.xe -o xui
+    - name: xui test (16)
+      run: time ./xui
