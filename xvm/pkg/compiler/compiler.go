@@ -241,6 +241,13 @@ func (c *Compiler) compileStmt(n *ASTNode) {
 		c.emit(bytecode.OP_NOP) // compile-time only
 	case NodeAssert:
 		c.compileAssert(n)
+	// ── Imperative control flow ──────────────────────────────────────────
+	case NodeUnless:
+		c.compileUnless(n)
+	case NodeRepeat:
+		c.compileRepeat(n)
+	case NodeForever:
+		c.compileForever(n)
 	case NodeSpawn:
 		if len(n.Children) > 0 {
 			c.compileExpr(n.Children[0])
@@ -810,6 +817,11 @@ func (c *Compiler) compileExpr(n *ASTNode) {
 		c.compileTernary(n)
 	case NodeNullish:
 		c.compileNullish(n)
+	// ── Declarative / functional ─────────────────────────────────────────
+	case NodePipeForward:
+		c.compilePipeForward(n)
+	case NodeWhere:
+		c.compileWhere(n)
 	case NodeFnCall:
 		c.compileFnCall(n)
 	case NodeMethodCall:
@@ -1026,13 +1038,11 @@ func (c *Compiler) compileNullish(n *ASTNode) {
 }
 
 func (c *Compiler) compileFnCall(n *ASTNode) {
-	// Push function first, then arguments.
-	// OP_CALL pops args (high-to-low index), then pops callee — so callee must be
-	// deepest on the stack (pushed first) and args on top (pushed last).
-	c.emitOp4(bytecode.OP_LOAD, c.constString(n.StrVal))
+	// Push arguments, push function, call
 	for _, arg := range n.Children {
 		c.compileExpr(arg)
 	}
+	c.emitOp4(bytecode.OP_LOAD, c.constString(n.StrVal))
 	c.emitOp1(bytecode.OP_CALL, uint8(len(n.Children)))
 }
 
@@ -1049,11 +1059,10 @@ func (c *Compiler) compileMethodCall(n *ASTNode) {
 
 func (c *Compiler) compileCallExpr(n *ASTNode) {
 	// n.Children[0] = callee expr, n.Children[1..] = args
-	// Push callee first (deepest), then args on top — matching OP_CALL's pop order.
-	c.compileExpr(n.Children[0])
 	for _, arg := range n.Children[1:] {
 		c.compileExpr(arg)
 	}
+	c.compileExpr(n.Children[0])
 	c.emitOp1(bytecode.OP_CALL, uint8(len(n.Children)-1))
 }
 
@@ -1197,4 +1206,142 @@ func (c *Compiler) compileMatch(n *ASTNode) {
 	for _, pos := range endJumps {
 		c.patchJumpAt(pos)
 	}
+}
+
+// ─── Imperative control-flow compile helpers ──────────────────────────────────
+
+// compileUnless compiles: unless (cond) { body }
+// Semantics: body executes when cond is FALSY — the clean inverse of 'if'.
+// children[0] = condition, children[1] = body
+func (c *Compiler) compileUnless(n *ASTNode) {
+	c.compileExpr(n.Children[0]) // push condition
+	// JUMP_TRUE skips body (condition true → skip body)
+	skipJump := c.emitJump(bytecode.OP_JUMP_TRUE)
+	c.emitScope()
+	c.compileStmt(n.Children[1])
+	c.emitEndScope()
+	c.patchJump(skipJump)
+}
+
+// compileRepeat compiles: repeat N { body }
+// Semantics: body runs exactly N times.  break/continue work as in while.
+// children[0] = count expression, children[1] = body
+// Strategy: store count in hidden var __repeat_i__; loop while __repeat_i__ > 0;
+// decrement at end of each iteration.
+func (c *Compiler) compileRepeat(n *ASTNode) {
+	counterIdx := c.constString("__repeat_i__")
+	c.emitScope()
+
+	// __repeat_i__ = <count expr>  (OP_STORE_NEW pops the value)
+	c.compileExpr(n.Children[0])
+	c.emitOp4(bytecode.OP_STORE_NEW, counterIdx)
+
+	loopStart := c.currentPos()
+
+	// Condition: __repeat_i__ > 0
+	c.emitOp4(bytecode.OP_LOAD, counterIdx)
+	c.emitOp4(bytecode.OP_PUSH_CONST, c.constNumber(0))
+	c.emit(bytecode.OP_GT)
+	endJump := c.emitJump(bytecode.OP_JUMP_FALSE)
+
+	oldBreaks := c.current.loopBreaks
+	oldContinues := c.current.loopContinues
+	oldStart := c.current.loopStart
+	c.current.loopBreaks = nil
+	c.current.loopContinues = nil
+	c.current.loopStart = loopStart
+
+	c.compileStmt(n.Children[1])
+
+	// continue target: decrement then loop back
+	continueTarget := c.currentPos()
+	for _, pos := range c.current.loopContinues {
+		binary.LittleEndian.PutUint32(c.current.code[pos:], uint32(continueTarget))
+	}
+
+	// __repeat_i__ -= 1
+	// OP_STORE peeks (leaves value on stack), so we need OP_POP after.
+	c.emitOp4(bytecode.OP_LOAD, counterIdx)
+	c.emitOp4(bytecode.OP_PUSH_CONST, c.constNumber(1))
+	c.emit(bytecode.OP_SUB)
+	c.emitOp4(bytecode.OP_STORE, counterIdx)
+	c.emit(bytecode.OP_POP)
+
+	c.emitOpI4(bytecode.OP_JUMP, int32(loopStart))
+	c.patchJump(endJump)
+
+	for _, pos := range c.current.loopBreaks {
+		c.patchJumpAt(pos)
+	}
+
+	c.emitEndScope()
+	c.current.loopBreaks = oldBreaks
+	c.current.loopContinues = oldContinues
+	c.current.loopStart = oldStart
+}
+
+// compileForever compiles: forever { body }
+// Semantics: unconditional loop.  break exits; return propagates value.
+// children[0] = body
+func (c *Compiler) compileForever(n *ASTNode) {
+	loopStart := c.currentPos()
+	c.emitScope()
+
+	oldBreaks := c.current.loopBreaks
+	oldContinues := c.current.loopContinues
+	oldStart := c.current.loopStart
+	c.current.loopBreaks = nil
+	c.current.loopContinues = nil
+	c.current.loopStart = loopStart
+
+	c.compileStmt(n.Children[0])
+
+	// continue → jump back to loop start
+	for _, pos := range c.current.loopContinues {
+		binary.LittleEndian.PutUint32(c.current.code[pos:], uint32(loopStart))
+	}
+	c.emitOpI4(bytecode.OP_JUMP, int32(loopStart))
+
+	// break → jump here
+	for _, pos := range c.current.loopBreaks {
+		c.patchJumpAt(pos)
+	}
+
+	c.emitEndScope()
+	c.current.loopBreaks = oldBreaks
+	c.current.loopContinues = oldContinues
+	c.current.loopStart = oldStart
+}
+
+// ─── Declarative / functional compile helpers ────────────────────────────────
+
+// compilePipeForward compiles: expr |> fn
+// Semantics: equivalent to fn(expr) — passes LHS as the first argument to RHS.
+// children[0] = value, children[1] = function expression
+func (c *Compiler) compilePipeForward(n *ASTNode) {
+	// Stack layout needed by OP_CALL: [callee, arg0]
+	c.compileExpr(n.Children[1]) // push fn  (callee, deepest)
+	c.compileExpr(n.Children[0]) // push arg (on top)
+	c.emitOp1(bytecode.OP_CALL, 1)
+}
+
+// compileWhere compiles: expr where id = val [, id = val ...]
+// Semantics: evaluate bindings in a fresh inner scope, then evaluate body.
+//
+// OP_POP_SCOPE only removes the environment frame — the value stack is
+// independent — so the body result naturally survives the scope close.
+//
+// children[0]   = body expression
+// children[1..n] = NodeVarDecl nodes (StrVal=name, Children[0]=value expr)
+func (c *Compiler) compileWhere(n *ASTNode) {
+	c.emitScope()
+	// Emit bindings: OP_STORE_NEW pops, so no extra OP_POP needed.
+	for _, bind := range n.Children[1:] {
+		c.compileExpr(bind.Children[0])
+		c.emitOp4(bytecode.OP_STORE_NEW, c.constString(bind.StrVal))
+	}
+	// Body expression — result left on top of value stack.
+	c.compileExpr(n.Children[0])
+	// Close scope: only the env frame is removed; result stays on value stack.
+	c.emitEndScope()
 }

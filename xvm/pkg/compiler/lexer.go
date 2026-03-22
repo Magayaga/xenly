@@ -241,6 +241,9 @@ func (l *Lexer) nextToken() Token {
 		}
 		return mkTok(TOK_AMPERSAND, "&")
 	case '|':
+		if l.match('>') {
+			return mkTok(TOK_PIPE_FWD, "|>")
+		}
 		if l.match('|') {
 			return mkTok(TOK_OR, "||")
 		}

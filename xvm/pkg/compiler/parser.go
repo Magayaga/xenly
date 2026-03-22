@@ -146,6 +146,12 @@ func (p *Parser) parseStatement() *ASTNode {
 		return p.parseFor()
 	case TOK_SWITCH:
 		return p.parseSwitch()
+	case TOK_UNLESS:
+		return p.parseUnless()
+	case TOK_REPEAT:
+		return p.parseRepeat()
+	case TOK_FOREVER:
+		return p.parseForever()
 	case TOK_BREAK:
 		p.advance()
 		p.match(TOK_SEMICOLON)
@@ -800,6 +806,32 @@ func (p *Parser) parseAssignment() *ASTNode {
 		return nil
 	}
 
+	// ── where clause ─────────────────────────────────────────────────────
+	// Syntax:  expr where id = val [, id = val ...]
+	// Semantics: evaluate bindings in a fresh scope, then evaluate body.
+	if p.check(TOK_WHERE) {
+		tok := p.advance()
+		n := NewNode(NodeWhere, tok.Line)
+		n.AddChild(expr) // children[0] = body expression
+		for {
+			nameTok := p.peek()
+			if nameTok.Type != TOK_IDENT {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: expected identifier in 'where' binding", nameTok.Line))
+				break
+			}
+			p.advance()
+			bind := NewNode(NodeVarDecl, nameTok.Line)
+			bind.StrVal = nameTok.Lexeme
+			p.expect(TOK_ASSIGN)
+			bind.AddChild(p.parseTernary()) // binding value
+			n.AddChild(bind)                // children[1..] = bindings
+			if !p.match(TOK_COMMA) {
+				break
+			}
+		}
+		return n
+	}
+
 	switch p.peek().Type {
 	case TOK_ASSIGN, TOK_PLUS_EQ, TOK_MINUS_EQ, TOK_STAR_EQ,
 		TOK_SLASH_EQ, TOK_PERCENT_EQ, TOK_STARSTAR_EQ:
@@ -821,7 +853,7 @@ func (p *Parser) parseAssignment() *ASTNode {
 }
 
 func (p *Parser) parseTernary() *ASTNode {
-	cond := p.parseNullish()
+	cond := p.parsePipeForward()
 	if p.check(TOK_QUESTION) {
 		tok := p.advance()
 		then := p.parseExpression()
@@ -834,6 +866,21 @@ func (p *Parser) parseTernary() *ASTNode {
 		return n
 	}
 	return cond
+}
+
+func (p *Parser) parsePipeForward() *ASTNode {
+	// expr |> fn  (left-associative)
+	// Desugars: a |> f  →  f(a),  a |> f |> g  →  g(f(a))
+	left := p.parseNullish()
+	for p.check(TOK_PIPE_FWD) {
+		tok := p.advance()
+		fn := p.parseNullish() // RHS must be a callable expression
+		n := NewNode(NodePipeForward, tok.Line)
+		n.AddChild(left) // children[0] = value
+		n.AddChild(fn)   // children[1] = function
+		left = n
+	}
+	return left
 }
 
 func (p *Parser) parseNullish() *ASTNode {
@@ -1541,4 +1588,40 @@ func (p *Parser) parseTypeName() string {
 
 func isTypeKeyword(t TokenType) bool {
 	return t == TOK_NULL || t == TOK_TRUE || t == TOK_FALSE
+}
+
+// ─── Imperative control-flow statements ───────────────────────────────────────
+
+// parseUnless parses: unless (cond) { body }
+// Executes body only when cond is falsy — the clean inverse of 'if', with no
+// else branch.  Mirrors C interpreter's NODE_UNLESS.
+func (p *Parser) parseUnless() *ASTNode {
+	tok := p.advance() // unless
+	n := NewNode(NodeUnless, tok.Line)
+	p.expect(TOK_LPAREN)
+	n.AddChild(p.parseExpression()) // children[0] = condition
+	p.expect(TOK_RPAREN)
+	n.AddChild(p.parseStatement()) // children[1] = body
+	return n
+}
+
+// parseRepeat parses: repeat N { body }
+// Runs body exactly N times.  'break' exits early; 'continue' skips to the
+// next iteration.  Mirrors C interpreter's NODE_REPEAT.
+func (p *Parser) parseRepeat() *ASTNode {
+	tok := p.advance() // repeat
+	n := NewNode(NodeRepeat, tok.Line)
+	n.AddChild(p.parseExpression()) // children[0] = count expression
+	n.AddChild(p.parseStatement())  // children[1] = body
+	return n
+}
+
+// parseForever parses: forever { body }
+// Infinite loop.  'break' exits; 'return' propagates a value.
+// Mirrors C interpreter's NODE_FOREVER.
+func (p *Parser) parseForever() *ASTNode {
+	tok := p.advance() // forever
+	n := NewNode(NodeForever, tok.Line)
+	n.AddChild(p.parseStatement()) // children[0] = body
+	return n
 }

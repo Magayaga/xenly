@@ -63,6 +63,16 @@ const (
 	TOK_ENSURES   // ensures
 	TOK_INVARIANT // invariant
 	TOK_ASSERT    // assert
+
+	// ── Imperative control flow ───────────────────────────────────────────
+	TOK_UNLESS  // unless  — inverse if, no else branch
+	TOK_REPEAT  // repeat  — counted loop: repeat N { body }
+	TOK_FOREVER // forever — infinite loop: forever { body }
+
+	// ── Declarative / functional ─────────────────────────────────────────
+	TOK_WHERE    // where     — local binding clause: expr where x = val
+	TOK_PIPE_FWD // |>        — pipe-forward: expr |> fn
+
 	TOK_PRINT     // print
 	TOK_INPUT     // input
 	TOK_TRUE      // true
@@ -169,6 +179,12 @@ var keywords = map[string]TokenType{
 	"ensures":    TOK_ENSURES,
 	"invariant":  TOK_INVARIANT,
 	"assert":     TOK_ASSERT,
+	// ── Imperative ────────────────────────────────────────────────────────
+	"unless":     TOK_UNLESS,
+	"repeat":     TOK_REPEAT,
+	"forever":    TOK_FOREVER,
+	// ── Declarative ───────────────────────────────────────────────────────
+	"where":      TOK_WHERE,
 	"print":      TOK_PRINT,
 	"input":      TOK_INPUT,
 	"true":       TOK_TRUE,
