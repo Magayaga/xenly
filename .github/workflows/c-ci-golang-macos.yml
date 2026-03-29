@@ -37,3 +37,7 @@ jobs:
         run: time ./xvm/bin/xenlybyc examples/functional.xe -o functional.xebc
       - name: run functional test (3)
         run: time ./xvm/bin/xenlyrun functional.xebc
+      - name: run math_enhanced_demo (4)
+        run: time ./xvm/bin/xenlybyc examples/math_enhanced_demo.xe -o math_enhanced_demo.xebc
+      - name: math_enhanced_demo (4)
+        run: time ./xvm/bin/xenlyrun math_enhanced_demo.xebc
