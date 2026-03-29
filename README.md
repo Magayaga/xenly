@@ -14,7 +14,7 @@
   </a>
 </p>
 
-**Xenly** (formerly known as **Xenon**) is a **free and open-source** high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It was originally written in the **C** programming language.
+**Xenly** (formerly known as **Xenon**) is a **free and open-source** high-level, multi-paradigm, general-purpose programming language designed primarily for command-line interfaces, web servers, and applications. It is written in the **C** and **Go** programming languages.
 
 Xenly programming language should be command-line interfaces, web servers, and desktop applications. It is static and dynamic typing, readability, usability, and flexibility.
 
