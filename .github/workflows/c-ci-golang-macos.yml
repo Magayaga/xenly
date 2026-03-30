@@ -41,3 +41,7 @@ jobs:
         run: time ./xvm/bin/xenlybyc examples/math_enhanced_demo.xe -o math_enhanced_demo.xebc
       - name: math_enhanced_demo (4)
         run: time ./xvm/bin/xenlyrun math_enhanced_demo.xebc
+      - name: test_enum (5)
+        run: time ./xvm/bin/xenlybyc examples/test_enum.xe -o test_enum.xebc
+      - name: run test_enum (5)
+        run: time ./xvm/bin/xenlyrun test_enum.xebc
