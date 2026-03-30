@@ -44,7 +44,7 @@
     xenly_sqrt(121)
     ```
 
-* On June 19, 2024, He announced the new features of the `nanopreview` Xenly programming language are new Xenly `binary_math` (**binary mathematical functions**) module and the updating `math` (**mathematical functions**) module.
+* On June 19, 2024, He announced the new features of the `nanopreview` Xenly programming language are the new Xenly `binary_math` (**binary mathematical functions**) module and the updating `math` (**mathematical functions**) module.
 
     ```swift
     import binary_math
@@ -60,18 +60,20 @@
     xenly_decbin(489)
     ```
 
-* On July 9, 2024, He announced a new virtual machine that enables a computer to run Xenly programs and programs written in other languages that are also compiled to Xenly bytecode are called **Xenly Virtual Machine**. It was originally written in **C** programming language.
+* On July 9, 2024, He announced a new virtual machine that enables a computer to run Xenly programs and programs written in other languages that are also compiled to Xenly bytecode, called **Xenly Virtual Machine**. It was originally written in **C** programming language.
 
 * On July 21, 2024, He announced adding **Xenly** Interpreter using **C**, **Rust**, and **Zig**. Next upcoming features of **Xenly** are `var` and `let` **variables** and fixing `import` **modules**.
 
-* On July 24, 2024, He announced **Xenly**'s source code due to typhoon Carina, strong weather in the Philippines because the rain is heavy and the flood is rising.
+* On July 24, 2024, He announced **Xenly**'s source code due to typhoon Carina, strong weather in the Philippines, because the rain is heavy and the flood is rising.
 
-* On July 26, 2024, He announced that upcoming features of Xenly programming language are `fn` means define a function and more statements.
+* On July 26, 2024, He announced that the upcoming features of the Xenly programming language are `fn`, which means to define a function and more statements.
 
 * On March 29, 2025, He announced that the fixed Xenly Interpreter was written in the C programming language due to the fixing of Xenly's source code.
   
 * On April 6, 2025, He wrote “I want to print() function returns but should be don’t nota() function”. In addition, xenly.c was returned because this is the longest code in a split of the many files.
   
-* On February 8, 2026, He announced that new native compiler and redesign of interpreter of Xenly programming language then new upcoming releases (**alpha** and **beta**).
+* On February 8, 2026, He announced a new native compiler and a redesign of the interpreter of the Xenly programming language, then new upcoming releases (**alpha** and **beta**).
 
-* On March 12, 2026, He announced that **XVM (Xenly Virtual Machine)** because `xenlybyc` replaced old `xenlyc` (the Xenly compiler that translates human-readable source code into bytecode) and `xenlyrun` replaced `xenly` (the launcher that runs the compiled bytecode using the Xenly Virtual Machine) using **Go** programming language.
+* On March 12, 2026, He announced that **XVM (Xenly Virtual Machine)** because `xenlybyc` replaced old `xenlyc` (the Xenly compiler that translates human-readable source code into bytecode) and `xenlyrun` replaced `xenly` (the launcher that runs the compiled bytecode using the Xenly Virtual Machine) using the **Go** programming language.
+
+* On March 30, 2026, He announced that the upcoming **Xenly's linker** is the fastest drop-in replacement for existing **Unix**/**Unix-like** linkers. It's replaced **GCC** and **Clang** linkers.
