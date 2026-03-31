@@ -121,7 +121,8 @@ INTERP_OBJS = $(INTERP_SRCS:.c=.o)
 
 XENLYC = xenlyc
 XENLYC_SRCS = src/xenlyc_main.c src/lexer.c src/ast.c src/parser.c \
-              src/codegen.c src/unicode.c src/sema.c
+              src/codegen.c src/unicode.c src/sema.c \
+              src/xenly_linker.c
 XENLYC_OBJS = $(XENLYC_SRCS:.c=.o)
 
 RT_LIB = libxly_rt.a
@@ -152,7 +153,7 @@ $(TARGET): $(INTERP_OBJS)
 	@echo "  Interpreter: $(TARGET)"
 
 $(XENLYC): $(XENLYC_OBJS)
-	@echo "Linking compiler..."
+	@echo "Linking compiler (with built-in xlnk linker)..."
 	$(CC) -o $@ $^ $(LDFLAGS)
 	@echo "  Compiler: $(XENLYC)"
 
@@ -298,6 +299,8 @@ help:
 	@echo "    all          Build interpreter, compiler, and runtime (default)"
 	@echo "    run          Build and run examples/hello.xe"
 	@echo "    compile      Build and test the native compiler (xenlyc)"
+	@echo "                   Pipeline: .xe → lexer → parser → AST → sema"
+	@echo "                             → codegen → .s → as → .o → xlnk → binary"
 	@echo "    test         Run the core test suite"
 	@echo "    test-sys     Run the sys module demo (examples/sys_demo.xe)"
 	@echo "    format       Auto-format all C source with clang-format"
