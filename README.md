@@ -33,11 +33,12 @@ The **Xenly** programming language supports **macOS**, **Windows**, and **Linux*
 ## How Much Faster?
 Here are times to run `xenly`, `xenlyc`, and `xvm` on some Xenly's example codes on GitHub of varying sizes:
 
-   | Example codes | Size (LOC) | `xenly` | `xenlyc` | `xvm` (`xenlybyc` + `xenlyrun`) |
-   |:-------------:|:----------:|:-------:|:--------:|:-------------------------------:|
-   | `hello.xe`    | 3          | 0.051s  | 0.034s   | 0.004s                          |
-   | `sys_demo.xe` | 159        | 0.078s  | 0.094s   | 135.861s                        |
-   | Billion nested loops | 8   | -       | 3.562s   | -                               |
+   |      Example codes      | Size (LOC) | `xenly` | `xenlyc` | `xvm` (`xenlybyc` + `xenlyrun`) |
+   |:-----------------------:|:----------:|:-------:|:--------:|:-------------------------------:|
+   | `hello.xe`              | 3          | 0.051s  | 0.034s   | 0.004s                          |
+   | `sys_demo.xe`           | 159        | 0.078s  | 0.094s   | 135.861s                        |
+   | `math_enhanced_demo.xe` | 223        | 0.005s  | 0.126s   | 0.006s                          |
+   | Billion nested loops    | 8          | -       | 3.562s   | -                               |
    
 ## Examples
 ### 1. Hello, World! program
