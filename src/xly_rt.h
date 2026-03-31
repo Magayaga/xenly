@@ -197,4 +197,131 @@ XlyVal **xly_make_cell(XlyVal *initial);   /* allocate heap cell for mutable cap
 XlyVal  *xly_cell_get(XlyVal **cell);      /* dereference cell                       */
 void     xly_cell_set(XlyVal **cell, XlyVal *val); /* write through cell              */
 
+/* ══════════════════════════════════════════════════════════════════════════════
+ * UNICODE / UTF-8 RUNTIME API
+ *
+ * Every Xenly string is a NUL-terminated UTF-8 byte sequence.  The functions
+ * below expose the full unicode.h surface through the XlyVal* ABI so that
+ * compiled Xenly programs can call them without any C interop boilerplate.
+ *
+ * Naming convention:
+ *   xly_uni_*   — Unicode character / codepoint operations (XlyVal* in/out)
+ *   xly_utf8_*  — UTF-8 string operations
+ *   xly_str_*   — already-existing byte-level string ops (kept for compat)
+ *
+ * All functions follow the same error contract as the rest of xly_rt:
+ *   — Invalid type arguments return xly_null() or xly_num(0) / xly_str("").
+ *   — Out-of-bounds indices return xly_null().
+ *   — Strings are always valid UTF-8 on output (sanitized).
+ * ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── UTF-8 string length / indexing ─────────────────────────────────────────── */
+
+/* xly_utf8_len(s) → number: codepoint count (not byte count) */
+XlyVal *xly_utf8_len(XlyVal *s);
+
+/* xly_utf8_char_at(s, index) → string: one UTF-8 character at codepoint index */
+XlyVal *xly_utf8_char_at(XlyVal *s, XlyVal *index);
+
+/* xly_utf8_slice(s, start, end) → string: codepoints [start,end) */
+XlyVal *xly_utf8_slice(XlyVal *s, XlyVal *start, XlyVal *end);
+
+/* xly_utf8_byte_offset(s, index) → number: byte offset of Nth codepoint */
+XlyVal *xly_utf8_byte_offset(XlyVal *s, XlyVal *index);
+
+/* xly_utf8_is_valid(s) → bool: 1 if s is valid UTF-8 */
+XlyVal *xly_utf8_is_valid(XlyVal *s);
+
+/* xly_utf8_sanitize(s) → string: replace invalid sequences with U+FFFD */
+XlyVal *xly_utf8_sanitize(XlyVal *s);
+
+/* xly_utf8_reverse(s) → string: reverse by codepoints */
+XlyVal *xly_utf8_reverse(XlyVal *s);
+
+/* xly_utf8_display_width(s) → number: terminal column width */
+XlyVal *xly_utf8_display_width(XlyVal *s);
+
+/* xly_utf8_contains_rune(s, cp) → bool: true if codepoint cp appears in s */
+XlyVal *xly_utf8_contains_rune(XlyVal *s, XlyVal *cp);
+
+/* xly_utf8_count_rune(s, cp) → number: occurrences of codepoint in s */
+XlyVal *xly_utf8_count_rune(XlyVal *s, XlyVal *cp);
+
+/* xly_utf8_index_rune(s, cp) → number: byte offset of first cp, or -1 */
+XlyVal *xly_utf8_index_rune(XlyVal *s, XlyVal *cp);
+
+/* xly_utf8_equal_fold(a, b) → bool: case-insensitive Unicode comparison */
+XlyVal *xly_utf8_equal_fold(XlyVal *a, XlyVal *b);
+
+/* ── Unicode codepoint operations ────────────────────────────────────────────── */
+
+/* xly_uni_codepoint_at(s, index) → number: codepoint value at index */
+XlyVal *xly_uni_codepoint_at(XlyVal *s, XlyVal *index);
+
+/* xly_uni_from_codepoint(cp) → string: UTF-8 string from codepoint number */
+XlyVal *xly_uni_from_codepoint(XlyVal *cp);
+
+/* ── Unicode character classification ────────────────────────────────────────── */
+
+/* All accept a codepoint number or a 1-character string */
+XlyVal *xly_uni_is_letter (XlyVal *cp);  /* Lu Ll Lt Lm Lo */
+XlyVal *xly_uni_is_upper  (XlyVal *cp);  /* Lu */
+XlyVal *xly_uni_is_lower  (XlyVal *cp);  /* Ll */
+XlyVal *xly_uni_is_title  (XlyVal *cp);  /* Lt */
+XlyVal *xly_uni_is_digit  (XlyVal *cp);  /* Nd — decimal digit */
+XlyVal *xly_uni_is_number (XlyVal *cp);  /* Nd Nl No */
+XlyVal *xly_uni_is_space  (XlyVal *cp);  /* Unicode whitespace */
+XlyVal *xly_uni_is_punct  (XlyVal *cp);  /* Punctuation categories */
+XlyVal *xly_uni_is_symbol (XlyVal *cp);  /* Symbol categories */
+XlyVal *xly_uni_is_mark   (XlyVal *cp);  /* Combining marks */
+XlyVal *xly_uni_is_control(XlyVal *cp);  /* Control characters */
+XlyVal *xly_uni_is_graphic(XlyVal *cp);  /* Printable incl. space */
+XlyVal *xly_uni_is_print  (XlyVal *cp);  /* Printable excl. space */
+XlyVal *xly_uni_digit_value(XlyVal *cp); /* number: 0-9, or -1 */
+
+/* ── Case conversion ─────────────────────────────────────────────────────────── */
+
+/* xly_uni_to_upper/lower/title(cp) → number: case-mapped codepoint */
+XlyVal *xly_uni_to_upper(XlyVal *cp);
+XlyVal *xly_uni_to_lower(XlyVal *cp);
+XlyVal *xly_uni_to_title(XlyVal *cp);
+
+/* xly_uni_simple_fold(cp) → number: next simple case-fold equivalent */
+XlyVal *xly_uni_simple_fold(XlyVal *cp);
+
+/* String-level case (operate on whole UTF-8 strings) */
+XlyVal *xly_utf8_to_upper(XlyVal *s);
+XlyVal *xly_utf8_to_lower(XlyVal *s);
+XlyVal *xly_utf8_to_title(XlyVal *s);
+
+/* ── Grapheme clusters (Unicode TR#29) ───────────────────────────────────────── */
+
+/* xly_grapheme_count(s) → number: number of user-perceived characters */
+XlyVal *xly_grapheme_count(XlyVal *s);
+
+/* xly_grapheme_at(s, index) → string: Nth grapheme cluster */
+XlyVal *xly_grapheme_at(XlyVal *s, XlyVal *index);
+
+/* xly_grapheme_next_break(s) → number: bytes until next cluster boundary */
+XlyVal *xly_grapheme_next_break(XlyVal *s);
+
+/* ── Normalization ────────────────────────────────────────────────────────────── */
+
+/* xly_utf8_nfc(s) → string: NFC-normalized UTF-8 */
+XlyVal *xly_utf8_nfc(XlyVal *s);
+
+/* xly_utf8_nfd(s) → string: NFD-normalized UTF-8 */
+XlyVal *xly_utf8_nfd(XlyVal *s);
+
+/* ── UTF-16 interop ───────────────────────────────────────────────────────────── */
+
+/* xly_utf16_encode(cp) → array: [high, low] surrogate pair, or [cp] if BMP */
+XlyVal *xly_utf16_encode(XlyVal *cp);
+
+/* xly_utf16_decode(high, low) → number: codepoint from surrogate pair */
+XlyVal *xly_utf16_decode(XlyVal *high, XlyVal *low);
+
+/* xly_uni_is_surrogate(cp) → bool */
+XlyVal *xly_uni_is_surrogate(XlyVal *cp);
+
 #endif /* XLY_RT_H */
