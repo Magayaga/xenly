@@ -41,3 +41,7 @@ jobs:
         run: Measure-Command { ./xvm/bin/xenlybyc examples/math_enhanced_demo.xe -o math_enhanced_demo.xebc }
       - name: run math_enhanced_demo test (4)
         run: Measure-Command { ./xvm/bin/xenlyrun math_enhanced_demo.xebc }
+      - name: test_enum test (5)
+        run: Measure-Command { ./xvm/bin/xenlybyc examples/test_enum.xe -o test_enum.xebc }
+      - name: run test_enum (5)
+        run: Measure-Command { ./xvm/bin/xenlyrun test_enum.xebc }
