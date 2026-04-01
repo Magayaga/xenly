@@ -77,3 +77,5 @@
 * On March 12, 2026, He announced that **XVM (Xenly Virtual Machine)** because `xenlybyc` replaced old `xenlyc` (the Xenly compiler that translates human-readable source code into bytecode) and `xenlyrun` replaced `xenly` (the launcher that runs the compiled bytecode using the Xenly Virtual Machine) using the **Go** programming language.
 
 * On March 30, 2026, He announced that the upcoming **Xenly's linker** is the fastest drop-in replacement for existing **Unix**/**Unix-like** linkers. It's replaced **GCC** and **Clang** linkers.
+
+* On April 1, 2026, He announced the upcoming new HTTP web server library of the Xenly programming language.
