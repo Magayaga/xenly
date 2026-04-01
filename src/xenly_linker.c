@@ -695,44 +695,6 @@ static void munmap_file(MappedFile *mf) {
     mf->data = NULL; mf->fd = -1;
 }
 
-/* ── Symbol table (open-addressing hash, FNV-1a) ─────────────────────────── */
-
-static uint32_t sym_hash(const char *name) {
-    uint32_t h = 2166136261u;
-    for (; *name; name++) h = (h ^ (uint8_t)*name) * 16777619u;
-    return h;
-}
-
-static XlnkSymbol *sym_find(SymTable *t, const char *name) {
-    uint32_t h = sym_hash(name) & (SYM_HTAB_SIZE - 1);
-    for (uint32_t i = 0; i < SYM_HTAB_SIZE; i++) {
-        uint32_t idx = (h + i) & (SYM_HTAB_SIZE - 1);
-        XlnkSymbol *e = t->entries[idx];
-        if (!e) return NULL;
-        if (strcmp(e->name, name) == 0) return e;
-    }
-    return NULL;
-}
-
-static XlnkSymbol *sym_intern(SymTable *t, const char *name) {
-    if (t->n >= XLNK_MAX_SYMBOLS) return NULL;
-    uint32_t h = sym_hash(name) & (SYM_HTAB_SIZE - 1);
-    for (uint32_t i = 0; i < SYM_HTAB_SIZE; i++) {
-        uint32_t idx = (h + i) & (SYM_HTAB_SIZE - 1);
-        if (!t->entries[idx]) {
-            XlnkSymbol *s = &t->pool[t->n++];
-            memset(s, 0, sizeof(*s));
-            s->name = strdup(name);
-            s->plt_index = -1;
-            s->got_index = -1;
-            t->entries[idx] = s;
-            return s;
-        }
-        if (strcmp(t->entries[idx]->name, name) == 0) return t->entries[idx];
-    }
-    return NULL;
-}
-
 /* ── Chunk management ────────────────────────────────────────────────────── */
 
 static Chunk *new_chunk(XlnkState *st) {
@@ -1214,11 +1176,29 @@ static int write_elf64(XlnkState *st) {
      *          .shstrtab  (simplified set) */
     /* For speed we emit minimal ELF — just enough for the OS loader */
 
-    /* ── Open output ────────────────────────────────────────────────── */
-    FILE *f = fopen(out, "wb");
-    if (!f) {
+    /* ── Open output (O_CREAT|O_TRUNC|O_WRONLY — no FILE* buffering) ── */
+    int fd = open(out, O_CREAT | O_TRUNC | O_WRONLY, 0755);
+    if (fd < 0) {
         xlnk_diag(st, XLNK_DIAG_ERROR, "cannot write '%s': %s", out, strerror(errno));
         return XLNK_ERR_OUTPUT;
+    }
+
+    /* Pre-allocate: avoids fragmentation and tells the OS the final size up
+     * front so subsequent pwrite calls hit pre-allocated blocks.           */
+    {
+        off_t total = 0;
+        for (int i = 0; i < st->n_chunks; i++) {
+            Chunk *c = &st->chunks[i];
+            if (!c->is_bss && c->data)
+                total = (off_t)(c->file_off + c->size);
+        }
+        if (total > 0) {
+#if defined(__linux__)
+            posix_fallocate(fd, 0, total);
+#else
+            ftruncate(fd, total);
+#endif
+        }
     }
 
     /* ── ELF header ─────────────────────────────────────────────────── */
@@ -1240,7 +1220,6 @@ static int write_elf64(XlnkState *st) {
     eh.e_phentsize = sizeof(Elf64_Phdr);
     eh.e_phnum     = (Elf64_Half)nphdr;
     eh.e_shentsize = sizeof(Elf64_Shdr);
-    fwrite(&eh, sizeof(eh), 1, f);
 
     /* ── Program headers ────────────────────────────────────────────── */
     uint64_t phdr_off  = sizeof(Elf64_Ehdr);
@@ -1308,32 +1287,72 @@ static int write_elf64(XlnkState *st) {
     phdrs[ph_idx].p_memsz = cfg->stack_size ? cfg->stack_size : 8 * 1024 * 1024;
     ph_idx++;
 
-    fwrite(phdrs, sizeof(Elf64_Phdr), (size_t)nphdr, f);
+    /* ── Scatter write with pwrite — no fwrite/fputc/ftell overhead ─── */
+    /* Build an iovec array covering: ELF header, phdrs, interp, all chunks.
+     * pwrite(2) with explicit offsets avoids all lseek calls and FILE*
+     * buffering.  On Linux pwritev(2) can submit everything in one syscall.*/
+    {
+        /* Max iov: 2 (ehdr+phdrs) + 1 (interp) + n_chunks */
+        int max_iov = 3 + st->n_chunks;
+        struct iovec *iov = (struct iovec *)malloc(sizeof(struct iovec)
+                                                   * (size_t)max_iov);
+        off_t *offsets    = (off_t *)malloc(sizeof(off_t) * (size_t)max_iov);
+        if (!iov || !offsets) {
+            free(iov); free(offsets); close(fd);
+            return XLNK_ERR_NOMEM;
+        }
 
-    /* ── Interp string ──────────────────────────────────────────────── */
-    if (!cfg->is_static && interp_len > 0)
-        fwrite(interp, 1, interp_len, f);
+        int ni = 0;
+        iov[ni].iov_base = &eh;
+        iov[ni].iov_len  = sizeof(eh);
+        offsets[ni]      = 0;
+        ni++;
 
-    /* ── Section data ───────────────────────────────────────────────── */
-    long cur = ftell(f);
-    for (int i = 0; i < st->n_chunks; i++) {
-        Chunk *c = &st->chunks[i];
-        if (c->is_bss || !c->data) continue;
-        /* Pad to alignment */
-        while ((long)ftell(f) < (long)c->file_off) fputc(0, f);
-        fwrite(c->data, 1, c->size, f);
+        iov[ni].iov_base = phdrs;
+        iov[ni].iov_len  = (size_t)nphdr * sizeof(Elf64_Phdr);
+        offsets[ni]      = (off_t)phdr_off;
+        ni++;
+
+        if (!cfg->is_static && interp_len > 0) {
+            iov[ni].iov_base = (void *)interp;
+            iov[ni].iov_len  = interp_len;
+            offsets[ni]      = (off_t)(phdr_off + phdr_size);
+            ni++;
+        }
+
+        for (int i = 0; i < st->n_chunks; i++) {
+            Chunk *c = &st->chunks[i];
+            if (c->is_bss || !c->data) continue;
+            iov[ni].iov_base = c->data;
+            iov[ni].iov_len  = c->size;
+            offsets[ni]      = (off_t)c->file_off;
+            ni++;
+        }
+
+        /* Issue pwrite for each segment — O_WRONLY + explicit offset,
+         * no seek required between writes.                             */
+        for (int i = 0; i < ni; i++) {
+            ssize_t written = pwrite(fd, iov[i].iov_base,
+                                     iov[i].iov_len, offsets[i]);
+            if (written < 0 || (size_t)written != iov[i].iov_len) {
+                xlnk_diag(st, XLNK_DIAG_ERROR,
+                          "pwrite failed at offset %lld: %s",
+                          (long long)offsets[i], strerror(errno));
+                free(iov); free(offsets); close(fd);
+                return XLNK_ERR_OUTPUT;
+            }
+        }
+        free(iov);
+        free(offsets);
     }
 
-    fclose(f);
-
-    /* Make executable */
+    close(fd);
     chmod(out, 0755);
 
     if (cfg->verbose)
         xlnk_diag(st, XLNK_DIAG_INFO,
                   "wrote ELF64 '%s' (entry=0x%llx, %d chunks)",
                   out, (unsigned long long)st->entry_vaddr, st->n_chunks);
-    (void)cur;
     return XLNK_OK;
 }
 
@@ -1466,21 +1485,31 @@ static int write_macho64(XlnkState *st) {
     mh.ncmds      = ncmds;
     mh.sizeofcmds = lcsize;
 
-    fwrite(&mh,    sizeof(mh),    1, f);
-    fwrite(lcbuf,  1, lcsize, f);
+    /* ── pwrite scatter output ──────────────────────────────────────── */
+    int fd = open(out, O_CREAT | O_TRUNC | O_WRONLY, 0755);
+    if (fd < 0) {
+        xlnk_diag(st, XLNK_DIAG_ERROR, "cannot write '%s': %s", out, strerror(errno));
+        return XLNK_ERR_OUTPUT;
+    }
 
-    /* Pad to 4096 */
-    long cur = ftell(f);
-    while (cur++ < 0x1000) fputc(0, f);
+    /* Header block: MachHeader64 + load commands + padding to 0x1000 */
+    uint8_t hdr_block[0x1000];
+    memset(hdr_block, 0, sizeof(hdr_block));
+    memcpy(hdr_block, &mh, sizeof(mh));
+    memcpy(hdr_block + sizeof(mh), lcbuf, lcsize);
 
-    /* Write section data */
+    pwrite(fd, hdr_block, sizeof(hdr_block), 0);
+
+    /* Section data at file offset 0x1000 */
+    off_t cur_off = 0x1000;
     for (int i = 0; i < st->n_chunks; i++) {
         Chunk *c = &st->chunks[i];
         if (c->is_bss || !c->data) continue;
-        fwrite(c->data, 1, c->size, f);
+        pwrite(fd, c->data, c->size, cur_off);
+        cur_off += (off_t)c->size;
     }
 
-    fclose(f);
+    close(fd);
     chmod(out, 0755);
 
     if (cfg->verbose)
@@ -1567,6 +1596,12 @@ int xlnk_link(const XlnkConfig *cfg) {
     memset(&st, 0, sizeof(st));
     st.cfg = cfg;
 
+    /* Pre-allocate arenas:
+     *   str_arena : 2 MB — holds all symbol name strings without strdup
+     *   mem_arena : 32 MB — holds all chunk data + reloc tables            */
+    arena_init(&st.str_arena, 2 * 1024 * 1024);
+    arena_init(&st.mem_arena, 32 * 1024 * 1024);
+
     /* ── Detect output format from first object ──────────────────────── */
     if (cfg->n_objects > 0) {
         const char *fmt = xlnk_detect_format(cfg->objects[0]);
@@ -1627,14 +1662,10 @@ int xlnk_link(const XlnkConfig *cfg) {
     }
 
 cleanup:
-    /* Free symbol names */
-    for (int i = 0; i < st.syms.n; i++)
-        free(st.syms.pool[i].name);
-    /* Free chunk data and relocs */
-    for (int i = 0; i < st.n_chunks; i++) {
-        free(st.chunks[i].data);
-        free(st.chunks[i].relas);
-    }
+    /* All symbol names and chunk data live in arenas — free in O(1) */
+    arena_free(&st.str_arena);
+    arena_free(&st.mem_arena);
+    /* Chunk array itself is a plain malloc */
     free(st.chunks);
     free(st.dynstr);
     free(st.dynsym);
