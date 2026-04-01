@@ -1,6 +1,6 @@
 # Getting started with Xenly
 
-You'll need to install our build dependencies (`git`, `gcc` for Windows, `clang` for Linux / macOS) and check out the Xenly repository, for example on **Windows**, **Linux**, or **macOS**:
+You'll need to install our build dependencies (`git`, `gcc`/`clang` for Linux / macOS) and check out the Xenly repository, for example on **Windows**, **Linux**, or **macOS**:
 
 
 1. ## Linux operating system:

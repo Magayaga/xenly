@@ -31,6 +31,7 @@
  */
 
 #include "xly_rt.h"
+#include "unicode.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -339,24 +340,34 @@ XlyVal *xly_input(XlyVal *prompt) {
  * SYSTEMS PROGRAMMING — STRING PRIMITIVES
  * ══════════════════════════════════════════════════════════════════════════════ */
 
-/* xly_str_len(s) → number: byte length of string (O(1) via strlen) */
+/* xly_str_len(s) → number: Unicode codepoint count (not byte count).
+ * Use the new utf8_strlen from unicode.h for correct multi-byte handling. */
 XlyVal *xly_str_len(XlyVal *s) {
+    if (!s || s->type != VAL_STRING) return xly_num(0);
+    return xly_num((double)utf8_strlen(s->str));
+}
+
+/* xly_str_byte_len(s) → number: raw byte length (old xly_str_len behaviour) */
+XlyVal *xly_str_byte_len(XlyVal *s) {
     if (!s || s->type != VAL_STRING) return xly_num(0);
     return xly_num((double)strlen(s->str));
 }
 
-/* xly_str_slice(s, start, end) → string: bytes [start,end) */
+/* xly_str_slice(s, start, end) → string: codepoints [start,end).
+ * Now Unicode-aware: indices are codepoint positions, not byte offsets. */
 XlyVal *xly_str_slice(XlyVal *s, XlyVal *start, XlyVal *end) {
     if (!s || s->type != VAL_STRING) return xly_str("");
-    size_t len = strlen(s->str);
-    size_t st  = start ? (size_t)(long long)start->num : 0;
-    size_t en  = end   ? (size_t)(long long)end->num   : len;
-    if (st > len) st = len;
-    if (en > len) en = len;
-    if (en < st)  en = st;
-    char *buf = (char*)malloc(en - st + 1);
-    memcpy(buf, s->str + st, en - st);
-    buf[en - st] = '\0';
+    size_t clen = utf8_strlen(s->str);
+    size_t st = start ? (size_t)(long long)start->num : 0;
+    size_t en = end   ? (size_t)(long long)end->num   : clen;
+    if (st > clen) st = clen;
+    if (en > clen) en = clen;
+    if (en < st)   en = st;
+    /* allocate worst-case: (en-st)*4 + 1 bytes */
+    size_t buf_size = (en - st) * UTF8_MAX_BYTES + 1;
+    char *buf = (char *)malloc(buf_size);
+    if (!buf) return xly_str("");
+    utf8_slice(s->str, st, en, buf, buf_size);
     XlyVal *r = xly_str(buf);
     free(buf);
     return r;
@@ -870,9 +881,13 @@ XlyVal *xly_index(XlyVal *collection, XlyVal *index_val) {
         return collection->array[idx];
     }
     if (collection->type == VAL_STRING) {
-        int len = (int)strlen(collection->str);
-        if (idx < 0 || idx >= len) return xly_null();
-        char buf[2] = { collection->str[idx], '\0' };
+        /* Index by codepoint (Unicode-aware), not byte */
+        size_t clen = utf8_strlen(collection->str);
+        if (idx < 0) idx = (int)clen + idx;
+        if (idx < 0 || (size_t)idx >= clen) return xly_null();
+        char buf[UTF8_MAX_BYTES + 1];
+        utf8_slice(collection->str, (size_t)idx, (size_t)idx + 1,
+                   buf, sizeof(buf));
         return xly_str(buf);
     }
     return xly_null();
@@ -1113,4 +1128,263 @@ XlyVal *value_clone(XlyVal *v) {
         }
         default: return v;
     }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * UNICODE / UTF-8 RUNTIME — xly_rt.c
+ *
+ * These functions expose the full unicode.h API through the XlyVal* ABI.
+ * Every compiled Xenly binary links xly_rt + unicode and can call all of
+ * these without any C interop.
+ *
+ * Convention for "codepoint" arguments:
+ *   - If the argument is VAL_NUMBER its value is the codepoint (uint32_t).
+ *   - If the argument is VAL_STRING its first codepoint is used.
+ * ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Internal helper: extract a codepoint from a number or 1-char string */
+static uint32_t xly_to_cp(XlyVal *v) {
+    if (!v) return 0;
+    if (v->type == VAL_NUMBER) return (uint32_t)(unsigned long long)v->num;
+    if (v->type == VAL_STRING && v->str && v->str[0]) {
+        size_t bytes;
+        return utf8_decode(v->str, &bytes);
+    }
+    return 0;
+}
+
+/* ── UTF-8 string length / indexing ──────────────────────────────────────── */
+
+XlyVal *xly_utf8_len(XlyVal *s) {
+    if (!s || s->type != VAL_STRING) return xly_num(0);
+    return xly_num((double)utf8_strlen(s->str));
+}
+
+XlyVal *xly_utf8_char_at(XlyVal *s, XlyVal *index) {
+    if (!s || s->type != VAL_STRING || !index) return xly_str("");
+    size_t idx = (size_t)(long long)index->num;
+    char buf[UTF8_MAX_BYTES + 1];
+    utf8_slice(s->str, idx, idx + 1, buf, sizeof(buf));
+    return xly_str(buf);
+}
+
+XlyVal *xly_utf8_slice(XlyVal *s, XlyVal *start, XlyVal *end) {
+    /* Re-use the updated xly_str_slice which is now codepoint-aware */
+    return xly_str_slice(s, start, end);
+}
+
+XlyVal *xly_utf8_byte_offset(XlyVal *s, XlyVal *index) {
+    if (!s || s->type != VAL_STRING || !index) return xly_num(0);
+    size_t idx = (size_t)(long long)index->num;
+    return xly_num((double)utf8_index_byte(s->str, idx));
+}
+
+XlyVal *xly_utf8_is_valid(XlyVal *s) {
+    if (!s || s->type != VAL_STRING) return xly_bool(0);
+    return xly_bool(utf8_is_valid(s->str));
+}
+
+XlyVal *xly_utf8_sanitize(XlyVal *s) {
+    if (!s || s->type != VAL_STRING) return xly_str("");
+    size_t src_len = strlen(s->str);
+    size_t buf_size = src_len * 3 + 1;
+    char *buf = (char *)malloc(buf_size);
+    if (!buf) return xly_str("");
+    utf8_sanitize(s->str, buf, buf_size);
+    XlyVal *r = xly_str(buf);
+    free(buf);
+    return r;
+}
+
+XlyVal *xly_utf8_reverse(XlyVal *s) {
+    if (!s || s->type != VAL_STRING) return xly_str("");
+    size_t src_len = strlen(s->str);
+    char *buf = (char *)malloc(src_len + 1);
+    if (!buf) return xly_str("");
+    utf8_reverse(s->str, buf, src_len + 1);
+    XlyVal *r = xly_str(buf);
+    free(buf);
+    return r;
+}
+
+XlyVal *xly_utf8_display_width(XlyVal *s) {
+    if (!s || s->type != VAL_STRING) return xly_num(0);
+    return xly_num((double)utf8_display_width(s->str));
+}
+
+XlyVal *xly_utf8_contains_rune(XlyVal *s, XlyVal *cp_val) {
+    if (!s || s->type != VAL_STRING) return xly_bool(0);
+    uint32_t cp = xly_to_cp(cp_val);
+    return xly_bool(utf8_contains_rune(s->str, cp));
+}
+
+XlyVal *xly_utf8_count_rune(XlyVal *s, XlyVal *cp_val) {
+    if (!s || s->type != VAL_STRING) return xly_num(0);
+    uint32_t cp = xly_to_cp(cp_val);
+    return xly_num((double)utf8_count_rune(s->str, cp));
+}
+
+XlyVal *xly_utf8_index_rune(XlyVal *s, XlyVal *cp_val) {
+    if (!s || s->type != VAL_STRING) return xly_num(-1);
+    uint32_t cp = xly_to_cp(cp_val);
+    size_t off = utf8_index_rune(s->str, cp);
+    return xly_num(off == (size_t)-1 ? -1.0 : (double)off);
+}
+
+XlyVal *xly_utf8_equal_fold(XlyVal *a, XlyVal *b) {
+    if (!a || a->type != VAL_STRING || !b || b->type != VAL_STRING)
+        return xly_bool(0);
+    return xly_bool(utf8_equal_fold(a->str, b->str));
+}
+
+/* ── Unicode codepoint operations ────────────────────────────────────────── */
+
+XlyVal *xly_uni_codepoint_at(XlyVal *s, XlyVal *index) {
+    if (!s || s->type != VAL_STRING || !index) return xly_num(0);
+    size_t idx = (size_t)(long long)index->num;
+    const char *pos = utf8_char_at(s->str, idx);
+    if (!pos || !*pos) return xly_num(0);
+    size_t bytes;
+    uint32_t cp = utf8_decode(pos, &bytes);
+    return xly_num((double)cp);
+}
+
+XlyVal *xly_uni_from_codepoint(XlyVal *cp_val) {
+    uint32_t cp = xly_to_cp(cp_val);
+    char buf[UTF8_MAX_BYTES + 1] = {0};
+    size_t n = utf8_encode(cp, buf);
+    if (n == 0) return xly_str("");
+    buf[n] = '\0';
+    return xly_str(buf);
+}
+
+/* ── Unicode character classification ────────────────────────────────────── */
+
+XlyVal *xly_uni_is_letter (XlyVal *v) { return xly_bool(unicode_is_letter (xly_to_cp(v))); }
+XlyVal *xly_uni_is_upper  (XlyVal *v) { return xly_bool(unicode_is_upper  (xly_to_cp(v))); }
+XlyVal *xly_uni_is_lower  (XlyVal *v) { return xly_bool(unicode_is_lower  (xly_to_cp(v))); }
+XlyVal *xly_uni_is_title  (XlyVal *v) { return xly_bool(unicode_is_title  (xly_to_cp(v))); }
+XlyVal *xly_uni_is_digit  (XlyVal *v) { return xly_bool(unicode_is_digit  (xly_to_cp(v))); }
+XlyVal *xly_uni_is_number (XlyVal *v) { return xly_bool(unicode_is_number (xly_to_cp(v))); }
+XlyVal *xly_uni_is_space  (XlyVal *v) { return xly_bool(unicode_is_space  (xly_to_cp(v))); }
+XlyVal *xly_uni_is_punct  (XlyVal *v) { return xly_bool(unicode_is_punct  (xly_to_cp(v))); }
+XlyVal *xly_uni_is_symbol (XlyVal *v) { return xly_bool(unicode_is_symbol (xly_to_cp(v))); }
+XlyVal *xly_uni_is_mark   (XlyVal *v) { return xly_bool(unicode_is_mark   (xly_to_cp(v))); }
+XlyVal *xly_uni_is_control(XlyVal *v) { return xly_bool(unicode_is_control(xly_to_cp(v))); }
+XlyVal *xly_uni_is_graphic(XlyVal *v) { return xly_bool(unicode_is_graphic(xly_to_cp(v))); }
+XlyVal *xly_uni_is_print  (XlyVal *v) { return xly_bool(unicode_is_print  (xly_to_cp(v))); }
+
+XlyVal *xly_uni_digit_value(XlyVal *v) {
+    return xly_num((double)unicode_digit_value(xly_to_cp(v)));
+}
+
+/* ── Case conversion ─────────────────────────────────────────────────────── */
+
+XlyVal *xly_uni_to_upper(XlyVal *v) {
+    return xly_num((double)unicode_to_upper(xly_to_cp(v)));
+}
+XlyVal *xly_uni_to_lower(XlyVal *v) {
+    return xly_num((double)unicode_to_lower(xly_to_cp(v)));
+}
+XlyVal *xly_uni_to_title(XlyVal *v) {
+    return xly_num((double)unicode_to_title(xly_to_cp(v)));
+}
+XlyVal *xly_uni_simple_fold(XlyVal *v) {
+    return xly_num((double)unicode_simple_fold(xly_to_cp(v)));
+}
+
+/* String-level case conversion */
+
+static XlyVal *_utf8_case(XlyVal *s,
+    size_t (*fn)(const char *, char *, size_t)) {
+    if (!s || s->type != VAL_STRING) return xly_str("");
+    size_t src_len = strlen(s->str);
+    /* Worst case: each byte expands to 3 (ß→SS is 2 codepoints; handled by to_upper) */
+    size_t buf_size = src_len * 3 + 1;
+    char *buf = (char *)malloc(buf_size);
+    if (!buf) return xly_str("");
+    fn(s->str, buf, buf_size);
+    XlyVal *r = xly_str(buf);
+    free(buf);
+    return r;
+}
+
+XlyVal *xly_utf8_to_upper(XlyVal *s) { return _utf8_case(s, utf8_to_upper); }
+XlyVal *xly_utf8_to_lower(XlyVal *s) { return _utf8_case(s, utf8_to_lower); }
+XlyVal *xly_utf8_to_title(XlyVal *s) { return _utf8_case(s, utf8_to_title); }
+
+/* ── Grapheme clusters ───────────────────────────────────────────────────── */
+
+XlyVal *xly_grapheme_count(XlyVal *s) {
+    if (!s || s->type != VAL_STRING) return xly_num(0);
+    return xly_num((double)grapheme_count(s->str));
+}
+
+XlyVal *xly_grapheme_at(XlyVal *s, XlyVal *index) {
+    if (!s || s->type != VAL_STRING || !index) return xly_str("");
+    size_t idx = (size_t)(long long)index->num;
+    const char *pos = grapheme_cluster_at(s->str, idx);
+    if (!pos || !*pos) return xly_str("");
+    size_t len = grapheme_next_break(pos);
+    if (len == 0) return xly_str("");
+    char *buf = (char *)malloc(len + 1);
+    if (!buf) return xly_str("");
+    memcpy(buf, pos, len);
+    buf[len] = '\0';
+    XlyVal *r = xly_str(buf);
+    free(buf);
+    return r;
+}
+
+XlyVal *xly_grapheme_next_break(XlyVal *s) {
+    if (!s || s->type != VAL_STRING) return xly_num(0);
+    return xly_num((double)grapheme_next_break(s->str));
+}
+
+/* ── Normalization ───────────────────────────────────────────────────────── */
+
+static XlyVal *_utf8_norm(XlyVal *s,
+    size_t (*fn)(const char *, char *, size_t)) {
+    if (!s || s->type != VAL_STRING) return xly_str("");
+    size_t src_len = strlen(s->str);
+    size_t buf_size = src_len * 4 + 1;
+    char *buf = (char *)malloc(buf_size);
+    if (!buf) return xly_str("");
+    fn(s->str, buf, buf_size);
+    XlyVal *r = xly_str(buf);
+    free(buf);
+    return r;
+}
+
+XlyVal *xly_utf8_nfc(XlyVal *s) { return _utf8_norm(s, utf8_nfc); }
+XlyVal *xly_utf8_nfd(XlyVal *s) { return _utf8_norm(s, utf8_nfd); }
+
+/* ── UTF-16 interop ──────────────────────────────────────────────────────── */
+
+XlyVal *xly_utf16_encode(XlyVal *cp_val) {
+    uint32_t cp = xly_to_cp(cp_val);
+    if (cp <= 0xFFFF && !utf16_is_surrogate(cp)) {
+        XlyVal *elem = xly_num((double)cp);
+        return xly_array_create(&elem, 1);
+    }
+    uint16_t high, low;
+    if (!utf16_encode_pair(cp, &high, &low)) {
+        XlyVal *elem = xly_num((double)cp);
+        return xly_array_create(&elem, 1);
+    }
+    XlyVal *elems[2];
+    elems[0] = xly_num((double)high);
+    elems[1] = xly_num((double)low);
+    return xly_array_create(elems, 2);
+}
+
+XlyVal *xly_utf16_decode(XlyVal *high_val, XlyVal *low_val) {
+    uint16_t high = (uint16_t)(unsigned)xly_to_cp(high_val);
+    uint16_t low  = (uint16_t)(unsigned)xly_to_cp(low_val);
+    uint32_t cp = utf16_decode_pair(high, low);
+    return xly_num((double)cp);
+}
+
+XlyVal *xly_uni_is_surrogate(XlyVal *v) {
+    return xly_bool(utf16_is_surrogate(xly_to_cp(v)));
 }

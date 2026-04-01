@@ -1,6 +1,6 @@
 # `xvm` / **Xenly Virtual Machine**
 
-**XVM**, also known as **Xenly Virtual Machine**, is a virtual machine that enables a computer to run Xenly programs and programs written in other languages that are also compiled into Xenly bytecode. The XVM is detailed by a specification that formally describes what is required in a Xenly implementation. It was available for the **Windows**, **macOS**, and **Linux** operating systems.
+**XVM**, also known as **Xenly Virtual Machine**, is a virtual machine that enables a computer to run Xenly programs written in other languages that are also compiled into Xenly bytecode. The XVM is detailed by a specification that formally describes what is required in a Xenly implementation. It was available for the **Windows**, **macOS**, and **Linux** operating systems.
 
 It is written in **Go** programming language.
 
@@ -18,7 +18,8 @@ It is written in **Go** programming language.
 
 2. Build the **XVM** and run the program (makefile or batchfile):
    ```bash
-   # Run the program (makefile or batchfile)
+   # Run the program (makefile, batchfile, or Python script)
+   $ py install-go.py # windows, linux, or macOS
    $ make # linux or macOS
    $ ./main.bat # windows
    ```
@@ -30,12 +31,12 @@ It is written in **Go** programming language.
    $ make cross-all   
    ```
 
-3. **`xvm`** can be compiled into a bytecode executable:
+3. **`xenlybyc`** (Xenly bytecode compiler) can be compiled into a bytecode executable:
    ```bash
    $ ./bin/xenlybyc examples/hello.xe -o hello.xebc
    ```
 
-4. **xvm** can be executed:
+4. **`xenlyrun`** (Xenly bytecode interpreter) can be executed:
    ```bash
    $ ./bin/xenlyrun hello.xebc
    ```
