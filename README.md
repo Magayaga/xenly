@@ -23,13 +23,13 @@ Xenly programming language should be command-line interfaces, web servers, and d
 ## Operating system supports
 The **Xenly** programming language supports **macOS**, **Windows**, and **Linux** operating systems, and **Windows Subsystem for Linux**.
 
-|   Operating systems  | Interpreter (`xenly`) | Native compiler (`xenlyc`) | Xenly Virtual Machine (`xenlybyc` and `xenlyrun`)   | Build automation system tool, test runner, and bundler (`bituin`) |
+|   Operating systems  | Interpreter (`xenly`) | Native compiler (`xenlyc`) | Xenly Virtual Machine (`xenlybyc` and `xenlyrun`)   | Build automation system tool and test runner (`bituin`) |
 |:--------------------:|:---------------------:|:--------------------------:|:---------------------------------------------------:|:-------------------------------------------------------:|
 | Linux 🐧             | Yes                   | Yes                        | Yes                                                 | -                                                       |
 | Apple macOS 🍎       | Yes                   | Yes                        | Yes                                                 | -                                                       |
 | Windows Subsystem for Linux 🪟 | Yes         | Yes                        | Yes                                                 | -                                                       |
 | Windows 🪟           | No (Not available)    | No (Not available)         | Yes                                                 | -                                                       |
-| **Programming language** | **C**              | **C**                      | **Go**                                              | **Zig** or **Rust**? |
+| **Programming language** | **C**              | **C**                      | **Go**                                              | **Zig** |
 
 ## How Much Faster?
 Here are times to run `xenly`, `xenlyc`, and `xvm` on some Xenly's example codes on GitHub of varying sizes:
@@ -93,7 +93,7 @@ You can download the git clone of the `xenly` programming language project. It i
 
 ```bash
 # Download the Xenly's source code
-$ git clone https://github.com/magayaga/xenly
+$ git clone https://github.com/magayaga/xenly.git
 $ cd xenly
 ```
 
