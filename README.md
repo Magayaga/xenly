@@ -29,6 +29,7 @@ The **Xenly** programming language supports **macOS**, **Windows**, and **Linux*
 | Apple macOS 🍎       | Yes                   | Yes                        | Yes                                                 | - |
 | Windows Subsystem for Linux 🪟 | Yes         | Yes                        | Yes                                                 | - |
 | Windows 🪟           | No (Not available)    | No (Not available)         | Yes                                                 | - |
+| **Programming language** | C | C | Go | - |
 
 ## How Much Faster?
 Here are times to run `xenly`, `xenlyc`, and `xvm` on some Xenly's example codes on GitHub of varying sizes:
