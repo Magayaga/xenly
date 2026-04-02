@@ -1,0 +1,7 @@
+# Handle line endings automatically for files detected as text
+# and leave binary files untouched
+* text=auto
+
+# Explicitly set EOL for specific file types if needed
+*.sh text eol=lf
+*.bat text eol=crlf
