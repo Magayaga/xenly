@@ -4,6 +4,13 @@
 
 It is written in **Go** programming language.
 
+| Operating systems               | `XVM` was working (`xenlybyc` and `xenlyrun`) |
+|:-------------------------------:|:----------------------------------------:|
+| **Windows**                     | Yes ✔️                                   |
+| **Windows Subsystem for Linux** | Yes ✔️                                   |
+| **macOS**                       | Yes ✔️                                   |
+| **Linux**                       | Yes ✔️                                   |
+
 ## Filename extensions
 
 * `.xe` and `.xenly` (**Xenly source file**) — It is the source file for the Xenly programming language.
