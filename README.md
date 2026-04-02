@@ -133,6 +133,7 @@ The Xenly source code is organized as follows:
 |          Directory           |                           Contents                          |
 |:----------------------------:|:-----------------------------------------------------------:|
 | `assets/`                    | Types of files for the Xenly programming language           |
+| `bituin/`                    | Bituin's source code for the Xenly programming language     |
 | `doc/`                       | Documentation for the Xenly programming language            |
 | `docs/`                      | Official website for the Xenly programming language         |
 | `examples/`                  | Example code for the Xenly programming language             |
@@ -149,15 +150,3 @@ If you are new to the **Xenly**, you should check out these additional resources
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
 
 Licensed under the [MIT](LICENSE) license.
-
-
-
-
-
-
-
-
-
-
-
-
