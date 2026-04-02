@@ -130,7 +130,8 @@ RT_LIB = libxly_rt.a
 #      They were compiled into the interpreter but missing from libxly_rt.a,
 #      causing linker errors for anyone who links against the static runtime.
 RT_OBJS = src/xly_rt.o src/modules_rt.o src/unicode.o \
-          src/multiproc_rt.o src/multiproc_builtins_rt.o
+          src/multiproc_rt.o src/multiproc_builtins_rt.o \
+          src/xly_http.o src/xenly_linker.o
 
 # ─── Build Targets ───────────────────────────────────────────────────────────
 
