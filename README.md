@@ -23,7 +23,7 @@ Xenly programming language should be command-line interfaces, web servers, and d
 ## Operating system supports
 The **Xenly** programming language supports **macOS**, **Windows**, and **Linux** operating systems, and **Windows Subsystem for Linux**.
 
-|   Operating systems  | Interpreter (`xenly`) | Native compiler (`xenlyc`) | Xenly Virtual Machine (`xenlybyc` and `xenlyrun`)   | Build automation system tool and test runner (`bituin`) |
+|   Operating systems  | Interpreter (`xenly`) | Native compiler (`xenlyc`) | Xenly Virtual Machine (`xenlybyc` and `xenlyrun`)   | Build automation system tool, test runner, and bundler (`bituin`) |
 |:--------------------:|:---------------------:|:--------------------------:|:---------------------------------------------------:|:-------------------------------------------------------:|
 | Linux 🐧             | Yes                   | Yes                        | Yes                                                 | -                                                       |
 | Apple macOS 🍎       | Yes                   | Yes                        | Yes                                                 | -                                                       |
