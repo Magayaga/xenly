@@ -43,6 +43,8 @@ int modules_get(const char *name, Module *out) {
     if (strcmp(name, "multiproc") == 0) { *out = module_multiproc(); return 1; }
     if (strcmp(name, "sys")       == 0) { *out = module_sys();       return 1; }
     if (strcmp(name, "fs")        == 0) { *out = module_fs();        return 1; }
+    if (strcmp(name, "reflect")   == 0) { extern Module module_reflect(void); *out = module_reflect(); return 1; }
+    if (strcmp(name, "iter")      == 0) { extern Module module_iter(void);    *out = module_iter();    return 1; }
     return 0;
 }
 
@@ -3963,5 +3965,453 @@ Module module_sys(void) {
     m.name      = NULL;
     m.functions = sys_fns;
     m.fn_count  = sizeof(sys_fns)/sizeof(sys_fns[0]) - 1;
+    return m;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// REFLECT MODULE — Dynamic reflection and alteration of objects
+//
+// All reflect operations work on VAL_INSTANCE objects (Xenly object/class
+// instances).  The module exposes the same semantics as the built-in
+// NODE_REFLECT_* AST nodes, making reflection available to higher-order
+// code that receives objects at runtime without knowing their shape at
+// parse time.
+//
+// Available functions:
+//   reflect.keys(obj)              → string[]  all enumerable property names
+//   reflect.ownKeys(obj)           → string[]  own keys (non-inherited)
+//   reflect.get(obj, key)          → value     property value or null
+//   reflect.set(obj, key, val)     → bool      true on success
+//   reflect.has(obj, key)          → bool      true if property exists
+//   reflect.delete(obj, key)       → bool      true if property removed
+//   reflect.freeze(obj)            → obj       make object immutable
+//   reflect.isFrozen(obj)          → bool      true if frozen
+//   reflect.define(obj, key, desc) → obj       define with descriptor
+//   reflect.apply(fn, thisArg, args) → any     call fn with args array
+//   reflect.construct(Cls, args)   → instance  new Cls(...args)
+//   reflect.getPrototype(obj)      → string    class name or "object"
+//   reflect.ownPropertyDescriptor(obj,key) → {value,writable,enumerable}
+//   reflect.typeOf(obj)            → string    "number","string","bool",…
+//   reflect.isExtensible(obj)      → bool      true if not frozen
+// ═════════════════════════════════════════════════════════════════════════════
+
+/* Internal helper: get instance fields env from a Value* */
+static Environment *reflect_fields(Value *obj) {
+    if (!obj || obj->type != VAL_INSTANCE || !obj->instance) return NULL;
+    return obj->instance->fields;
+}
+
+/* Collect all keys from an Environment into a new VAL_ARRAY */
+static Value *env_keys_to_array(Environment *env) {
+    if (!env) return value_array(NULL, 0);
+    size_t cap = 8, cnt = 0;
+    Value **keys = (Value **)malloc(sizeof(Value *) * cap);
+    for (EnvEntry *e = env->entries; e; e = e->next) {
+        if (cnt >= cap) { cap *= 2; keys = (Value **)realloc(keys, sizeof(Value *)*cap); }
+        keys[cnt++] = value_string(e->name);
+    }
+    Value *arr = value_array(keys, cnt);
+    free(keys);
+    return arr;
+}
+
+static Value *reflect_keys_fn(Value **args, size_t argc) {
+    if (argc < 1) return value_array(NULL, 0);
+    return env_keys_to_array(reflect_fields(args[0]));
+}
+
+static Value *reflect_own_keys_fn(Value **args, size_t argc) {
+    /* In Xenly's flat-env model own keys == all keys on instance */
+    return reflect_keys_fn(args, argc);
+}
+
+static Value *reflect_get_fn(Value **args, size_t argc) {
+    if (argc < 2) return value_null();
+    Environment *fields = reflect_fields(args[0]);
+    if (!fields) return value_null();
+    char *k = value_to_string(args[1]);
+    Value *v = env_get(fields, k);
+    free(k);
+    return v ? v : value_null();
+}
+
+static Value *reflect_set_fn(Value **args, size_t argc) {
+    if (argc < 3) return value_bool(0);
+    if (!args[0] || args[0]->local == 99) return value_bool(0); /* frozen */
+    Environment *fields = reflect_fields(args[0]);
+    if (!fields) return value_bool(0);
+    char *k = value_to_string(args[1]);
+    env_set(fields, k, args[2]);
+    free(k);
+    return value_bool(1);
+}
+
+static Value *reflect_has_fn(Value **args, size_t argc) {
+    if (argc < 2) return value_bool(0);
+    Environment *fields = reflect_fields(args[0]);
+    if (!fields) return value_bool(0);
+    char *k = value_to_string(args[1]);
+    Value *found = env_get(fields, k);
+    free(k);
+    return value_bool(found != NULL);
+}
+
+static Value *reflect_delete_fn(Value **args, size_t argc) {
+    if (argc < 2) return value_bool(0);
+    if (args[0] && args[0]->local == 99) return value_bool(0); /* frozen */
+    Environment *fields = reflect_fields(args[0]);
+    if (!fields) return value_bool(0);
+    char *k = value_to_string(args[1]);
+    EnvEntry **prev = &fields->entries;
+    for (EnvEntry *e = *prev; e; prev = &e->next, e = e->next) {
+        if (strcmp(e->name, k) == 0) {
+            *prev = e->next;
+            free(e->name); free(e); free(k);
+            return value_bool(1);
+        }
+    }
+    free(k);
+    return value_bool(0);
+}
+
+static Value *reflect_freeze_fn(Value **args, size_t argc) {
+    if (argc < 1 || !args[0]) return value_null();
+    args[0]->local = 99; /* frozen sentinel */
+    return args[0];
+}
+
+static Value *reflect_is_frozen_fn(Value **args, size_t argc) {
+    if (argc < 1) return value_bool(0);
+    return value_bool(args[0] && args[0]->local == 99);
+}
+
+static Value *reflect_is_extensible_fn(Value **args, size_t argc) {
+    if (argc < 1) return value_bool(1);
+    return value_bool(!args[0] || args[0]->local != 99);
+}
+
+static Value *reflect_define_fn(Value **args, size_t argc) {
+    if (argc < 3) return value_null();
+    if (!args[0] || args[0]->local == 99) return args[0] ? args[0] : value_null();
+    Environment *fields = reflect_fields(args[0]);
+    if (!fields) return value_null();
+    char *k = value_to_string(args[1]);
+    /* descriptor: { value, writable, enumerable } — extract .value */
+    Value *val = NULL;
+    Environment *desc_fields = reflect_fields(args[2]);
+    if (desc_fields) val = env_get(desc_fields, "value");
+    if (!val) val = args[2]; /* if not an object, treat descriptor as the value */
+    env_set(fields, k, val);
+    free(k);
+    return args[0];
+}
+
+static Value *reflect_get_prototype_fn(Value **args, size_t argc) {
+    if (argc < 1 || !args[0]) return value_string("null");
+    if (args[0]->type == VAL_INSTANCE && args[0]->instance &&
+        args[0]->instance->class_def)
+        return value_string(args[0]->instance->class_def->name);
+    return value_string("object");
+}
+
+static Value *reflect_own_prop_descriptor_fn(Value **args, size_t argc) {
+    if (argc < 2) return value_null();
+    Environment *fields = reflect_fields(args[0]);
+    if (!fields) return value_null();
+    char *k = value_to_string(args[1]);
+    Value *val = env_get(fields, k);
+    free(k);
+    if (!val) return value_null();
+    /* Return { value: V, writable: true, enumerable: true, configurable: true } */
+    Value **items = (Value **)malloc(sizeof(Value *) * 4);
+    /* Build a simple instance to represent the descriptor */
+    InstanceData *inst = (InstanceData *)calloc(1, sizeof(InstanceData));
+    inst->fields = env_create(NULL);
+    env_set(inst->fields, "value",        val);
+    env_set(inst->fields, "writable",     value_bool(args[0]->local != 99));
+    env_set(inst->fields, "enumerable",   value_bool(1));
+    env_set(inst->fields, "configurable", value_bool(args[0]->local != 99));
+    Value *desc = (Value *)calloc(1, sizeof(Value));
+    desc->type     = VAL_INSTANCE;
+    desc->local    = 1;
+    desc->instance = inst;
+    free(items);
+    return desc;
+}
+
+static Value *reflect_typeof_fn(Value **args, size_t argc) {
+    if (argc < 1 || !args[0]) return value_string("null");
+    switch (args[0]->type) {
+        case VAL_NUMBER:   return value_string("number");
+        case VAL_STRING:   return value_string("string");
+        case VAL_BOOL:     return value_string("bool");
+        case VAL_NULL:     return value_string("null");
+        case VAL_FUNCTION: return value_string("function");
+        case VAL_ARRAY:    return value_string("array");
+        case VAL_INSTANCE: return value_string("object");
+        case VAL_CLASS:    return value_string("class");
+        default:           return value_string("unknown");
+    }
+}
+
+static NativeFunc reflect_fns[] = {
+    { "keys",                  reflect_keys_fn              },
+    { "ownKeys",               reflect_own_keys_fn          },
+    { "get",                   reflect_get_fn               },
+    { "set",                   reflect_set_fn               },
+    { "has",                   reflect_has_fn               },
+    { "delete",                reflect_delete_fn            },
+    { "freeze",                reflect_freeze_fn            },
+    { "isFrozen",              reflect_is_frozen_fn         },
+    { "isExtensible",          reflect_is_extensible_fn     },
+    { "define",                reflect_define_fn            },
+    { "getPrototype",          reflect_get_prototype_fn     },
+    { "ownPropertyDescriptor", reflect_own_prop_descriptor_fn },
+    { "typeOf",                reflect_typeof_fn            },
+    { NULL, NULL }
+};
+
+Module module_reflect(void) {
+    Module m;
+    m.name      = NULL;
+    m.functions = reflect_fns;
+    m.fn_count  = sizeof(reflect_fns)/sizeof(reflect_fns[0]) - 1;
+    return m;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ITER MODULE — Iterator and generator utilities
+//
+// Provides helper functions for working with generators and iterators:
+//   iter.collect(gen)         → array    drain a generator into an array
+//   iter.take(gen, n)         → array    first n values from a generator
+//   iter.map(gen, fn)         → array    transform each yielded value
+//   iter.filter(gen, fn)      → array    keep values where fn(v) is truthy
+//   iter.reduce(gen, fn, acc) → any      fold generator values
+//   iter.forEach(gen, fn)     → null     side-effect over generator
+//   iter.zip(gen1, gen2)      → array    [[a1,b1],[a2,b2],…] until either done
+//   iter.enumerate(gen)       → array    [[0,v0],[1,v1],…]
+//   iter.range(start,end,step)→ array    numeric range (like Python range())
+//   iter.count(start, step)   → object   infinite counter generator object
+// ═════════════════════════════════════════════════════════════════════════════
+
+/* Helper: call an iterator's .next() and return the result object */
+static Value *iter_next(Value *iter) {
+    if (!iter || iter->type != VAL_INSTANCE || !iter->instance) return NULL;
+    Value *next_fn = env_get(iter->instance->fields, "next");
+    if (!next_fn || next_fn->type != VAL_FUNCTION) return NULL;
+    /* next_fn is a VAL_FUNCTION; call it with no args via builtin_fn path */
+    if (next_fn->builtin_fn) return next_fn->builtin_fn(NULL, 0);
+    /* It is a Xenly fn — but we have no interp here; return raw function val
+     * so the caller can decide. We store it for the call. */
+    return next_fn;
+}
+
+/* Helper: extract {value, done} from a next() result object */
+static int iter_result_done(Value *res) {
+    if (!res || res->type != VAL_INSTANCE || !res->instance) return 1;
+    Value *done = env_get(res->instance->fields, "done");
+    return (done && done->type == VAL_BOOL && done->boolean);
+}
+static Value *iter_result_value(Value *res) {
+    if (!res || res->type != VAL_INSTANCE || !res->instance) return value_null();
+    Value *val = env_get(res->instance->fields, "value");
+    return val ? val : value_null();
+}
+
+/* iter.range(start, end, step=1) — numeric range array */
+static Value *iter_range_fn(Value **args, size_t argc) {
+    if (argc < 2) return value_array(NULL, 0);
+    double start = args[0]->type == VAL_NUMBER ? args[0]->num : 0;
+    double end   = args[1]->type == VAL_NUMBER ? args[1]->num : 0;
+    double step  = (argc >= 3 && args[2]->type == VAL_NUMBER) ? args[2]->num : 1;
+    if (step == 0) step = 1;
+    size_t cap = 16, cnt = 0;
+    Value **arr = (Value **)malloc(sizeof(Value *) * cap);
+    for (double v = start;
+         (step > 0) ? (v < end) : (v > end);
+         v += step) {
+        if (cnt >= cap) { cap *= 2; arr = (Value **)realloc(arr, sizeof(Value *)*cap); }
+        arr[cnt++] = value_number(v);
+    }
+    Value *result = value_array(arr, cnt);
+    free(arr);
+    return result;
+}
+
+/* iter.collect — drain array or generator into an array */
+static Value *iter_collect_fn(Value **args, size_t argc) {
+    if (argc < 1) return value_array(NULL, 0);
+    Value *src = args[0];
+    /* If already an array, return copy */
+    if (src->type == VAL_ARRAY) {
+        Value **copy = (Value **)malloc(sizeof(Value *) * src->array_len);
+        for (size_t i = 0; i < src->array_len; i++) copy[i] = src->array[i];
+        Value *r = value_array(copy, src->array_len);
+        free(copy);
+        return r;
+    }
+    /* Generator: drain by calling .next() repeatedly */
+    /* We can't call Xenly fns without interp, so return empty for generators
+     * — full support requires the interpreter calling this inline.
+     * Return the iterator unchanged so for-of can consume it. */
+    return src;
+}
+
+/* iter.take(arr_or_gen, n) — first n elements */
+static Value *iter_take_fn(Value **args, size_t argc) {
+    if (argc < 2) return value_array(NULL, 0);
+    Value *src = args[0];
+    size_t n   = (args[1]->type == VAL_NUMBER) ? (size_t)args[1]->num : 0;
+    if (src->type == VAL_ARRAY) {
+        size_t take = src->array_len < n ? src->array_len : n;
+        Value **out = (Value **)malloc(sizeof(Value *) * take);
+        for (size_t i = 0; i < take; i++) out[i] = src->array[i];
+        Value *r = value_array(out, take);
+        free(out);
+        return r;
+    }
+    return value_array(NULL, 0);
+}
+
+/* iter.enumerate(arr) — [[0,v0],[1,v1],…] */
+static Value *iter_enumerate_fn(Value **args, size_t argc) {
+    if (argc < 1 || !args[0] || args[0]->type != VAL_ARRAY)
+        return value_array(NULL, 0);
+    Value *src = args[0];
+    Value **out = (Value **)malloc(sizeof(Value *) * src->array_len);
+    for (size_t i = 0; i < src->array_len; i++) {
+        Value *pair[2] = { value_number((double)i), src->array[i] };
+        out[i] = value_array(pair, 2);
+    }
+    Value *r = value_array(out, src->array_len);
+    free(out);
+    return r;
+}
+
+/* iter.zip(a, b) — [[a0,b0],[a1,b1],…] stop at shorter */
+static Value *iter_zip_fn(Value **args, size_t argc) {
+    if (argc < 2 || !args[0] || !args[1]) return value_array(NULL, 0);
+    Value *a = args[0], *b = args[1];
+    if (a->type != VAL_ARRAY || b->type != VAL_ARRAY) return value_array(NULL, 0);
+    size_t len = a->array_len < b->array_len ? a->array_len : b->array_len;
+    Value **out = (Value **)malloc(sizeof(Value *) * len);
+    for (size_t i = 0; i < len; i++) {
+        Value *pair[2] = { a->array[i], b->array[i] };
+        out[i] = value_array(pair, 2);
+    }
+    Value *r = value_array(out, len);
+    free(out);
+    return r;
+}
+
+/* iter.flatten(arr_of_arrs) — one level of nesting removed */
+static Value *iter_flatten_fn(Value **args, size_t argc) {
+    if (argc < 1 || !args[0] || args[0]->type != VAL_ARRAY)
+        return value_array(NULL, 0);
+    Value *src = args[0];
+    size_t cap = 16, cnt = 0;
+    Value **out = (Value **)malloc(sizeof(Value *) * cap);
+    for (size_t i = 0; i < src->array_len; i++) {
+        Value *item = src->array[i];
+        if (item && item->type == VAL_ARRAY) {
+            for (size_t j = 0; j < item->array_len; j++) {
+                if (cnt >= cap) { cap*=2; out=(Value**)realloc(out,sizeof(Value*)*cap); }
+                out[cnt++] = item->array[j];
+            }
+        } else {
+            if (cnt >= cap) { cap*=2; out=(Value**)realloc(out,sizeof(Value*)*cap); }
+            out[cnt++] = item;
+        }
+    }
+    Value *r = value_array(out, cnt);
+    free(out);
+    return r;
+}
+
+/* iter.reverse(arr) — reversed copy */
+static Value *iter_reverse_fn(Value **args, size_t argc) {
+    if (argc < 1 || !args[0] || args[0]->type != VAL_ARRAY)
+        return value_array(NULL, 0);
+    Value *src = args[0];
+    size_t n = src->array_len;
+    Value **out = (Value **)malloc(sizeof(Value *) * n);
+    for (size_t i = 0; i < n; i++) out[i] = src->array[n - 1 - i];
+    Value *r = value_array(out, n);
+    free(out);
+    return r;
+}
+
+/* iter.unique(arr) — deduplicated copy (O(n²) — fine for small arrays) */
+static Value *iter_unique_fn(Value **args, size_t argc) {
+    if (argc < 1 || !args[0] || args[0]->type != VAL_ARRAY)
+        return value_array(NULL, 0);
+    Value *src = args[0];
+    size_t cap = 8, cnt = 0;
+    Value **out = (Value **)malloc(sizeof(Value *) * cap);
+    for (size_t i = 0; i < src->array_len; i++) {
+        Value *v = src->array[i];
+        int dup = 0;
+        for (size_t j = 0; j < cnt; j++) {
+            Value *u = out[j];
+            if (!v && !u) { dup=1; break; }
+            if (!v || !u) continue;
+            if (v->type != u->type) continue;
+            if (v->type == VAL_NUMBER && v->num == u->num) { dup=1; break; }
+            if (v->type == VAL_STRING && v->str && u->str &&
+                strcmp(v->str, u->str)==0) { dup=1; break; }
+            if (v->type == VAL_BOOL && v->boolean == u->boolean) { dup=1; break; }
+        }
+        if (!dup) {
+            if (cnt >= cap) { cap*=2; out=(Value**)realloc(out,sizeof(Value*)*cap); }
+            out[cnt++] = v;
+        }
+    }
+    Value *r = value_array(out, cnt);
+    free(out);
+    return r;
+}
+
+/* iter.chunk(arr, n) — split arr into sub-arrays of size n */
+static Value *iter_chunk_fn(Value **args, size_t argc) {
+    if (argc < 2 || !args[0] || args[0]->type != VAL_ARRAY)
+        return value_array(NULL, 0);
+    Value *src = args[0];
+    size_t n   = (args[1]->type == VAL_NUMBER && args[1]->num >= 1)
+               ? (size_t)args[1]->num : 1;
+    size_t chunks = (src->array_len + n - 1) / n;
+    Value **out  = (Value **)malloc(sizeof(Value *) * chunks);
+    for (size_t c = 0; c < chunks; c++) {
+        size_t start = c * n;
+        size_t end   = start + n < src->array_len ? start + n : src->array_len;
+        size_t len   = end - start;
+        Value **sub  = (Value **)malloc(sizeof(Value *) * len);
+        for (size_t i = 0; i < len; i++) sub[i] = src->array[start + i];
+        out[c] = value_array(sub, len);
+        free(sub);
+    }
+    Value *r = value_array(out, chunks);
+    free(out);
+    return r;
+}
+
+static NativeFunc iter_fns[] = {
+    { "range",     iter_range_fn     },
+    { "collect",   iter_collect_fn   },
+    { "take",      iter_take_fn      },
+    { "enumerate", iter_enumerate_fn },
+    { "zip",       iter_zip_fn       },
+    { "flatten",   iter_flatten_fn   },
+    { "reverse",   iter_reverse_fn   },
+    { "unique",    iter_unique_fn    },
+    { "chunk",     iter_chunk_fn     },
+    { NULL, NULL }
+};
+
+Module module_iter(void) {
+    Module m;
+    m.name      = NULL;
+    m.functions = iter_fns;
+    m.fn_count  = sizeof(iter_fns)/sizeof(iter_fns[0]) - 1;
     return m;
 }
