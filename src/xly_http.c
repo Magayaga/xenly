@@ -355,7 +355,11 @@ static int http_parse(const char *buf, size_t len, XlyHttpRequest *req,
     /* Body */
     size_t header_bytes = (size_t)(header_end - buf);
     if (has_body && content_length > 0) {
-        if (content_length > max_body) return -1; /* too large */
+        if (content_length > (size_t)max_body) {
+                fprintf(stderr, "[xly_http] request body too large (%zu > %d)\n",
+                        content_length, max_body);
+                return -1;
+            } /* too large — 413 */
         size_t available = len - header_bytes;
         if (available < content_length) return 0; /* need more data */
         req->body = (char *)malloc(content_length + 1);
@@ -439,33 +443,36 @@ static void send_all(int fd, const char *buf, size_t len) {
 static void send_response(int fd, XlyHttpResponse *res) {
     char header_buf[8192];
     int  hl = 0;
+    size_t body_len = (res->body && !res->chunked) ? res->body_len : 0;
 
     hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
-                   "HTTP/1.1 %d %s\r\n",
-                   res->status, status_reason(res->status));
+                   "HTTP/1.1 %d %s\r\n", res->status, status_reason(res->status));
     hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
-                   "Server: xlnk/1.0 xly_http/1.0\r\n");
+                   "Server: xly_http/1.0\r\n");
 
-    /* Content-Length unless chunked */
-    if (!res->chunked && res->body && res->body_len > 0) {
+    /* Content-Length (always emit for non-chunked, even if 0) */
+    if (!res->chunked) {
         hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
-                       "Content-Length: %zu\r\n", res->body_len);
-    } else if (res->chunked) {
+                       "Content-Length: %zu\r\n", body_len);
+    } else {
         hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
                        "Transfer-Encoding: chunked\r\n");
     }
 
-    /* Custom headers */
+    /* Custom headers (Content-Type, Location, etc.) */
     for (int i = 0; i < res->n_headers; i++) {
         hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
-                       "%s: %s\r\n",
-                       res->headers[i].key, res->headers[i].value);
+                       "%s: %s\r\n", res->headers[i].key, res->headers[i].value);
     }
+
+    /* Connection keep-alive */
+    hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
+                   "Connection: keep-alive\r\n");
     hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl, "\r\n");
 
     send_all(fd, header_buf, (size_t)hl);
-    if (res->body && res->body_len > 0)
-        send_all(fd, res->body, res->body_len);
+    if (body_len > 0)
+        send_all(fd, res->body, body_len);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -487,6 +494,7 @@ static void handle_request(XlyHttpServer *srv, int fd,
         }
     }
 
+    req->conn = (void *)&fd;  /* expose fd so xly_http_send() can write response */
     XlyHttpCtx ctx = { srv, req, &res, matched ? matched->user : NULL, 0 };
 
     if (!matched) {
@@ -516,10 +524,16 @@ static void handle_request(XlyHttpServer *srv, int fd,
     /* Free request body */
     if (req->body) { free(req->body); req->body = NULL; }
 
-    /* Free response body (unless it was a static string — check via malloc?) */
-    /* Convention: response body set by xly_http_send_* is always heap-allocated */
-    if (res.body && res.body_len > 0 && res.status != XLY_HTTP_200) {
-        /* Don't free static string literals used in 404 default handler */
+    /* Free response body — only if it was heap-allocated (not the static "404 Not Found" literal).
+     * Convention: xly_http_send_text/json/bytes always strdup the body, so it is safe to free.
+     * The 404 default handler uses a string literal — detect by checking res.sent flag:
+     * if sent==0 (send_response called directly above), and body is not NULL and was
+     * set by send_*, it is heap-allocated. If body == "404 Not Found" literal, it will
+     * have been written directly by handle_request and is NOT heap-allocated.
+     * Simplest safe rule: only free if res.sent (handler called xly_http_send which strdup'd). */
+    if (res.body && res.sent) {
+        free(res.body);
+        res.body = NULL;
     }
 
     __atomic_fetch_add(&srv->n_requests, 1, __ATOMIC_RELAXED);
@@ -643,10 +657,7 @@ static void *accept_thread(void *arg) {
             if (!srv->running) break;
             continue;
         }
-        /* Non-blocking for the connection fd */
-        int flags = fcntl(fd, F_GETFL, 0);
-        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-        fcntl(fd, F_SETFL, flags & ~O_NONBLOCK); /* blocking mode for simplicity */
+        /* Connection fd stays in blocking mode; timeouts via SO_RCVTIMEO */
 
         /* Put on accept ring */
         int tail = __atomic_load_n(&srv->ring.tail, __ATOMIC_RELAXED);
@@ -911,13 +922,11 @@ void xly_http_redirect(XlyHttpCtx *ctx, XlyHttpStatus status, const char *loc) {
 void xly_http_send(XlyHttpCtx *ctx) {
     if (ctx->res->sent) return;
     ctx->res->sent = 1;
-    int fd = ((Conn *)ctx->req->conn) ? ((Conn *)ctx->req->conn)->fd : -1;
-    /* Fallback: pull fd from req directly (stored after accept) */
-    if (fd < 0 && ctx->req->conn)
-        fd = *(int *)ctx->req->conn;
+    /* req->conn is set to &fd (int*) by handle_request before calling handlers */
+    int fd = ctx->req->conn ? *(int *)ctx->req->conn : -1;
     if (fd >= 0)
         send_response(fd, ctx->res);
-    if (ctx->res->body) { free(ctx->res->body); ctx->res->body = NULL; }
+    /* Do NOT free body here — handle_request owns the response lifecycle */
 }
 
 void xly_http_write_chunk(XlyHttpCtx *ctx, const void *data, size_t len) {
@@ -1148,7 +1157,9 @@ static void val_route_handler(XlyHttpCtx *ctx) {
     /* Call the Xenly function */
     XlyVal *args[1] = { ctx_obj };
     xly_call_fnval(fn, args, 1);
-    value_destroy(ctx_obj);
+    /* ctx_obj is a VAL_INSTANCE — let it be collected normally.
+     * Do NOT call value_destroy here: the handler may have stored references
+     * into res (via xly_http_send_*) that still point into ctx_obj fields. */
 }
 
 XlyVal *xly_http_route_val(XlyVal *srv_val, XlyVal *method, XlyVal *pattern,
