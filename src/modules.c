@@ -43,6 +43,7 @@ int modules_get(const char *name, Module *out) {
     if (strcmp(name, "multiproc") == 0) { *out = module_multiproc(); return 1; }
     if (strcmp(name, "sys")       == 0) { *out = module_sys();       return 1; }
     if (strcmp(name, "fs")        == 0) { *out = module_fs();        return 1; }
+    if (strcmp(name, "http")      == 0) { extern Module module_http(void);    *out = module_http();    return 1; }
     if (strcmp(name, "reflect")   == 0) { extern Module module_reflect(void); *out = module_reflect(); return 1; }
     if (strcmp(name, "iter")      == 0) { extern Module module_iter(void);    *out = module_iter();    return 1; }
     return 0;
@@ -4413,5 +4414,146 @@ Module module_iter(void) {
     m.name      = NULL;
     m.functions = iter_fns;
     m.fn_count  = sizeof(iter_fns)/sizeof(iter_fns[0]) - 1;
+    return m;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// HTTP MODULE  — wraps xly_http.c for use via  import "http"
+//
+// The http module is intentionally NOT auto-imported: starting a server
+// thread in every program would be wrong.  Users must explicitly:
+//
+//   import "http"
+//   const srv = http.create()
+//   http.get(srv, "/", fn(ctx) { http.send_text(ctx, 200, "Hello") })
+//   http.listen(srv, "0.0.0.0", 8080)
+//   http.run(srv)
+//
+// All XlyVal* wrappers delegate to the xly_http_*_val functions defined in
+// xly_http.c which are already compiled into libxly_rt.a.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/* Forward-declare all xly_http_*_val functions rather than including
+ * xly_http.h (which pulls in xly_rt.h which redefines Value types). */
+extern Value *xly_http_create_val    (Value *cfg);
+extern Value *xly_http_listen_val    (Value *srv, Value *host, Value *port);
+extern Value *xly_http_run_val       (Value *srv);
+extern Value *xly_http_run_async_val (Value *srv);
+extern Value *xly_http_stop_val      (Value *srv);
+extern Value *xly_http_route_val     (Value *srv, Value *method, Value *pattern, Value *handler, Value *user);
+extern Value *xly_http_get_val       (Value *srv, Value *pattern, Value *handler);
+extern Value *xly_http_post_val      (Value *srv, Value *pattern, Value *handler);
+extern Value *xly_http_put_val       (Value *srv, Value *pattern, Value *handler);
+extern Value *xly_http_delete_val    (Value *srv, Value *pattern, Value *handler);
+extern Value *xly_http_send_text_val (Value *ctx, Value *status, Value *body);
+extern Value *xly_http_send_json_val (Value *ctx, Value *status, Value *json);
+extern Value *xly_http_req_header_val(Value *ctx, Value *name);
+extern Value *xly_http_param_val     (Value *ctx, Value *name);
+extern Value *xly_http_query_val     (Value *ctx, Value *name);
+extern Value *xly_http_to_json_val   (Value *val);
+extern Value *xly_http_from_json_val (Value *str);
+
+/* Module function wrappers — bridge NativeFunc (Value**,size_t) to xly_http_*_val */
+
+static Value *http_create(Value **args, size_t argc) {
+    return xly_http_create_val(argc > 0 ? args[0] : NULL);
+}
+static Value *http_listen(Value **args, size_t argc) {
+    if (argc < 3) return value_bool(0);
+    return xly_http_listen_val(args[0], args[1], args[2]);
+}
+static Value *http_run(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    return xly_http_run_val(args[0]);
+}
+static Value *http_run_async(Value **args, size_t argc) {
+    if (argc < 1) return value_bool(0);
+    return xly_http_run_async_val(args[0]);
+}
+static Value *http_stop(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    return xly_http_stop_val(args[0]);
+}
+static Value *http_route(Value **args, size_t argc) {
+    if (argc < 4) return value_bool(0);
+    return xly_http_route_val(args[0], args[1], args[2], args[3],
+                               argc > 4 ? args[4] : NULL);
+}
+static Value *http_get(Value **args, size_t argc) {
+    if (argc < 3) return value_bool(0);
+    return xly_http_get_val(args[0], args[1], args[2]);
+}
+static Value *http_post(Value **args, size_t argc) {
+    if (argc < 3) return value_bool(0);
+    return xly_http_post_val(args[0], args[1], args[2]);
+}
+static Value *http_put(Value **args, size_t argc) {
+    if (argc < 3) return value_bool(0);
+    return xly_http_put_val(args[0], args[1], args[2]);
+}
+static Value *http_delete(Value **args, size_t argc) {
+    if (argc < 3) return value_bool(0);
+    return xly_http_delete_val(args[0], args[1], args[2]);
+}
+static Value *http_send_text(Value **args, size_t argc) {
+    if (argc < 3) return value_null();
+    return xly_http_send_text_val(args[0], args[1], args[2]);
+}
+static Value *http_send_json(Value **args, size_t argc) {
+    if (argc < 3) return value_null();
+    return xly_http_send_json_val(args[0], args[1], args[2]);
+}
+static Value *http_param(Value **args, size_t argc) {
+    if (argc < 2) return value_null();
+    return xly_http_param_val(args[0], args[1]);
+}
+static Value *http_query(Value **args, size_t argc) {
+    if (argc < 2) return value_null();
+    return xly_http_query_val(args[0], args[1]);
+}
+static Value *http_header(Value **args, size_t argc) {
+    if (argc < 2) return value_null();
+    return xly_http_req_header_val(args[0], args[1]);
+}
+static Value *http_to_json(Value **args, size_t argc) {
+    if (argc < 1) return value_string("null");
+    return xly_http_to_json_val(args[0]);
+}
+static Value *http_from_json(Value **args, size_t argc) {
+    if (argc < 1) return value_null();
+    return xly_http_from_json_val(args[0]);
+}
+static Value *http_version(Value **args, size_t argc) {
+    (void)args; (void)argc;
+    return value_string("xly_http/1.0.0");
+}
+
+static NativeFunc http_fns[] = {
+    { "create",     http_create     },
+    { "listen",     http_listen     },
+    { "run",        http_run        },
+    { "runAsync",   http_run_async  },
+    { "stop",       http_stop       },
+    { "route",      http_route      },
+    { "get",        http_get        },
+    { "post",       http_post       },
+    { "put",        http_put        },
+    { "delete",     http_delete     },
+    { "sendText",   http_send_text  },
+    { "sendJson",   http_send_json  },
+    { "param",      http_param      },
+    { "query",      http_query      },
+    { "header",     http_header     },
+    { "toJson",     http_to_json    },
+    { "fromJson",   http_from_json  },
+    { "version",    http_version    },
+    { NULL, NULL }
+};
+
+Module module_http(void) {
+    Module m;
+    m.name      = NULL;
+    m.functions = http_fns;
+    m.fn_count  = sizeof(http_fns)/sizeof(http_fns[0]) - 1;
     return m;
 }
