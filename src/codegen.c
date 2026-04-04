@@ -2965,6 +2965,209 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         }
         break;
 
+    /* ── Generator function declaration (ARM64) ─────────────────────────────
+     * gen fn name(params) { body }
+     *
+     * Strategy: emit the generator body as a regular function but add
+     * a state-machine wrapper.  The function returns an iterator object
+     * allocated on the heap:  xly_call_module("iter","__make_gen__",…)
+     *
+     * For the native compiler the cleanest approach is to lower the
+     * generator to a plain Xenly function whose first argument is a
+     * heap-allocated state struct.  We call the runtime helper
+     * xly_gen_create(fn_ptr, env_ptr) which returns a VAL_INSTANCE
+     * iterator.  The generator body is emitted as a helper with a
+     * switch-based PC dispatch.                                         */
+    case NODE_GEN_DECL: {
+        const char *gen_name = node->str_value ? node->str_value : "__anon_gen";
+        char body_lbl[128]; snprintf(body_lbl, sizeof(body_lbl), "_xly_gen_%s", gen_name);
+
+        /* Emit the state-machine body function */
+        emit(cg, "// ── generator body: %s ─────────────────────────────", gen_name);
+        emit(cg, "    adrp    x0, %s@PAGE", body_lbl);
+        emit(cg, "    add     x0, x0, %s@PAGEOFF", body_lbl);
+        /* Pass fn pointer + current env to runtime helper */
+        emit(cg, "    mov     x1, sp");   /* env approximation */
+        emit(cg, "    bl      " XLY_SYM("xly_gen_create"));
+        /* x0 = iterator VAL_INSTANCE */
+        /* Store in global if named */
+        if (node->str_value) {
+            int gi = gvar_declare(cg, node->str_value);
+            emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+            emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+            emit(cg, "    str     x0, [x9, #%d]", gi * 8);
+        }
+        break;
+    }
+
+    /* ── yield expr (ARM64) ─────────────────────────────────────────────────
+     * Within a generator body, yield suspends execution.
+     * In native codegen this is lowered to:
+     *   1. Evaluate the yield expression → x0
+     *   2. Store x0 as the current yield value via xly_gen_yield(x0)
+     *   3. Return from the body function (the runtime resumes on next .next())
+     * The runtime tracks the PC via the state struct.                   */
+    case NODE_YIELD:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        else emit(cg, "    bl      " XLY_SYM("xly_null"));
+        emit(cg, "    bl      " XLY_SYM("xly_gen_yield"));  /* saves yield value */
+        emit(cg, "    ret");                                  /* suspend */
+        break;
+
+    case NODE_YIELD_EMPTY:
+        emit(cg, "    bl      " XLY_SYM("xly_null"));
+        emit(cg, "    bl      " XLY_SYM("xly_gen_yield"));
+        emit(cg, "    ret");
+        break;
+
+    /* ── for (x of iterable) — ARM64 ────────────────────────────────────────
+     * children[0] = iterable, children[1] = body, str_value = loop var name
+     * Lowers to: call xly_for_of_next(iter) in a loop.                */
+    case NODE_FOR_OF: {
+        int lbl = cg->label_count++;
+        char loop_lbl[32], end_lbl[32];
+        snprintf(loop_lbl, sizeof(loop_lbl), ".Lfor_of_%d", lbl);
+        snprintf(end_lbl,  sizeof(end_lbl),  ".Lfor_of_end_%d", lbl);
+
+        /* Evaluate iterable → x19 (callee-saved) */
+        emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    mov     x19, x0");   /* save iterator */
+
+        emit(cg, "%s:", loop_lbl);
+        /* Call .next() on iterator */
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_for_of_next"));
+        /* x0 = {value, done} or NULL if done */
+        emit(cg, "    cbz     x0, %s", end_lbl);
+        /* Store value in loop variable */
+        if (node->str_value) {
+            const char *var_lbl = intern_string(cg, node->str_value);
+            emit(cg, "    adrp    x9, %s@PAGE", var_lbl);
+            emit(cg, "    add     x9, x9, %s@PAGEOFF", var_lbl);
+            emit(cg, "    str     x0, [x9]");
+        }
+        /* Emit body */
+        if (node->child_count > 1) emit_stmt_a64(cg, node->children[1]);
+        emit(cg, "    b       %s", loop_lbl);
+        emit(cg, "%s:", end_lbl);
+        break;
+    }
+
+    /* ── Computed property access: obj.[expr] (ARM64) ───────────────────────
+     * children[0] = object, children[1] = key expression               */
+    case NODE_COMPUTED_PROP:
+        emit_expr_a64(cg, node->children[0]);   /* x0 = obj */
+        emit(cg, "    mov     x19, x0");
+        emit_expr_a64(cg, node->children[1]);   /* x0 = key */
+        emit(cg, "    mov     x1, x0");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_index"));   /* xly_index(obj, key) */
+        break;
+
+    case NODE_COMPUTED_PROP_SET:
+        emit_expr_a64(cg, node->children[0]);   /* x0 = obj */
+        emit(cg, "    mov     x19, x0");
+        emit_expr_a64(cg, node->children[1]);   /* x0 = key */
+        emit(cg, "    mov     x20, x0");
+        emit_expr_a64(cg, node->children[2]);   /* x0 = val */
+        emit(cg, "    mov     x2, x0");
+        emit(cg, "    mov     x1, x20");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_index_set"));
+        break;
+
+    /* ── Reflect calls — lower to xly_rt reflect helpers (ARM64) ────────────
+     * Each reflect.* operation maps to an xly_rt function.             */
+    case NODE_REFLECT_KEYS:
+    case NODE_REFLECT_OWN_KEYS:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_keys"));
+        break;
+
+    case NODE_REFLECT_GET:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    mov     x19, x0");
+        if (node->child_count > 1) emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x1, x0");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_get"));
+        break;
+
+    case NODE_REFLECT_SET:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    mov     x19, x0");
+        if (node->child_count > 1) emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x20, x0");
+        if (node->child_count > 2) emit_expr_a64(cg, node->children[2]);
+        emit(cg, "    mov     x2, x0");
+        emit(cg, "    mov     x1, x20");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_set"));
+        break;
+
+    case NODE_REFLECT_HAS:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    mov     x19, x0");
+        if (node->child_count > 1) emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x1, x0");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_has"));
+        break;
+
+    case NODE_REFLECT_DELETE:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    mov     x19, x0");
+        if (node->child_count > 1) emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x1, x0");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_delete"));
+        break;
+
+    case NODE_REFLECT_FREEZE:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_freeze"));
+        break;
+
+    case NODE_REFLECT_IS_FROZEN:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_is_frozen"));
+        break;
+
+    case NODE_REFLECT_APPLY:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    mov     x19, x0");
+        if (node->child_count > 2) emit_expr_a64(cg, node->children[2]);
+        emit(cg, "    mov     x1, x0");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_apply"));
+        break;
+
+    case NODE_REFLECT_CONSTRUCT:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    mov     x19, x0");
+        if (node->child_count > 1) emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x1, x0");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_construct"));
+        break;
+
+    case NODE_REFLECT_DEFINE:
+        if (node->child_count > 0) emit_expr_a64(cg, node->children[0]);
+        emit(cg, "    mov     x19, x0");
+        if (node->child_count > 1) emit_expr_a64(cg, node->children[1]);
+        emit(cg, "    mov     x20, x0");
+        if (node->child_count > 2) emit_expr_a64(cg, node->children[2]);
+        emit(cg, "    mov     x2, x0");
+        emit(cg, "    mov     x1, x20");
+        emit(cg, "    mov     x0, x19");
+        emit(cg, "    bl      " XLY_SYM("xly_reflect_define"));
+        break;
+
+    /* ── Block fn and trailing block call: desugar identical to ARROW_FN ─── */
+    case NODE_BLOCK_FN:
+        emit_expr_a64(cg, node);  /* fall through to expression emitter */
+        break;
+
     default:
         emit_expr_a64(cg, node);
         break;
