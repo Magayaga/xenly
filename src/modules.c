@@ -4196,29 +4196,9 @@ Module module_reflect(void) {
 //   iter.count(start, step)   → object   infinite counter generator object
 // ═════════════════════════════════════════════════════════════════════════════
 
-/* Helper: call an iterator's .next() and return the result object */
-static Value *iter_next(Value *iter) {
-    if (!iter || iter->type != VAL_INSTANCE || !iter->instance) return NULL;
-    Value *next_fn = env_get(iter->instance->fields, "next");
-    if (!next_fn || next_fn->type != VAL_FUNCTION) return NULL;
-    /* next_fn is a VAL_FUNCTION; call it with no args via builtin_fn path */
-    if (next_fn->builtin_fn) return next_fn->builtin_fn(NULL, 0);
-    /* It is a Xenly fn — but we have no interp here; return raw function val
-     * so the caller can decide. We store it for the call. */
-    return next_fn;
-}
-
-/* Helper: extract {value, done} from a next() result object */
-static int iter_result_done(Value *res) {
-    if (!res || res->type != VAL_INSTANCE || !res->instance) return 1;
-    Value *done = env_get(res->instance->fields, "done");
-    return (done && done->type == VAL_BOOL && done->boolean);
-}
-static Value *iter_result_value(Value *res) {
-    if (!res || res->type != VAL_INSTANCE || !res->instance) return value_null();
-    Value *val = env_get(res->instance->fields, "value");
-    return val ? val : value_null();
-}
+/* Note: iter_next, iter_result_done, iter_result_value were removed.
+ * Iteration over generator objects is handled by NODE_FOR_OF in interpreter.c
+ * which calls .next() directly. These helpers were dead code. */
 
 /* iter.range(start, end, step=1) — numeric range array */
 static Value *iter_range_fn(Value **args, size_t argc) {
@@ -4433,25 +4413,11 @@ Module module_iter(void) {
 // xly_http.c which are already compiled into libxly_rt.a.
 // ═════════════════════════════════════════════════════════════════════════════
 
-/* Forward-declare all xly_http_*_val functions rather than including
- * xly_http.h (which pulls in xly_rt.h which redefines Value types). */
-extern Value *xly_http_create_val    (Value *cfg);
-extern Value *xly_http_listen_val    (Value *srv, Value *host, Value *port);
-extern Value *xly_http_run_val       (Value *srv);
-extern Value *xly_http_run_async_val (Value *srv);
-extern Value *xly_http_stop_val      (Value *srv);
-extern Value *xly_http_route_val     (Value *srv, Value *method, Value *pattern, Value *handler, Value *user);
-extern Value *xly_http_get_val       (Value *srv, Value *pattern, Value *handler);
-extern Value *xly_http_post_val      (Value *srv, Value *pattern, Value *handler);
-extern Value *xly_http_put_val       (Value *srv, Value *pattern, Value *handler);
-extern Value *xly_http_delete_val    (Value *srv, Value *pattern, Value *handler);
-extern Value *xly_http_send_text_val (Value *ctx, Value *status, Value *body);
-extern Value *xly_http_send_json_val (Value *ctx, Value *status, Value *json);
-extern Value *xly_http_req_header_val(Value *ctx, Value *name);
-extern Value *xly_http_param_val     (Value *ctx, Value *name);
-extern Value *xly_http_query_val     (Value *ctx, Value *name);
-extern Value *xly_http_to_json_val   (Value *val);
-extern Value *xly_http_from_json_val (Value *str);
+/* xly_http.h is now safe to include after interpreter.h because it detects
+ * INTERPRETER_H and uses typedef Value XlyVal instead of including xly_rt.h.
+ * All xly_http_*_val functions are compiled into the interpreter binary via
+ * INTERP_SRCS (src/xly_http.c). No extern declarations needed. */
+#include "xly_http.h"
 
 /* Module function wrappers — bridge NativeFunc (Value**,size_t) to xly_http_*_val */
 
