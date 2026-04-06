@@ -15,7 +15,6 @@
 // ─── Forward declarations (grammar hierarchy) ───────────────────────────────
 static ASTNode *parse_statement(Parser *p);
 static ASTNode *parse_gen_decl(Parser *p);
-static ASTNode *parse_for_of(Parser *p, int line, char *iter_var);
 static ASTNode *parse_block_fn(Parser *p);
 static ASTNode *try_parse_trailing_block(Parser *p, ASTNode *call_node);
 static ASTNode *parse_expression(Parser *p);
