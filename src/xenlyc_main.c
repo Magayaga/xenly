@@ -11,9 +11,9 @@
  *
  * Pipeline (fully self-hosting, zero external toolchain):
  *   source.xe  →  lexer  →  parser  →  AST  →  sema  →  codegen  →  .s
- *   .s  →  as (system assembler)  →  .o  →  xlnk (linker)  →  ELF/Mach-O binary
+ *   .s  →  as (system assembler)  →  .o  →  xlnk  →  ELF/Mach-O binary
  *
- * xlnk v1.0 is a self-hosting, self-contained native linker.
+ * xlnk is a self-hosting, self-contained native linker.
  * No gcc, no clang, no ld.  The only external process is the system
  * assembler (as) which converts .s → .o.  All other stages are in-process.
  *
@@ -622,6 +622,14 @@ int main(int argc, char **argv) {
             lnk.output    = out_name;
             lnk.is_static = do_static;
             lnk.verbose   = verbose;
+            /* Set entry point to match what codegen emits:
+             *   macOS: XLY_SYM("main") = "_main"  (leading underscore)
+             *   Linux: XLY_SYM("main") = "main"   (no underscore)        */
+#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
+            lnk.entry     = "_main";
+#else
+            lnk.entry     = "main";
+#endif
 
             xlnk_add_object(&lnk, obj_path);
             xlnk_add_library(&lnk, rt_path);
