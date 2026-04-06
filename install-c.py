@@ -38,6 +38,7 @@ INTERP_SRCS = [
     "src/main.c", "src/lexer.c", "src/ast.c", "src/parser.c",
     "src/interpreter.c", "src/modules.c", "src/typecheck.c",
     "src/unicode.c", "src/multiproc.c", "src/multiproc_builtins.c",
+    "src/xly_http.c",
 ]
 
 # xenly_linker.c provides the in-process xlnk linker (20× faster than
@@ -63,6 +64,7 @@ RT_NOMP_SRCS = [
     ("src/modules.c",            "src/modules_rt.o"),
     ("src/multiproc.c",          "src/multiproc_rt.o"),
     ("src/multiproc_builtins.c", "src/multiproc_builtins_rt.o"),
+    ("src/xly_http.c",           "src/xly_http.o"),
 ]
 
 # ── Environment variables ─────────────────────────────────────────────────────
