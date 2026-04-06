@@ -1979,7 +1979,15 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
 
     emit(&cg, XLY_TEXT_SECTION);
     emit(&cg, ".globl  " XLY_SYM("main"));
+#if XLY_EMIT_GNU_STACK
+    /* Linux/ELF: also export _start pointing at main so both xlnk
+     * (entry=main) and system tools (expect _start) resolve correctly.    */
+    emit(&cg, ".globl  _start");
+#endif
     emit(&cg, XLY_SYM("main") ":");
+#if XLY_EMIT_GNU_STACK
+    emit(&cg, "_start:");
+#endif
     emit(&cg, "    pushq   %%rbp");
     emit(&cg, "    movq    %%rsp, %%rbp");
     emit(&cg, "    subq    $%d, %%rsp", mframe);
@@ -3522,7 +3530,13 @@ int codegen(ASTNode *program, const char *outpath) {
 
     emit(&cg, XLY_TEXT_SECTION);
     emit(&cg, ".globl  " XLY_SYM("main"));
+#if XLY_EMIT_GNU_STACK
+    emit(&cg, ".globl  _start");
+#endif
     emit(&cg, XLY_SYM("main") ":");
+#if XLY_EMIT_GNU_STACK
+    emit(&cg, "_start:");
+#endif
     /* Same frame layout as emit_function_a64: allocate first, save pair at
      * TOP of frame, set x29 to saved-pair address so that locals at
      * [x29, #-8], [x29, #-16], ... remain within [sp, old_sp).            */
