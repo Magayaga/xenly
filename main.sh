@@ -129,6 +129,7 @@ INTERP_SRCS=(
   src/main.c src/lexer.c src/ast.c src/parser.c
   src/interpreter.c src/modules.c src/typecheck.c
   src/unicode.c src/multiproc.c src/multiproc_builtins.c
+  src/xly_http.c
 )
 
 # xenly_linker.c: in-process ELF/Mach-O linker (xlnk, 20× faster than gcc/ld)
