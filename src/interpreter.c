@@ -52,6 +52,10 @@
 // Used by value_array to register arrays for shutdown cleanup.
 static Interpreter *g_interp = NULL;
 
+/* Forward declarations needed by generator and reflect eval cases */
+static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc); /* 4-arg form */
+static Value *eval(Interpreter *interp, ASTNode *node, Environment *env);
+
 // ─── Value Constructors ──────────────────────────────────────────────────────
 Value *value_number(double n) {
     Value *v = (Value *)calloc(1, sizeof(Value));
@@ -125,6 +129,19 @@ Value *value_variant(const char *tag, Value **fields, size_t field_count) {
     }
     return v;
 }
+
+/* ── value_function — create a VAL_FUNCTION Value from a FnDef* ─────────────
+ * Ownership: the returned Value owns the FnDef (fn_shared=0).              */
+static Value *value_function(FnDef *def) {
+    Value *v = (Value *)calloc(1, sizeof(Value));
+    if (!v) return NULL;
+    v->type      = VAL_FUNCTION;
+    v->fn        = def;
+    v->fn_shared = 0;  /* this Value owns the FnDef */
+    v->local     = 0;
+    return v;
+}
+
 
 void value_destroy(Value *v) {
     if (!v) return;
@@ -599,7 +616,7 @@ void interpreter_destroy(Interpreter *interp) {
 
 // ─── Forward: Evaluator ──────────────────────────────────────────────────────
 Value *eval(Interpreter *interp, ASTNode *node, Environment *env);
-static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc);
+static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc); /* 4-arg form */
 
 // ─── Import Module ───────────────────────────────────────────────────────────
 // ─── Forward declarations: user module helpers ──────────────────────────────
@@ -3029,7 +3046,7 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
             Value *next_fn = env_get(iterable->instance->fields, "next");
             while (next_fn && next_fn->type == VAL_FUNCTION) {
                 /* Call next() with no arguments */
-                Value *result = call_function(interp, next_fn, NULL, 0, env);
+                Value *result = call_value(interp, next_fn, NULL, 0);
                 if (!result) break;
                 /* result is { value: V, done: bool } */
                 Value *done_v = (result->type == VAL_INSTANCE)
@@ -3254,7 +3271,7 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         size_t argc = (args_arr && args_arr->type == VAL_ARRAY)
                     ? args_arr->array_len : 0;
         Value **argv = argc ? args_arr->array : NULL;
-        return call_function(interp, fn, argv, argc, env);
+        return call_value(interp, fn, argv, argc);
     }
 
     case NODE_REFLECT_CONSTRUCT: {
