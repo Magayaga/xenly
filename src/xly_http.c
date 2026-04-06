@@ -57,7 +57,7 @@ static inline XlyVal *xly_obj_new(void) {
     inst->fields    = env_create(NULL);
     v->type     = VAL_INSTANCE;
     v->local    = 1;
-    v->instance = inst;
+    v->instance = (void *)inst;  /* suppress _XlyInstData* vs InstanceData* mismatch */
     return v;
 }
 static inline void xly_obj_set(XlyVal *obj, const char *key, XlyVal *val) {
@@ -440,8 +440,8 @@ static int http_parse(const char *buf, size_t len, XlyHttpRequest *req,
     size_t header_bytes = (size_t)(header_end - buf);
     if (has_body && content_length > 0) {
         if (content_length > (size_t)max_body) {
-                fprintf(stderr, "[xly_http] request body too large (%zu > %d)\n",
-                        content_length, max_body);
+                fprintf(stderr, "[xly_http] request body too large (%zu > %zu)\n",
+                        content_length, (size_t)max_body);
                 return -1;
             } /* too large — 413 */
         size_t available = len - header_bytes;
@@ -1049,7 +1049,7 @@ char *xly_http_to_json(XlyVal *val) {
             else if (*s == '\n') { buf[pos++] = '\\'; buf[pos++] = 'n'; }
             else if (*s == '\r') { buf[pos++] = '\\'; buf[pos++] = 'r'; }
             else if (*s == '\t') { buf[pos++] = '\\'; buf[pos++] = 't'; }
-            else buf[pos++] = *s; s++;
+            else { buf[pos++] = *s; } s++;
         }
         buf[pos++] = '"'; buf[pos] = '\0';
         free(raw); free(type_str); return strdup(buf);
