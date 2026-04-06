@@ -53,7 +53,7 @@
 Interpreter *g_interp = NULL; /* non-static: used by xly_http callback shims */
 
 /* Forward declarations needed by generator and reflect eval cases */
-static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc); /* 4-arg form */
+Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc);
 Value *eval(Interpreter *interp, ASTNode *node, Environment *env); /* non-static: used by multiproc.c */
 
 // ─── Value Constructors ──────────────────────────────────────────────────────
@@ -616,7 +616,7 @@ void interpreter_destroy(Interpreter *interp) {
 
 // ─── Forward: Evaluator ──────────────────────────────────────────────────────
 Value *eval(Interpreter *interp, ASTNode *node, Environment *env);
-static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc); /* 4-arg form */
+Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc);
 
 // ─── Import Module ───────────────────────────────────────────────────────────
 // ─── Forward declarations: user module helpers ──────────────────────────────
@@ -673,7 +673,7 @@ static void do_import(Interpreter *interp, const char *modname, const char *alia
 }
 
 // ─── call_value: invoke a Xenly function value with pre-evaluated args ───────
-static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc) {
+Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc) {
     if (!fn_val) return value_null();
     if (fn_val->type == VAL_BUILTIN_FN) return fn_val->builtin_fn(args, argc);
     if (fn_val->type != VAL_FUNCTION) return value_null();
