@@ -50,11 +50,11 @@
 
 // File-scope pointer to the active interpreter — set during interpreter_run.
 // Used by value_array to register arrays for shutdown cleanup.
-static Interpreter *g_interp = NULL;
+Interpreter *g_interp = NULL; /* non-static: used by xly_http callback shims */
 
 /* Forward declarations needed by generator and reflect eval cases */
 static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc); /* 4-arg form */
-static Value *eval(Interpreter *interp, ASTNode *node, Environment *env);
+Value *eval(Interpreter *interp, ASTNode *node, Environment *env); /* non-static: used by multiproc.c */
 
 // ─── Value Constructors ──────────────────────────────────────────────────────
 Value *value_number(double n) {
