@@ -22,8 +22,92 @@
  *   All sends use sendfile(2) for static files (zero-copy)
  */
 
-#include "xly_http.h"
+#include "interpreter.h"  /* include FIRST so INTERPRETER_H is defined */
+#include "xly_http.h"     /* now uses typedef Value XlyVal instead of xly_rt.h */
 #include "platform.h"
+
+/* ── Interpreter-mode shims for xly_rt functions ────────────────────────────
+ * When compiled into the interpreter binary (INTERP_SRCS), xly_rt.c is not
+ * linked.  These thin wrappers map xly_rt API → interpreter Value API so
+ * the HTTP server works correctly in both interpreter and runtime contexts.
+ *
+ * g_interp is the active interpreter instance (non-static in interpreter.c).
+ * It is set by interpreter_run() before any user code executes.           */
+extern Interpreter *g_interp;
+extern Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc);
+extern Environment *env_create(Environment *parent);
+extern void env_set(Environment *env, const char *name, Value *val);
+extern Value *env_get(Environment *env, const char *name);
+extern Value *value_string(const char *s);
+extern Value *value_number(double n);
+extern Value *value_null(void);
+extern Value *value_bool(int b);
+extern Value *value_array(Value **items, size_t len);
+extern char  *value_to_string(Value *v);
+
+/* Opaque InstanceData — same layout as interpreter.h InstanceData */
+typedef struct { void *class_def; Environment *fields; } _XlyInstData;
+
+static inline XlyVal *xly_obj_new(void) {
+    XlyVal *v = (XlyVal *)calloc(1, sizeof(XlyVal));
+    if (!v) return NULL;
+    _XlyInstData *inst = (_XlyInstData *)calloc(1, sizeof(_XlyInstData));
+    if (!inst) { free(v); return NULL; }
+    inst->class_def = NULL;
+    inst->fields    = env_create(NULL);
+    v->type     = VAL_INSTANCE;
+    v->local    = 1;
+    v->instance = inst;
+    return v;
+}
+static inline void xly_obj_set(XlyVal *obj, const char *key, XlyVal *val) {
+    if (!obj || obj->type != VAL_INSTANCE || !obj->instance) return;
+    env_set(((_XlyInstData *)obj->instance)->fields, key, val);
+}
+static inline XlyVal *xly_obj_get(XlyVal *obj, const char *key) {
+    if (!obj || obj->type != VAL_INSTANCE || !obj->instance) return NULL;
+    return env_get(((_XlyInstData *)obj->instance)->fields, key);
+}
+static inline XlyVal *xly_str(const char *s)  { return value_string(s); }
+static inline XlyVal *xly_num(double n)        { return value_number(n); }
+static inline XlyVal *xly_null(void)           { return value_null(); }
+static inline XlyVal *xly_bool(int b)          { return value_bool(b); }
+static inline int     xly_truthy(XlyVal *v) {
+    if (!v) return 0;
+    if (v->type == VAL_NULL)   return 0;
+    if (v->type == VAL_BOOL)   return v->boolean;
+    if (v->type == VAL_NUMBER) return v->num != 0.0;
+    if (v->type == VAL_STRING) return v->str && *v->str;
+    return 1;
+}
+static inline char *xly_to_cstr(XlyVal *v) {
+    if (!v) return strdup("null");
+    return value_to_string(v);
+}
+static inline XlyVal *xly_typeof(XlyVal *v) {
+    if (!v || v->type == VAL_NULL)     return value_string("null");
+    if (v->type == VAL_NUMBER)         return value_string("number");
+    if (v->type == VAL_STRING)         return value_string("string");
+    if (v->type == VAL_BOOL)           return value_string("bool");
+    if (v->type == VAL_FUNCTION)       return value_string("function");
+    if (v->type == VAL_ARRAY)          return value_string("array");
+    if (v->type == VAL_INSTANCE)       return value_string("object");
+    return value_string("unknown");
+}
+static inline XlyVal *xly_array_create(XlyVal **items, size_t n) {
+    return value_array(items, n);
+}
+static inline size_t xly_array_len(XlyVal *v) {
+    return (v && v->type == VAL_ARRAY) ? v->array_len : 0;
+}
+static inline XlyVal *xly_array_get(XlyVal *v, size_t i) {
+    if (!v || v->type != VAL_ARRAY || i >= v->array_len) return value_null();
+    return v->array[i];
+}
+static inline XlyVal *xly_call_fnval(XlyVal *fn, XlyVal **args, int argc) {
+    if (!fn || !g_interp) return value_null();
+    return call_value(g_interp, fn, args, (size_t)argc);
+}
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
