@@ -831,14 +831,38 @@ static int layout_elf64(XlnkState *st) {
             s->value = st->chunks[ci].vaddr + off;
     }
 
-    /* Find entry point */
-    const char *ename = cfg->entry ? cfg->entry : "_start";
-    XlnkSymbol *esym  = sym_find(&st->syms, ename);
-    if (esym && esym->defined) {
-        st->entry_vaddr = esym->value;
-    } else {
-        xlnk_diag(st, XLNK_DIAG_ERROR, "entry point '%s' not found", ename);
-        return XLNK_ERR_NOENTRY;
+    /* Find entry point
+     * Search order: cfg->entry (if set), then the Xenly codegen defaults:
+     *   Linux ELF:  "main"   (XLY_SYM("main") without underscore)
+     *   macOS MachO: "_main" (XLY_SYM("main") with underscore)
+     * "_start" is tried last for compatibility with hand-written .s files.
+     * This lets `xenlyc` work without setting cfg->entry explicitly.       */
+    {
+        const char *candidates[5];
+        int         ncandidates = 0;
+        if (cfg->entry)          candidates[ncandidates++] = cfg->entry;
+        candidates[ncandidates++] = "main";    /* Linux ELF codegen default  */
+        candidates[ncandidates++] = "_main";   /* macOS Mach-O codegen default */
+        candidates[ncandidates++] = "_start";  /* ELF CRT0 fallback           */
+        candidates[ncandidates++] = "start";   /* bare fallback               */
+
+        XlnkSymbol *esym = NULL;
+        const char *ename = candidates[0];
+        for (int ci = 0; ci < ncandidates; ci++) {
+            esym = sym_find(&st->syms, candidates[ci]);
+            if (esym && esym->defined) { ename = candidates[ci]; break; }
+            esym = NULL;
+        }
+        if (esym && esym->defined) {
+            st->entry_vaddr = esym->value;
+            if (cfg->verbose)
+                xlnk_diag(st, XLNK_DIAG_INFO, "entry: '%s' @ 0x%llx",
+                          ename, (unsigned long long)st->entry_vaddr);
+        } else {
+            xlnk_diag(st, XLNK_DIAG_ERROR,
+                      "entry point not found (tried: main, _main, _start, start)");
+            return XLNK_ERR_NOENTRY;
+        }
     }
     return XLNK_OK;
 }
