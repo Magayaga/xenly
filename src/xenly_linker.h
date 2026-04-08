@@ -10,8 +10,15 @@
 /*
  * xenly_linker.h — Xenly Built-in Linker  (xlnk)
  *
- * Fastest drop-in replacement for GCC/Clang as the final link step in the
- * Xenly native compiler pipeline.  Links one or more ELF-64 or Mach-O-64
+ * Self-hosting, self-contained native linker for Linux and macOS.
+ * Replaces GCC/Clang/ld/ld64 entirely.  Zero external process spawning.
+ *
+ * v4.0 platform-specific optimizations:
+ *   Linux:  MAP_POPULATE, MAP_NORESERVE, MAP_HUGETLB, posix_fadvise,
+ *           posix_fallocate, mmap(MAP_SHARED) output, pwritev fallback
+ *   macOS:  F_NOCACHE, F_RDADVISE, mmap(MAP_SHARED) output, pwrite fallback
+ *   Both:   Robin Hood hashing, wyhash, huge-page arenas, zero-copy input,
+ *           madvise SEQUENTIAL + DONTNEED, LIKELY/UNLIKELY branch hints  Links one or more ELF-64 or Mach-O-64
  * object files and static archives (.a) into a native executable without
  * spawning any subprocess.
  *
@@ -56,10 +63,10 @@
 #include <stdint.h>
 
 /* ── Version ─────────────────────────────────────────────────────────────── */
-#define XLNK_VERSION_MAJOR 1
+#define XLNK_VERSION_MAJOR 4
 #define XLNK_VERSION_MINOR 0
 #define XLNK_VERSION_PATCH 0
-#define XLNK_VERSION_STR   "1.0.0"
+#define XLNK_VERSION_STR   "4.0.0"
 
 /* ── Limits ──────────────────────────────────────────────────────────────── */
 #define XLNK_MAX_OBJECTS  256   /* input .o / archive-member files           */
@@ -152,7 +159,7 @@ int xlnk_link(const XlnkConfig *cfg);
 const char *xlnk_error_string(int code);
 
 /*
- * xlnk_version — return the version string "1.0.0".
+ * xlnk_version — return the version string "4.0.0".
  */
 const char *xlnk_version(void);
 
