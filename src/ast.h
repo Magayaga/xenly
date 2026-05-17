@@ -94,18 +94,40 @@ typedef enum {
     NODE_INVARIANT,         // invariant (condition) — class invariant
     NODE_ASSERT,            // assert(condition, message) — runtime assertion
 
-    // ── Imperative control flow ───────────────────────────────────────────────
-    NODE_UNLESS,            // unless (cond) { body }   — executes body when cond is FALSE
-    NODE_REPEAT,            // repeat N { body }         — counted loop (N times)
-    NODE_FOREVER,           // forever { body }          — infinite loop; break exits
-
-    // ── Declarative / functional ─────────────────────────────────────────────
-    NODE_PIPE_FORWARD,      // expr |> fn                — pipe: passes LHS as first arg to RHS fn
-    NODE_WHERE,             // expr where id = val, ...  — local binding clause
-
     // Concurrency
 
     // Modular programming
+    // ── Imperative extras ──────────────────────────────────────────────────
+    NODE_UNLESS,            // unless (cond) { body }
+    NODE_REPEAT,            // repeat N { body }
+    NODE_FOREVER,           // forever { body }
+    NODE_PIPE_FORWARD,      // expr |> fn
+    NODE_WHERE,             // expr where id = val, ...
+
+    // ── Generators & Iterators ────────────────────────────────────────────
+    NODE_GEN_DECL,          // gen fn name(params) { body }
+    NODE_YIELD,             // yield expr
+    NODE_YIELD_EMPTY,       // yield
+    NODE_FOR_OF,            // for val of iterable { }
+
+    // ── Closures: trailing block syntax ──────────────────────────────────
+    NODE_BLOCK_CALL,        // expr(args) { |params| body }
+    NODE_BLOCK_FN,          // { |params| body }
+
+    // ── Reflection / Metaprogramming ──────────────────────────────────────
+    NODE_REFLECT_KEYS,
+    NODE_REFLECT_GET,
+    NODE_REFLECT_SET,
+    NODE_REFLECT_HAS,
+    NODE_REFLECT_DELETE,
+    NODE_REFLECT_DEFINE,
+    NODE_REFLECT_FREEZE,
+    NODE_REFLECT_IS_FROZEN,
+    NODE_REFLECT_OWN_KEYS,
+    NODE_REFLECT_APPLY,
+    NODE_REFLECT_CONSTRUCT,
+    NODE_COMPUTED_PROP,     // obj.[expr]
+    NODE_COMPUTED_PROP_SET, // obj.[expr] = val
 } NodeType;
 
 // Forward declarations

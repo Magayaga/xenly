@@ -324,4 +324,22 @@ XlyVal *xly_utf16_decode(XlyVal *high, XlyVal *low);
 /* xly_uni_is_surrogate(cp) → bool */
 XlyVal *xly_uni_is_surrogate(XlyVal *cp);
 
+/* ── Reflect runtime helpers (called from codegen output) ────────────────── */
+XlyVal *xly_reflect_keys     (XlyVal *obj);
+XlyVal *xly_reflect_get      (XlyVal *obj, XlyVal *key);
+XlyVal *xly_reflect_set      (XlyVal *obj, XlyVal *key, XlyVal *val);
+XlyVal *xly_reflect_has      (XlyVal *obj, XlyVal *key);
+XlyVal *xly_reflect_delete   (XlyVal *obj, XlyVal *key);
+XlyVal *xly_reflect_freeze   (XlyVal *obj);
+XlyVal *xly_reflect_is_frozen(XlyVal *obj);
+XlyVal *xly_reflect_define   (XlyVal *obj, XlyVal *key, XlyVal *desc);
+XlyVal *xly_reflect_apply    (XlyVal *fn, XlyVal *args);
+XlyVal *xly_reflect_construct(XlyVal *cls, XlyVal *args);
+
+/* ── Generator runtime helpers ───────────────────────────────────────────── */
+XlyVal *xly_gen_create   (void *fn_ptr, void *env_ptr);
+void    xly_gen_yield    (XlyVal *val);
+XlyVal *xly_for_of_next  (XlyVal *iter);
+XlyVal *xly_index_set    (XlyVal *collection, XlyVal *index, XlyVal *val);
+
 #endif /* XLY_RT_H */

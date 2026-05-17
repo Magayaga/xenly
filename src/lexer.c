@@ -133,6 +133,13 @@ static const Keyword keywords[] = {
     // ── Declarative ───────────────────────────────────────────────────────
     { "where",    TOKEN_WHERE },
     { "in",         TOKEN_IN },
+    // ── Generators & Iterators ────────────────────────────────────────────
+    { "yield",    TOKEN_YIELD },
+    { "gen",      TOKEN_GEN },
+    { "of",       TOKEN_OF },
+    // ── Reflection ────────────────────────────────────────────────────────
+    { "reflect",  TOKEN_REFLECT },
+
     { "and",     TOKEN_AND },
     { "or",     TOKEN_OR },
     { "not",    TOKEN_NOT },
@@ -400,7 +407,12 @@ Token lexer_next_token(Lexer *l) {
         case '[': return make_token(TOKEN_LBRACKET,  "[", startLine, startCol);
         case ']': return make_token(TOKEN_RBRACKET,  "]", startLine, startCol);
         case ',': return make_token(TOKEN_COMMA,     ",", startLine, startCol);
-        case '.': return make_token(TOKEN_DOT,       ".", startLine, startCol);
+        case '.':
+            if (l->pos < l->length && l->source[l->pos] == '[') {
+                lexer_advance(l);
+                return make_token(TOKEN_DOT_BRACKET, ".["  , startLine, startCol);
+            }
+            return make_token(TOKEN_DOT, ".", startLine, startCol);
         case ':': return make_token(TOKEN_COLON,     ":", startLine, startCol);
         case ';': return make_token(TOKEN_SEMICOLON,";", startLine, startCol);
         case '|':
@@ -467,6 +479,13 @@ const char *token_type_name(TokenType type) {
         case TOKEN_OPTCHAIN: return "?.";
         case TOKEN_COMMA: return ","; case TOKEN_DOT: return ".";
         case TOKEN_NEWLINE: return "NL"; case TOKEN_EOF: return "EOF";
+        case TOKEN_YIELD:        return "yield";
+        case TOKEN_GEN:          return "gen";
+        case TOKEN_OF:           return "of";
+        case TOKEN_REFLECT:      return "reflect";
+        case TOKEN_DOT_BRACKET:  return ".[";
+        case TOKEN_PIPE_PARAM:   return "|";
+
         default: return "???";
     }
 }
