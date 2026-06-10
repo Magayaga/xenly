@@ -501,15 +501,13 @@ static int g_verbose_asm = 0;   /* default: no annotation */
 #ifdef XLY_ARCH_X86_64
 
 /* ── load a double constant into %xmm0 ─────────────────────────────────
- * We sub 8 from rsp, write the bits, movsd, add 8 back.  No red-zone, no
- * dangling push at a call boundary.                                        */
+ * Use the red zone (-8(%rsp)) to avoid changing %rsp, which would break
+ * 16-byte alignment before a subsequent call instruction.                 */
 static void emit_load_double(CG *cg, double d) {
     union { double d; unsigned long long u; } uu; uu.d = d;
-    emit(cg, "    subq    $8, %%rsp");
     emit(cg, "    movabsq $%llu, %%rax", (unsigned long long)uu.u);
-    emit(cg, "    movq    %%rax, (%%rsp)");
-    emit(cg, "    movsd   (%%rsp), %%xmm0");
-    emit(cg, "    addq    $8, %%rsp");
+    emit(cg, "    movq    %%rax, -8(%%rsp)");
+    emit(cg, "    movsd   -8(%%rsp), %%xmm0");
 }
 
 /* ── expression compiler ────────────────────────────────────────────────
@@ -718,11 +716,9 @@ static void emit_expr(CG *cg, ASTNode *node) {
                 
                 uint64_t bits;
                 memcpy(&bits, &result, sizeof(double));
-                emit(cg, "    subq    $8, %%rsp");
                 emit(cg, "    movabsq $%lu, %%rax", bits);
-                emit(cg, "    movq    %%rax, (%%rsp)");
-                emit(cg, "    movsd   (%%rsp), %%xmm0");
-                emit(cg, "    addq    $8, %%rsp");
+                emit(cg, "    movq    %%rax, -8(%%rsp)");
+                emit(cg, "    movsd   -8(%%rsp), %%xmm0");
                 emit(cg, "    call    " XLY_SYM("xly_num"));
             } else if (is_plus) {
                 /* For +, check types at runtime and fall back to xly_add if needed */
@@ -1980,14 +1976,18 @@ static int codegen_x86_64(ASTNode *program, const char *outpath) {
     emit(&cg, XLY_TEXT_SECTION);
     emit(&cg, ".globl  " XLY_SYM("main"));
 #if XLY_EMIT_GNU_STACK
-    /* Linux/ELF: also export _start pointing at main so both xlnk
-     * (entry=main) and system tools (expect _start) resolve correctly.    */
+    /* Linux/ELF: _start is the true kernel entry point.  The kernel jumps
+     * to _start directly (no `call`), so rsp is 16-byte aligned at entry
+     * with NO return address on the stack.  A normal C prologue expects rsp
+     * to be 8 mod 16 at function entry (after `call` pushed the return
+     * address).  We compensate with andq+subq before falling through to the
+     * regular main prologue so every subsequent call has correct alignment. */
     emit(&cg, ".globl  _start");
+    emit(&cg, "_start:");
+    emit(&cg, "    andq    $-16, %%rsp");   /* ensure alignment (paranoia) */
+    emit(&cg, "    subq    $8, %%rsp");     /* simulate return-address push */
 #endif
     emit(&cg, XLY_SYM("main") ":");
-#if XLY_EMIT_GNU_STACK
-    emit(&cg, "_start:");
-#endif
     emit(&cg, "    pushq   %%rbp");
     emit(&cg, "    movq    %%rsp, %%rbp");
     emit(&cg, "    subq    $%d, %%rsp", mframe);
