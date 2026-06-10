@@ -613,49 +613,56 @@ int main(int argc, char **argv) {
             }
         }
 
-        /* ── self-hosting in-process linker (no gcc/clang) ── */
+        /* ── gcc-based linker (reliable, uses system toolchain) ── */
         {
+            /* libxly_rtc.a is the minimal compiler-only runtime (xly_rt + unicode + stub).
+             * It lives in the same directory as the xenlyc binary. */
             char rt_path[1024];
-            snprintf(rt_path, sizeof(rt_path), "%s/libxly_rt.a", rt_dir);
+            snprintf(rt_path, sizeof(rt_path), "%s/libxly_rtc.a", rt_dir);
 
-            XlnkConfig lnk = xlnk_default_config();
-            lnk.output    = out_name;
-            lnk.is_static = do_static;
-            lnk.verbose   = verbose;
-            /* Set entry point to match what codegen emits:
-             *   macOS: XLY_SYM("main") = "_main"  (leading underscore)
-             *   Linux: XLY_SYM("main") = "main"   (no underscore)        */
+            char cmd[4096];
+            if (do_static) {
 #if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
-            lnk.entry     = "_main";
+                snprintf(cmd, sizeof(cmd),
+                    "gcc -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -static 2>&1",
+                    out_name, obj_path, rt_path);
 #else
-            lnk.entry     = "main";
+                snprintf(cmd, sizeof(cmd),
+                    "gcc -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -ldl -lresolv -static 2>&1",
+                    out_name, obj_path, rt_path);
 #endif
-
-            xlnk_add_object(&lnk, obj_path);
-            xlnk_add_library(&lnk, rt_path);
-
-            if (!do_static) {
-#if defined(XLY_PLATFORM_MACOS)
-                xlnk_add_soname(&lnk, "/usr/lib/libm.dylib");
-                xlnk_add_soname(&lnk, "/usr/lib/libpthread.dylib");
+            } else {
+#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
+                snprintf(cmd, sizeof(cmd),
+                    "gcc -nostartfiles -o '%s' '%s' '%s' -lm -lpthread 2>&1",
+                    out_name, obj_path, rt_path);
 #else
-                xlnk_add_soname(&lnk, "libm.so.6");
-                xlnk_add_soname(&lnk, "libpthread.so.0");
-                xlnk_add_soname(&lnk, "libresolv.so.2");
-                xlnk_add_soname(&lnk, "libdl.so.2");
+                snprintf(cmd, sizeof(cmd),
+                    "gcc -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -ldl -lresolv 2>&1",
+                    out_name, obj_path, rt_path);
 #endif
             }
 
             if (verbose)
-                fprintf(stderr, "%s[xenlyc]%s xlnk v4.0: %s → %s\n",
-                        COL("2"), RESET, obj_path, out_name);
+                fprintf(stderr, "%s[xenlyc]%s link: %s\n",
+                        COL("2"), RESET, cmd);
 
-            int rc = xlnk_link(&lnk);
-            if (rc != XLNK_OK) {
+            FILE *lpipe = popen(cmd, "r");
+            if (!lpipe) {
+                fprintf(stderr, "%s[xenlyc]%s popen failed: cannot launch linker\n",
+                        COL("1;31"), RESET);
+                free(asm_path); free(obj_path);
+                return 1;
+            }
+            char lline[512];
+            while (fgets(lline, sizeof(lline), lpipe))
+                fputs(lline, stderr);
+            int lrc = pclose(lpipe);
+            if (lrc != 0) {
                 fprintf(stderr,
-                    "%s[xenlyc]%s link failed: %s\n"
-                    "%s[xenlyc]%s hint: run 'xenlyc --linker-version' to verify xlnk setup.\n",
-                    COL("1;31"), RESET, xlnk_error_string(rc),
+                    "%s[xenlyc]%s link failed (status %d)\n"
+                    "%s[xenlyc]%s hint: ensure libxly_rt.a is in the same directory as xenlyc\n",
+                    COL("1;31"), RESET, lrc,
                     COL("1;33"), RESET);
                 free(asm_path); free(obj_path);
                 return 1;
