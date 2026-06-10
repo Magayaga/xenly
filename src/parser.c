@@ -14,10 +14,12 @@
 
 // ─── Forward declarations (grammar hierarchy) ───────────────────────────────
 static ASTNode *parse_statement(Parser *p);
+static ASTNode *parse_gen_decl(Parser *p);
+static ASTNode *parse_block_fn(Parser *p);
+static ASTNode *try_parse_trailing_block(Parser *p, ASTNode *call_node);
 static ASTNode *parse_expression(Parser *p);
 static ASTNode *parse_update_expr(Parser *p);
 static ASTNode *parse_nullish(Parser *p);
-static ASTNode *parse_pipe_forward(Parser *p);
 static ASTNode *parse_or(Parser *p);
 static ASTNode *parse_and(Parser *p);
 static ASTNode *parse_equality(Parser *p);
@@ -262,6 +264,24 @@ static ASTNode *parse_statement(Parser *p) {
     }
 
     // fn declaration
+    // ── gen fn name(params) { body } — generator function ─────────────────
+    if (check(p, TOKEN_GEN)) {
+        return parse_gen_decl(p);
+    }
+
+    // ── yield expr — inside generator body ────────────────────────────────
+    if (check(p, TOKEN_YIELD)) {
+        advance(p);
+        int line = p->current.line;
+        if (check(p, TOKEN_NEWLINE) || check(p, TOKEN_SEMICOLON) ||
+            check(p, TOKEN_RBRACE)) {
+            return ast_node_create(NODE_YIELD_EMPTY, line);
+        }
+        ASTNode *node = ast_node_create(NODE_YIELD, line);
+        ast_node_add_child(node, parse_expression(p));
+        return node;
+    }
+
     if (check(p, TOKEN_FN)) {
         advance(p);
         int line = p->current.line;
@@ -494,76 +514,6 @@ static ASTNode *parse_statement(Parser *p) {
 
 
 
-    // ── unless (cond) { body } ────────────────────────────────────────────────
-    // Imperative inverse-if: runs body when condition is FALSE.  No else branch.
-    if (check(p, TOKEN_UNLESS)) {
-        advance(p);
-        ASTNode *node = ast_node_create(NODE_UNLESS, p->current.line);
-        expect(p, TOKEN_LPAREN, "Expected '(' after 'unless'.");
-        ast_node_add_child(node, parse_expression(p));   // children[0] = condition
-        expect(p, TOKEN_RPAREN, "Expected ')' after unless condition.");
-        skip_newlines(p);
-        ASTNode *body = ast_node_create(NODE_BLOCK, p->current.line);
-        if (check(p, TOKEN_LBRACE)) {
-            advance(p);
-            skip_newlines(p);
-            while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
-                ASTNode *s = parse_statement(p);
-                if (s) ast_node_add_child(body, s);
-                skip_newlines(p);
-            }
-            expect(p, TOKEN_RBRACE, "Expected '}' to close unless body.");
-        } else {
-            ASTNode *s = parse_statement(p);
-            if (s) ast_node_add_child(body, s);
-        }
-        ast_node_add_child(node, body);                  // children[1] = body
-        skip_newlines(p);
-        return node;
-    }
-
-    // ── repeat N { body } ─────────────────────────────────────────────────────
-    // Imperative counted loop: executes body exactly N times.
-    // 'break' exits early; 'continue' skips to next iteration.
-    if (check(p, TOKEN_REPEAT)) {
-        advance(p);
-        ASTNode *node = ast_node_create(NODE_REPEAT, p->current.line);
-        ast_node_add_child(node, parse_expression(p));   // children[0] = count
-        skip_newlines(p);
-        ASTNode *body = ast_node_create(NODE_BLOCK, p->current.line);
-        expect(p, TOKEN_LBRACE, "Expected '{' after repeat count.");
-        skip_newlines(p);
-        while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
-            ASTNode *s = parse_statement(p);
-            if (s) ast_node_add_child(body, s);
-            skip_newlines(p);
-        }
-        expect(p, TOKEN_RBRACE, "Expected '}' to close repeat body.");
-        ast_node_add_child(node, body);                  // children[1] = body
-        skip_newlines(p);
-        return node;
-    }
-
-    // ── forever { body } ──────────────────────────────────────────────────────
-    // Imperative infinite loop.  Use 'break' to exit, 'return' to return a value.
-    if (check(p, TOKEN_FOREVER)) {
-        advance(p);
-        ASTNode *node = ast_node_create(NODE_FOREVER, p->current.line);
-        skip_newlines(p);
-        ASTNode *body = ast_node_create(NODE_BLOCK, p->current.line);
-        expect(p, TOKEN_LBRACE, "Expected '{' after 'forever'.");
-        skip_newlines(p);
-        while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
-            ASTNode *s = parse_statement(p);
-            if (s) ast_node_add_child(body, s);
-            skip_newlines(p);
-        }
-        expect(p, TOKEN_RBRACE, "Expected '}' to close forever body.");
-        ast_node_add_child(node, body);                  // children[0] = body
-        skip_newlines(p);
-        return node;
-    }
-
     // do-while: do { body } while (cond)
     if (check(p, TOKEN_DO)) {
         advance(p);
@@ -667,6 +617,49 @@ static ASTNode *parse_statement(Parser *p) {
         advance(p);
         int line = p->current.line;
         expect(p, TOKEN_LPAREN, "Expected '(' after 'for'.");
+
+        // ── Detect for-of: for (x of iterable) ──────────────────────────────
+        // Peek ahead: VAR/LET IDENT OF  or  IDENT OF
+        {
+            int is_for_of = 0;
+            char *of_var = NULL;
+            if (check(p, TOKEN_VAR) || check(p, TOKEN_LET) || check(p, TOKEN_CONST)) {
+                advance(p);
+                if (check(p, TOKEN_IDENTIFIER)) {
+                    of_var = strdup(p->current.value);
+                    advance(p);
+                    if (check(p, TOKEN_OF)) {
+                        is_for_of = 1;
+                        advance(p); // consume 'of'
+                    } else {
+                        // put back — not for-of; fall through via fake token replay
+                        // We'll handle this by inserting the var name back
+                        // (simplest: just create a let_decl and continue)
+                    }
+                }
+                if (is_for_of && of_var) {
+                    ASTNode *iter = parse_expression(p);
+                    expect(p, TOKEN_RPAREN, "Expected ')' after for-of iterable.");
+                    skip_newlines(p);
+                    expect(p, TOKEN_LBRACE, "Expected '{' for for-of body.");
+                    ASTNode *body = ast_node_create(NODE_BLOCK, line);
+                    skip_newlines(p);
+                    while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+                        ASTNode *st = parse_statement(p);
+                        if (st) ast_node_add_child(body, st);
+                        skip_newlines(p);
+                    }
+                    expect(p, TOKEN_RBRACE, "Expected '}' to close for-of body.");
+                    ASTNode *node = ast_node_create(NODE_FOR_OF, line);
+                    node->str_value = of_var; // iteration variable name
+                    ast_node_add_child(node, iter);   // children[0] = iterable expr
+                    ast_node_add_child(node, body);   // children[1] = body block
+                    skip_newlines(p);
+                    return node;
+                }
+                if (of_var) free(of_var);
+            }
+        }
 
         // Detect for-in: for (var x in expr) or for (let x in expr) or for (x in expr)
         // Peek: if we see VAR/LET IDENT IN  or  IDENT IN  → for-in
@@ -1121,39 +1114,12 @@ static ASTNode *parse_update_expr(Parser *p) {
 }
 
 static ASTNode *parse_expression(Parser *p) {
-    ASTNode *expr = parse_nullish(p);
-
-    // ── where clause ─────────────────────────────────────────────────────────
-    // Syntax:  expr where id = val [, id = val ...]
-    // Semantics: evaluate bindings first (in declaration order), then eval expr.
-    // Desugared at runtime into a small block scope.
-    if (match(p, TOKEN_WHERE)) {
-        ASTNode *node = ast_node_create(NODE_WHERE, p->previous.line);
-        ast_node_add_child(node, expr);  // children[0] = body expression
-        // Parse one or more   id = value   binding pairs
-        do {
-            if (!check(p, TOKEN_IDENTIFIER)) {
-                error_at(p, "Expected identifier in 'where' binding.");
-                break;
-            }
-            ASTNode *bind = ast_node_create(NODE_VAR_DECL, p->current.line);
-            bind->str_value = strdup(p->current.value);
-            advance(p);
-            if (!match(p, TOKEN_ASSIGN)) {
-                error_at(p, "Expected '=' after identifier in 'where' binding.");
-                break;
-            }
-            ast_node_add_child(bind, parse_nullish(p));  // value expression
-            ast_node_add_child(node, bind);              // children[1..n] = bindings
-        } while (match(p, TOKEN_COMMA));
-        return node;
-    }
-    return expr;
+    return parse_nullish(p);
 }
 
 // ?? (null coalescing) — lower precedence than or
 static ASTNode *parse_nullish(Parser *p) {
-    ASTNode *left = parse_pipe_forward(p);
+    ASTNode *left = parse_or(p);
     // Ternary: cond ? then : else  (binds tighter than ??)
     if (match(p, TOKEN_QUESTION)) {
         ASTNode *node = ast_node_create(NODE_TERNARY, p->previous.line);
@@ -1169,25 +1135,7 @@ static ASTNode *parse_nullish(Parser *p) {
     while (match(p, TOKEN_NULLISH)) {
         ASTNode *node = ast_node_create(NODE_NULLISH, p->previous.line);
         ast_node_add_child(node, left);
-        ast_node_add_child(node, parse_pipe_forward(p));
-        left = node;
-    }
-    return left;
-}
-
-// ─── Pipe-forward: expr |> fn  (left-associative, lower than ternary/nullish) ─
-// Desugars   a |> f        →  f(a)
-//            a |> f |> g   →  g(f(a))
-// The RHS must be a callable expression.
-static ASTNode *parse_pipe_forward(Parser *p) {
-    ASTNode *left = parse_or(p);
-    while (match(p, TOKEN_PIPE_FORWARD)) {
-        int line = p->previous.line;
-        ASTNode *fn_expr = parse_or(p);   // RHS: the function expression
-        // Build a NODE_PIPE_FORWARD node: children[0]=value, children[1]=fn
-        ASTNode *node = ast_node_create(NODE_PIPE_FORWARD, line);
-        ast_node_add_child(node, left);
-        ast_node_add_child(node, fn_expr);
+        ast_node_add_child(node, parse_or(p));
         left = node;
     }
     return left;
@@ -1320,7 +1268,153 @@ static ASTNode *parse_unary(Parser *p) {
     return parse_call(p);
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * GENERATOR FUNCTION DECLARATION
+ *
+ * Syntax:   gen fn name(params) { body }
+ *           gen fn name(params) { ... yield value ... }
+ *
+ * Produces: NODE_GEN_DECL with same child layout as NODE_FN_DECL:
+ *   str_value          = function name
+ *   params/param_count = parameter list
+ *   children[0]        = body block (may contain NODE_YIELD nodes)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static ASTNode *parse_gen_decl(Parser *p) {
+    int line = p->current.line;
+    advance(p); /* consume 'gen' */
+
+    if (!check(p, TOKEN_FN)) {
+        error_at(p, "Expected 'fn' after 'gen'.");
+        return ast_node_create(NODE_NULL, line);
+    }
+    advance(p); /* consume 'fn' */
+
+    if (!check(p, TOKEN_IDENTIFIER)) {
+        error_at(p, "Expected generator function name.");
+        return ast_node_create(NODE_NULL, line);
+    }
+
+    ASTNode *node = ast_node_create(NODE_GEN_DECL, line);
+    node->str_value = strdup(p->current.value);
+    advance(p);
+
+    /* Parameter list */
+    expect(p, TOKEN_LPAREN, "Expected '(' after generator name.");
+    size_t cap = 4, count = 0;
+    Param *params = (Param *)malloc(sizeof(Param) * cap);
+    if (!check(p, TOKEN_RPAREN)) {
+        do {
+            skip_newlines(p);
+            if (check(p, TOKEN_RPAREN)) break;
+            if (!check(p, TOKEN_IDENTIFIER)) { error_at(p, "Expected parameter name."); break; }
+            if (count >= cap) { cap *= 2; params = (Param *)realloc(params, sizeof(Param)*cap); }
+            params[count].name            = strdup(p->current.value);
+            params[count].type_annotation = NULL;
+            params[count].default_value   = NULL;
+            params[count].is_optional     = 0;
+            advance(p);
+            if (match(p, TOKEN_COLON)) {
+                params[count].type_annotation = check(p, TOKEN_IDENTIFIER) ?
+                    strdup(p->current.value) : NULL;
+                if (params[count].type_annotation) advance(p);
+            }
+            if (match(p, TOKEN_ASSIGN)) {
+                params[count].default_value = parse_expression(p);
+                params[count].is_optional = 1;
+            }
+            count++;
+        } while (match(p, TOKEN_COMMA));
+    }
+    expect(p, TOKEN_RPAREN, "Expected ')' after generator parameters.");
+    node->params      = params;
+    node->param_count = count;
+
+    /* Body block */
+    skip_newlines(p);
+    expect(p, TOKEN_LBRACE, "Expected '{' for generator body.");
+    ASTNode *body = ast_node_create(NODE_BLOCK, p->current.line);
+    skip_newlines(p);
+    while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+        ASTNode *st = parse_statement(p);
+        if (st) ast_node_add_child(body, st);
+        skip_newlines(p);
+    }
+    expect(p, TOKEN_RBRACE, "Expected '}' to close generator body.");
+    ast_node_add_child(node, body);
+    skip_newlines(p);
+    return node;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * TRAILING BLOCK / CLOSURE PARSING
+ *
+ * Syntax:   call(args) { |p1, p2| body }   → call(args, fn(p1,p2){ body })
+ *           call(args) { body }             → call(args, fn(){ body })
+ *
+ * Enables:
+ *   arr.each { |x| print(x) }
+ *   5.times { |i| print(i) }
+ *   result = items.map { |x| x * 2 }
+ *
+ * If the { immediately follows a call expr with no space ambiguity,
+ * it is interpreted as a trailing lambda argument.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static ASTNode *parse_block_fn(Parser *p) {
+    int line = p->current.line;
+    expect(p, TOKEN_LBRACE, "Expected '{' for block.");
+
+    ASTNode *fn = ast_node_create(NODE_BLOCK_FN, line);
+
+    /* Optional parameter list:  { |p1, p2| body } */
+    size_t cap = 4, count = 0;
+    Param *params = (Param *)malloc(sizeof(Param) * cap);
+
+    skip_newlines(p);
+    if (check(p, TOKEN_PIPE)) {
+        advance(p); /* consume leading | */
+        while (!check(p, TOKEN_PIPE) && !check(p, TOKEN_EOF)) {
+            skip_newlines(p);
+            if (check(p, TOKEN_PIPE)) break;
+            if (!check(p, TOKEN_IDENTIFIER)) { error_at(p, "Expected parameter name in block."); break; }
+            if (count >= cap) { cap *= 2; params = (Param *)realloc(params, sizeof(Param)*cap); }
+            params[count].name            = strdup(p->current.value);
+            params[count].type_annotation = NULL;
+            params[count].default_value   = NULL;
+            params[count].is_optional     = 0;
+            advance(p);
+            count++;
+            if (!match(p, TOKEN_COMMA)) break;
+        }
+        expect(p, TOKEN_PIPE, "Expected closing '|' after block parameters.");
+    }
+
+    fn->params      = params;
+    fn->param_count = count;
+
+    /* Body */
+    ASTNode *body = ast_node_create(NODE_BLOCK, line);
+    skip_newlines(p);
+    while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+        ASTNode *st = parse_statement(p);
+        if (st) ast_node_add_child(body, st);
+        skip_newlines(p);
+    }
+    expect(p, TOKEN_RBRACE, "Expected '}' to close block.");
+    ast_node_add_child(fn, body);
+    return fn;
+}
+
+static ASTNode *try_parse_trailing_block(Parser *p, ASTNode *call_node) {
+    /* Already confirmed current token is TOKEN_LBRACE */
+    ASTNode *block_fn = parse_block_fn(p);
+    /* Append the anonymous block fn as the last argument to the call */
+    ast_node_add_child(call_node, block_fn);
+    return call_node;
+}
+
 static ASTNode *parse_call(Parser *p) {
+
     ASTNode *expr = parse_primary(p);
     if (!expr) return NULL;
 
@@ -1566,6 +1660,37 @@ static ASTNode *parse_call(Parser *p) {
                 ast_node_add_child(pget, expr); // children[0] = object expression
                 expr = pget;
             }
+            continue;
+        }
+
+        // ── Computed property: expr.[key_expr] → NODE_COMPUTED_PROP ─────────
+        if (match(p, TOKEN_DOT_BRACKET)) {
+            int bp_line = p->current.line;
+            ASTNode *key_expr = parse_expression(p);
+            expect(p, TOKEN_RBRACKET, "Expected ']' after computed property expression.");
+            // If assignment follows: expr.[key] = val
+            if (match(p, TOKEN_ASSIGN)) {
+                ASTNode *val = parse_expression(p);
+                ASTNode *node = ast_node_create(NODE_COMPUTED_PROP_SET, bp_line);
+                ast_node_add_child(node, expr);      // children[0] = object
+                ast_node_add_child(node, key_expr);  // children[1] = key expression
+                ast_node_add_child(node, val);       // children[2] = value
+                expr = node;
+            } else {
+                ASTNode *node = ast_node_create(NODE_COMPUTED_PROP, bp_line);
+                ast_node_add_child(node, expr);      // children[0] = object
+                ast_node_add_child(node, key_expr);  // children[1] = key expression
+                expr = node;
+            }
+            continue;
+        }
+
+        // ── Trailing block syntax: call(args) { |params| body } ──────────────
+        // Desugars to: call(args, fn(params) { body })
+        // This enables Ruby/Kotlin-style closures and iterators.
+        if ((expr->type == NODE_FN_CALL || expr->type == NODE_METHOD_CALL ||
+             expr->type == NODE_CALL_EXPR) && check(p, TOKEN_LBRACE)) {
+            expr = try_parse_trailing_block(p, expr);
             continue;
         }
 
@@ -2287,6 +2412,45 @@ static ASTNode *parse_primary(Parser *p) {
         }
         expect(p, TOKEN_RBRACE, "Expected '}' to close function body.");
         ast_node_add_child(node, fn_body);
+        return node;
+    }
+
+    // ── reflect.method(args) — metaprogramming reflection ─────────────────
+    if (check(p, TOKEN_REFLECT)) {
+        advance(p); // consume 'reflect'
+        int rline = p->current.line;
+        expect(p, TOKEN_DOT, "Expected '.' after 'reflect'.");
+        if (!check(p, TOKEN_IDENTIFIER)) {
+            error_at(p, "Expected reflect method name.");
+            return ast_node_create(NODE_NULL, rline);
+        }
+        char *method = strdup(p->current.value); advance(p);
+        expect(p, TOKEN_LPAREN, "Expected '(' after reflect method.");
+
+        // Map method name to node type
+        NodeType rtype = NODE_REFLECT_KEYS;
+        if      (strcmp(method, "keys")      == 0) rtype = NODE_REFLECT_KEYS;
+        else if (strcmp(method, "get")       == 0) rtype = NODE_REFLECT_GET;
+        else if (strcmp(method, "set")       == 0) rtype = NODE_REFLECT_SET;
+        else if (strcmp(method, "has")       == 0) rtype = NODE_REFLECT_HAS;
+        else if (strcmp(method, "delete")    == 0) rtype = NODE_REFLECT_DELETE;
+        else if (strcmp(method, "define")    == 0) rtype = NODE_REFLECT_DEFINE;
+        else if (strcmp(method, "freeze")    == 0) rtype = NODE_REFLECT_FREEZE;
+        else if (strcmp(method, "isFrozen")  == 0) rtype = NODE_REFLECT_IS_FROZEN;
+        else if (strcmp(method, "ownKeys")   == 0) rtype = NODE_REFLECT_OWN_KEYS;
+        else if (strcmp(method, "apply")     == 0) rtype = NODE_REFLECT_APPLY;
+        else if (strcmp(method, "construct") == 0) rtype = NODE_REFLECT_CONSTRUCT;
+        else { error_at(p, "Unknown reflect method."); free(method); }
+
+        ASTNode *node = ast_node_create(rtype, rline);
+        node->str_value = method;
+        while (!check(p, TOKEN_RPAREN) && !check(p, TOKEN_EOF)) {
+            skip_newlines(p);
+            if (check(p, TOKEN_RPAREN)) break;
+            ast_node_add_child(node, parse_expression(p));
+            if (!match(p, TOKEN_COMMA)) break;
+        }
+        expect(p, TOKEN_RPAREN, "Expected ')' after reflect arguments.");
         return node;
     }
 

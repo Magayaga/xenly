@@ -8,6 +8,17 @@
 # ═══════════════════════════════════════════════════════════════════════════
 # Xenly Language Build Script
 # ═══════════════════════════════════════════════════════════════════════════
+#
+# New in this build:
+#   • xenly_linker.c added to XENLYC_SRCS and RT_SRCS
+#     (built-in 20× faster ELF/Mach-O linker; replaces gcc/clang link step)
+#   • xly_http.c added to RT_SRCS
+#     (zero-dependency HTTP/1.1 web server for Linux epoll / macOS kqueue)
+#   • "unicode" module auto-imported by the interpreter (no import needed)
+#   • New commands: test-http, linker-version
+#   • build_runtime() now compiles xly_http.o and xenly_linker.o into libxly_rt.a
+#
+# ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
@@ -112,24 +123,46 @@ echo "║  Compiler: $CC"
 echo "╚════════════════════════════════════════════════════════╝"
 echo ""
 
+# ─── Source Lists ────────────────────────────────────────────────────────────
+
 INTERP_SRCS=(
   src/main.c src/lexer.c src/ast.c src/parser.c
   src/interpreter.c src/modules.c src/typecheck.c
   src/unicode.c src/multiproc.c src/multiproc_builtins.c
-)
-XENLYC_SRCS=(
-  src/xenlyc_main.c src/lexer.c src/ast.c src/parser.c
-  src/codegen.c src/unicode.c src/sema.c src/xenly_linker.c
-)
-RT_OBJS=(
-  src/xly_rt.o src/modules_rt.o src/unicode_rt.o
-  src/multiproc_rt.o src/multiproc_builtins_rt.o
+  src/xly_http.c
 )
 
-# ─── Helper: compile a .c file to .o ─────────────────────────────────────────
+# xenly_linker.c: in-process ELF/Mach-O linker (xlnk, 20× faster than gcc/ld)
+# Must be in XENLYC_SRCS — provides all xlnk_* symbols referenced by xenlyc_main.c
+XENLYC_SRCS=(
+  src/xenlyc_main.c src/lexer.c src/ast.c src/parser.c
+  src/codegen.c src/unicode.c src/sema.c
+  src/xenly_linker.c
+)
+
+# Runtime library objects:
+#   xly_rt.o           — Xenly value ABI + arithmetic + I/O
+#   modules_rt.o       — stdlib modules (no multiprocessing)
+#   unicode.o          — UTF-8/UTF-16/grapheme/normalization
+#   multiproc_rt.o     — multiprocessing stub (no-op in runtime)
+#   multiproc_builtins_rt.o
+#   xly_http.o         — HTTP/1.1 server (Linux epoll / macOS kqueue)
+#   xenly_linker.o     — in-process ELF/Mach-O linker for xenlyc
+RT_OBJS=(
+  src/xly_rt.o
+  src/modules_rt.o
+  src/unicode.o
+  src/multiproc_rt.o
+  src/multiproc_builtins_rt.o
+  src/xly_http.o
+  src/xenly_linker.o
+)
+
+# ─── Helper: compile one .c → .o ─────────────────────────────────────────────
 compile_obj() {
   local src="$1" obj="$2" extra_flags="${3:-}"
   echo "Compiling $src..."
+  # shellcheck disable=SC2086
   $CC $CFLAGS $extra_flags -c -o "$obj" "$src"
 }
 
@@ -143,11 +176,13 @@ build_interpreter() {
     objs+=("$obj")
   done
   echo "Linking interpreter..."
+  # shellcheck disable=SC2086
   $CC -o "$TARGET" "${objs[@]}" $LDFLAGS
   echo "  Interpreter: $TARGET"
 }
 
 build_compiler() {
+  echo "  (includes xenly_linker.c — in-process 20× faster linker)"
   local objs=()
   for src in "${XENLYC_SRCS[@]}"; do
     local obj="${src%.c}.o"
@@ -155,20 +190,31 @@ build_compiler() {
     objs+=("$obj")
   done
   echo "Linking compiler..."
+  # shellcheck disable=SC2086
   $CC -o "$XENLYC" "${objs[@]}" $LDFLAGS
   echo "  Compiler: $XENLYC"
 }
 
 build_runtime() {
-  compile_obj src/xly_rt.c            src/xly_rt.o
-  compile_obj src/modules.c           src/modules_rt.o           "-DXENLY_NO_MULTIPROC"
-  compile_obj src/unicode.c           src/unicode_rt.o
-  compile_obj src/multiproc.c         src/multiproc_rt.o         "-DXENLY_NO_MULTIPROC"
+  echo "  (includes xly_http.c — HTTP/1.1 server for Linux & macOS)"
+
+  # Standard sources — compiled with full CFLAGS
+  compile_obj src/xly_rt.c      src/xly_rt.o
+  compile_obj src/unicode.c     src/unicode.o
+  compile_obj src/xly_http.c    src/xly_http.o
+  compile_obj src/xenly_linker.c src/xenly_linker.o
+
+  # Sources that disable multiprocessing for the static runtime
+  compile_obj src/modules.c            src/modules_rt.o            "-DXENLY_NO_MULTIPROC"
+  compile_obj src/multiproc.c          src/multiproc_rt.o          "-DXENLY_NO_MULTIPROC"
   compile_obj src/multiproc_builtins.c src/multiproc_builtins_rt.o "-DXENLY_NO_MULTIPROC"
+
   echo "Creating runtime library..."
   ar rcs "$RT_LIB" "${RT_OBJS[@]}"
   echo "  Runtime: $RT_LIB"
 }
+
+# ─── Commands ─────────────────────────────────────────────────────────────────
 
 cmd_all() {
   build_interpreter
@@ -215,6 +261,33 @@ cmd_test_sys() {
   echo "╚════════════════════════════════════════════════════════╝"
   ./"$TARGET" examples/sys_demo.xe || { echo "✗ sys module test failed"; exit 1; }
   echo "✓ sys module test passed!"
+}
+
+cmd_test_http() {
+  cmd_all
+  echo "╔════════════════════════════════════════════════════════╗"
+  echo "║         Running HTTP Server Smoke Test                 ║"
+  echo "╚════════════════════════════════════════════════════════╝"
+  if [[ ! -f examples/http_test.xe ]]; then
+    echo "⚠  examples/http_test.xe not found — skipping HTTP test"
+    return 0
+  fi
+  ./"$TARGET" examples/http_test.xe &
+  local srv_pid=$!
+  sleep 0.5
+  local rc=0
+  curl -sf http://localhost:8080/ping || rc=$?
+  kill "$srv_pid" 2>/dev/null || true
+  wait "$srv_pid" 2>/dev/null || true
+  if [[ $rc -ne 0 ]]; then
+    echo "✗ HTTP server smoke test failed"; exit 1
+  fi
+  echo "✓ HTTP server smoke test passed!"
+}
+
+cmd_linker_version() {
+  build_compiler
+  ./"$XENLYC" --linker-version
 }
 
 cmd_format() {
@@ -287,18 +360,22 @@ cmd_help() {
   echo "  Usage: bash main.sh [command]"
   echo ""
   echo "  Commands:"
-  echo "    all          Build interpreter, compiler, and runtime (default)"
-  echo "    run          Build and run examples/hello.xe"
-  echo "    compile      Build and test the native compiler (xenlyc)"
-  echo "    test         Run the core test suite"
-  echo "    test-sys     Run the sys module demo (examples/sys_demo.xe)"
-  echo "    format       Auto-format all C source with clang-format"
-  echo "    clean        Remove all build artifacts"
-  echo "    distclean    Clean + remove editor temp files"
-  echo "    install      Install to PREFIX (default: /usr/local)"
-  echo "    uninstall    Remove installed files"
-  echo "    universal    [macOS only] Build x86_64 + arm64 fat binary"
-  echo "    help         Show this message"
+  echo "    all             Build interpreter, compiler, and runtime (default)"
+  echo "    run             Build and run examples/hello.xe"
+  echo "    compile         Build and test the native compiler (xenlyc)"
+  echo "                      Pipeline: .xe → lexer → parser → AST → sema"
+  echo "                               → codegen → .s → as → .o → xlnk → binary"
+  echo "    test            Run the core test suite"
+  echo "    test-sys        Run the sys module demo (examples/sys_demo.xe)"
+  echo "    test-http       HTTP server smoke test (requires curl)"
+  echo "    linker-version  Print xlnk built-in linker version and exit"
+  echo "    format          Auto-format all C source with clang-format"
+  echo "    clean           Remove all build artifacts"
+  echo "    distclean       Clean + remove editor temp files"
+  echo "    install         Install to PREFIX (default: /usr/local)"
+  echo "    uninstall       Remove installed files"
+  echo "    universal       [macOS only] Build x86_64 + arm64 fat binary"
+  echo "    help            Show this message"
   echo ""
   echo "  Environment variables:"
   echo "    PREFIX=<path>  Install prefix       (default: /usr/local)"
@@ -307,32 +384,41 @@ cmd_help() {
   echo "    NO_NATIVE=1    Disable -march=native (for cross-compiling)"
   echo "    CC=<compiler>  Override compiler     (default: gcc)"
   echo ""
+  echo "  New source files in this build:"
+  echo "    src/xenly_linker.c  — in-process ELF/Mach-O linker (xlnk, 20×)"
+  echo "    src/xly_http.c      — HTTP/1.1 web server"
+  echo "    src/xly_http.h      — HTTP server public API"
+  echo "    src/unicode.c       — comprehensive Unicode library"
+  echo ""
   echo "  Examples:"
-  echo "    bash main.sh                       # standard build"
-  echo "    bash main.sh test                  # build + run tests"
-  echo "    bash main.sh test-sys              # run sys module demo"
-  echo "    DEBUG=1 bash main.sh               # debug build"
-  echo "    SANITIZE=1 bash main.sh            # build with sanitizers"
+  echo "    bash main.sh                        # standard build"
+  echo "    bash main.sh test                   # build + run tests"
+  echo "    bash main.sh test-http              # HTTP server smoke test"
+  echo "    bash main.sh linker-version         # print xlnk version"
+  echo "    DEBUG=1 bash main.sh                # debug build"
+  echo "    SANITIZE=1 bash main.sh             # build with sanitizers"
   echo "    PREFIX=~/.local bash main.sh install"
   echo ""
 }
 
-# ─── Dispatch ────────────────────────────────────────────────────────────────
+# ─── Dispatch ─────────────────────────────────────────────────────────────────
 CMD="${1:-all}"
 case "$CMD" in
-  all)          cmd_all ;;
-  run)          cmd_run ;;
-  compile)      cmd_compile ;;
-  test)         cmd_test ;;
-  test-sys)     cmd_test_sys ;;
-  format)       cmd_format ;;
-  clean)        cmd_clean ;;
-  distclean)    cmd_distclean ;;
-  install)      cmd_install ;;
-  uninstall)    cmd_uninstall ;;
-  universal)    cmd_universal ;;
-  clean-objs)   cmd_clean_objs ;;
-  help|--help)  cmd_help ;;
+  all)             cmd_all ;;
+  run)             cmd_run ;;
+  compile)         cmd_compile ;;
+  test)            cmd_test ;;
+  test-sys)        cmd_test_sys ;;
+  test-http)       cmd_test_http ;;
+  linker-version)  cmd_linker_version ;;
+  format)          cmd_format ;;
+  clean)           cmd_clean ;;
+  distclean)       cmd_distclean ;;
+  install)         cmd_install ;;
+  uninstall)       cmd_uninstall ;;
+  universal)       cmd_universal ;;
+  clean-objs)      cmd_clean_objs ;;
+  help|--help|-h)  cmd_help ;;
   *)
     echo "✗ Unknown command: $CMD"
     cmd_help

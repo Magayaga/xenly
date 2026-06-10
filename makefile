@@ -116,7 +116,8 @@ $(info )
 TARGET = xenly
 INTERP_SRCS = src/main.c src/lexer.c src/ast.c src/parser.c \
               src/interpreter.c src/modules.c src/typecheck.c \
-              src/unicode.c src/multiproc.c src/multiproc_builtins.c
+              src/unicode.c src/multiproc.c src/multiproc_builtins.c \
+              src/xly_http.c
 INTERP_OBJS = $(INTERP_SRCS:.c=.o)
 
 XENLYC = xenlyc
@@ -172,7 +173,8 @@ src/multiproc_rt.o: src/multiproc.c
 	@echo "Compiling $< (runtime stub)..."
 	$(CC) $(CFLAGS) -DXENLY_NO_MULTIPROC -c -o $@ $<
 
-src/multiproc_builtins_rt.o: src/multiproc_builtins.c
+src/multiproc_builtins_rt.o: src/multiproc_builtins.c \
+              src/xly_http.c
 	@echo "Compiling $< (runtime stub)..."
 	$(CC) $(CFLAGS) -DXENLY_NO_MULTIPROC -c -o $@ $<
 
