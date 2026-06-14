@@ -557,122 +557,165 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    /* ── assemble: as input.s -o input.o ─────────────────────────────── */
-    char *obj_path = swap_ext(input, ".o");
-    {
-        char cmd[1024];
-#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
-#  if defined(__arm64__) || defined(__aarch64__)
-        snprintf(cmd, sizeof(cmd), "as -arch arm64 -o '%s' '%s' 2>&1",
-                 obj_path, asm_path);
-#  else
-        snprintf(cmd, sizeof(cmd), "as -arch x86_64 -o '%s' '%s' 2>&1",
-                 obj_path, asm_path);
-#  endif
-#else
-        snprintf(cmd, sizeof(cmd), "as --64 -o '%s' '%s' 2>&1",
-                 obj_path, asm_path);
-#endif
-        if (verbose) fprintf(stderr, "%s[xenlyc]%s assemble: %s\n",
-                             COL("2"), RESET, cmd);
-        FILE *pipe = popen(cmd, "r");
-        if (!pipe) {
-            fprintf(stderr, "%s[xenlyc]%s popen failed: cannot launch assembler\n",
-                    COL("1;31"), RESET);
-            free(asm_path); free(obj_path);
-            return 1;
-        }
-        char line[256];
-        while (fgets(line, sizeof(line), pipe))
-            fputs(line, stderr);
-        int st = pclose(pipe);
-        if (st != 0) {
-            fprintf(stderr, "%s[xenlyc]%s Assembly failed (status %d)\n",
-                    COL("1;31"), RESET, st);
-            free(asm_path); free(obj_path);
-            return 1;
-        }
-    }
-    double t_assemble = now_ms();
+    /* ── assemble + link in one gcc call ─────────────────────────────── *
+     * We pass the .s file directly to gcc rather than calling `as` first.
+     * This removes the dependency on the system `as` binary and keeps the
+     * pipeline to a single external process.  gcc (or cc/clang fallback)
+     * handles both assembly and linking internally.
+     *
+     * libxly_rtc.a is searched in several standard locations so that the
+     * binary works whether xenlyc is run from the build tree, installed to
+     * /usr/local/bin, or invoked via an absolute path.
+     * ------------------------------------------------------------------- */
 
-    /* ── link ─────────────────────────────────────────────────────────── */
+    /* 1. Locate libxly_rtc.a ------------------------------------------- */
+    char rt_path[1024];
+    {
+        /* Candidate directories, in preference order */
+        const char *candidates[6];
+        char dir_of_bin[512];   /* same dir as xenlyc binary              */
+        char dir_usr_local[64]; /* /usr/local/lib/xenly                   */
+        char dir_usr[64];       /* /usr/lib/xenly                         */
+        char dir_cwd[512];      /* current working directory              */
+        char dir_exe_parent[512]; /* parent of xenlyc binary dir          */
+
+        /* derive dir of xenlyc binary */
+        const char *slash = strrchr(argv[0], '/');
+        if (slash) {
+            size_t dlen = (size_t)(slash - argv[0]);
+            if (dlen >= sizeof(dir_of_bin)) dlen = sizeof(dir_of_bin) - 1;
+            strncpy(dir_of_bin, argv[0], dlen);
+            dir_of_bin[dlen] = '\0';
+            /* also build parent dir (one level up, e.g. bin/ → ../) */
+            const char *slash2 = NULL;
+            for (size_t k = dlen; k > 0; k--)
+                if (dir_of_bin[k-1] == '/') { slash2 = &dir_of_bin[k-1]; break; }
+            if (slash2) {
+                size_t plen = (size_t)(slash2 - dir_of_bin);
+                if (plen < sizeof(dir_exe_parent)) {
+                    strncpy(dir_exe_parent, dir_of_bin, plen);
+                    dir_exe_parent[plen] = '\0';
+                } else { strcpy(dir_exe_parent, dir_of_bin); }
+            } else { strcpy(dir_exe_parent, dir_of_bin); }
+        } else {
+            strcpy(dir_of_bin, ".");
+            strcpy(dir_exe_parent, ".");
+        }
+        if (getcwd(dir_cwd, sizeof(dir_cwd)) == NULL) strcpy(dir_cwd, ".");
+        strcpy(dir_usr_local, "/usr/local/lib/xenly");
+        strcpy(dir_usr,       "/usr/lib/xenly");
+
+        candidates[0] = dir_of_bin;
+        candidates[1] = dir_cwd;
+        candidates[2] = dir_exe_parent;
+        candidates[3] = dir_usr_local;
+        candidates[4] = dir_usr;
+        candidates[5] = NULL;
+
+        rt_path[0] = '\0';
+        for (int k = 0; candidates[k]; k++) {
+            char probe[1024];
+            snprintf(probe, sizeof(probe), "%s/libxly_rtc.a", candidates[k]);
+            if (access(probe, R_OK) == 0) {
+                strncpy(rt_path, probe, sizeof(rt_path) - 1);
+                rt_path[sizeof(rt_path)-1] = '\0';
+                break;
+            }
+        }
+        if (rt_path[0] == '\0') {
+            fprintf(stderr,
+                "%s[xenlyc]%s error: cannot find libxly_rtc.a\n"
+                "%s[xenlyc]%s  searched: %s, %s, %s, %s, %s\n"
+                "%s[xenlyc]%s  fix: copy libxly_rtc.a next to the xenlyc binary,\n"
+                "%s[xenlyc]%s       or run: make libxly_rtc.a NO_NATIVE=1\n",
+                COL("1;31"), RESET,
+                COL("1;33"), RESET,
+                candidates[0], candidates[1], candidates[2],
+                candidates[3], candidates[4],
+                COL("1;33"), RESET,
+                COL("1;33"), RESET);
+            free(asm_path);
+            return 1;
+        }
+        if (verbose)
+            fprintf(stderr, "%s[xenlyc]%s runtime: %s\n", COL("2"), RESET, rt_path);
+    }
+
+    /* 2. Find a working C compiler (gcc → cc → clang) ------------------- */
+    const char *cc = NULL;
+    {
+        const char *try[] = { "gcc", "cc", "clang", NULL };
+        for (int k = 0; try[k]; k++) {
+            char probe[64];
+            snprintf(probe, sizeof(probe), "command -v %s >/dev/null 2>&1", try[k]);
+            if (system(probe) == 0) { cc = try[k]; break; }
+        }
+        if (!cc) {
+            fprintf(stderr,
+                "%s[xenlyc]%s error: no C compiler found (tried gcc, cc, clang)\n"
+                "%s[xenlyc]%s  fix: install gcc — e.g.  sudo apt install gcc\n",
+                COL("1;31"), RESET,
+                COL("1;33"), RESET);
+            free(asm_path);
+            return 1;
+        }
+        if (verbose)
+            fprintf(stderr, "%s[xenlyc]%s compiler: %s\n", COL("2"), RESET, cc);
+    }
+
+    /* 3. Single compile+link command: cc -nostartfiles src.s rt.a → bin -- */
     {
         const char *out_name = output ? output : "a.out";
+        char cmd[4096];
 
-        /* Runtime library lives in same directory as xenlyc binary */
-        char rt_dir[512];
-        {
-            const char *slash = strrchr(argv[0], '/');
-            if (slash) {
-                size_t dlen = (size_t)(slash - argv[0]);
-                if (dlen >= sizeof(rt_dir)) dlen = sizeof(rt_dir) - 1;
-                strncpy(rt_dir, argv[0], dlen);
-                rt_dir[dlen] = '\0';
-            } else {
-                strcpy(rt_dir, ".");
-            }
+#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
+        if (do_static)
+            snprintf(cmd, sizeof(cmd),
+                "%s -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -static 2>&1",
+                cc, out_name, asm_path, rt_path);
+        else
+            snprintf(cmd, sizeof(cmd),
+                "%s -nostartfiles -o '%s' '%s' '%s' -lm -lpthread 2>&1",
+                cc, out_name, asm_path, rt_path);
+#else
+        if (do_static)
+            snprintf(cmd, sizeof(cmd),
+                "%s -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -ldl -lresolv -static 2>&1",
+                cc, out_name, asm_path, rt_path);
+        else
+            snprintf(cmd, sizeof(cmd),
+                "%s -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -ldl -lresolv 2>&1",
+                cc, out_name, asm_path, rt_path);
+#endif
+
+        if (verbose)
+            fprintf(stderr, "%s[xenlyc]%s link: %s\n", COL("2"), RESET, cmd);
+
+        FILE *lpipe = popen(cmd, "r");
+        if (!lpipe) {
+            fprintf(stderr, "%s[xenlyc]%s error: cannot launch compiler (%s)\n",
+                    COL("1;31"), RESET, cc);
+            free(asm_path);
+            return 1;
         }
-
-        /* ── gcc-based linker (reliable, uses system toolchain) ── */
-        {
-            /* libxly_rtc.a is the minimal compiler-only runtime (xly_rt + unicode + stub).
-             * It lives in the same directory as the xenlyc binary. */
-            char rt_path[1024];
-            snprintf(rt_path, sizeof(rt_path), "%s/libxly_rtc.a", rt_dir);
-
-            char cmd[4096];
-            if (do_static) {
-#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
-                snprintf(cmd, sizeof(cmd),
-                    "gcc -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -static 2>&1",
-                    out_name, obj_path, rt_path);
-#else
-                snprintf(cmd, sizeof(cmd),
-                    "gcc -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -ldl -lresolv -static 2>&1",
-                    out_name, obj_path, rt_path);
-#endif
-            } else {
-#if defined(XLY_PLATFORM_MACOS) || defined(PLATFORM_MACOS)
-                snprintf(cmd, sizeof(cmd),
-                    "gcc -nostartfiles -o '%s' '%s' '%s' -lm -lpthread 2>&1",
-                    out_name, obj_path, rt_path);
-#else
-                snprintf(cmd, sizeof(cmd),
-                    "gcc -nostartfiles -o '%s' '%s' '%s' -lm -lpthread -ldl -lresolv 2>&1",
-                    out_name, obj_path, rt_path);
-#endif
-            }
-
-            if (verbose)
-                fprintf(stderr, "%s[xenlyc]%s link: %s\n",
-                        COL("2"), RESET, cmd);
-
-            FILE *lpipe = popen(cmd, "r");
-            if (!lpipe) {
-                fprintf(stderr, "%s[xenlyc]%s popen failed: cannot launch linker\n",
-                        COL("1;31"), RESET);
-                free(asm_path); free(obj_path);
-                return 1;
-            }
-            char lline[512];
-            while (fgets(lline, sizeof(lline), lpipe))
-                fputs(lline, stderr);
-            int lrc = pclose(lpipe);
-            if (lrc != 0) {
-                fprintf(stderr,
-                    "%s[xenlyc]%s link failed (status %d)\n"
-                    "%s[xenlyc]%s hint: ensure libxly_rt.a is in the same directory as xenlyc\n",
-                    COL("1;31"), RESET, lrc,
-                    COL("1;33"), RESET);
-                free(asm_path); free(obj_path);
-                return 1;
-            }
+        char lline[512];
+        while (fgets(lline, sizeof(lline), lpipe))
+            fputs(lline, stderr);
+        int lrc = pclose(lpipe);
+        if (lrc != 0) {
+            fprintf(stderr,
+                "%s[xenlyc]%s link failed (status %d) — command was:\n  %s\n",
+                COL("1;31"), RESET, lrc, cmd);
+            free(asm_path);
+            return 1;
         }
 
         double t_link = now_ms();
+        /* t_assemble reused: codegen→link is now one phase */
+        double t_assemble = t_link;
 
-        fprintf(stderr, "%s[xenlyc]%s OK  →  %s  (opt=%d, xlnk v%s)\n",
-                COL("1;32"), RESET, out_name, opt_level, xlnk_version());
+        fprintf(stderr, "%s[xenlyc]%s OK  →  %s  (opt=%d)\n",
+                COL("1;32"), RESET, out_name, opt_level);
 
         if (do_time) {
             fprintf(stderr, "\n%s[xenlyc] compile times:%s\n", COL("1;36"), RESET);
@@ -680,10 +723,10 @@ int main(int argc, char **argv) {
             fprintf(stderr, "  parse   %6.1f ms\n", t_parse    - t_read);
             fprintf(stderr, "  sema    %6.1f ms\n", t_sema     - t_parse);
             fprintf(stderr, "  codegen %6.1f ms\n", t_codegen  - t_sema);
-            fprintf(stderr, "  assem   %6.1f ms\n", t_assemble - t_codegen);
-            fprintf(stderr, "  link    %6.1f ms\n", t_link     - t_assemble);
+            fprintf(stderr, "  link    %6.1f ms\n", t_link     - t_codegen);
             fprintf(stderr, "  total   %6.1f ms\n", t_link     - t0);
         }
+        (void)t_assemble;
     }
 
     /* ── cleanup temp files ───────────────────────────────────────────── */
@@ -693,9 +736,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%s[xenlyc]%s kept assembly: %s\n",
                 COL("2"), RESET, asm_path);
 
-    unlink(obj_path);
     free(asm_path);
-    free(obj_path);
 
     return 0;
 }
