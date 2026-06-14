@@ -15,9 +15,7 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: make installing test
-      run: make
-    - name: make installing xenlyc test
-      run: make xenlyc NO_NATIVE=1
+      run: make NO_NATIVE=1
     - name: xenly test (1)
       run: time ./xenly examples/hello.xe
     - name: xenlyc test (1)
