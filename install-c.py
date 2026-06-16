@@ -28,9 +28,10 @@ from pathlib import Path
 UNAME_S = platform.system()   # 'Linux', 'Darwin', 'Windows', ...
 UNAME_M = platform.machine()  # 'x86_64', 'arm64', ...
 
-TARGET  = "xenly"
-XENLYC  = "xenlyc"
+TARGET  = os.environ.get("TARGET", "xenly")
+XENLYC  = os.environ.get("XENLYC", "xenlyc")
 RT_LIB  = "libxly_rt.a"
+RTC_LIB = "libxly_rtc.a"
 
 # ── Source lists ──────────────────────────────────────────────────────────────
 
@@ -64,19 +65,26 @@ RT_NOMP_SRCS = [
     ("src/modules.c",            "src/modules_rt.o"),
     ("src/multiproc.c",          "src/multiproc_rt.o"),
     ("src/multiproc_builtins.c", "src/multiproc_builtins_rt.o"),
-    ("src/xly_http.c",           "src/xly_http.o"),
+]
+
+# Minimal compiler-only runtime used by xenlyc outputs.
+RTC_SRCS = [
+    "src/xly_rt.c",
+    "src/unicode.c",
+    "src/xly_rt_compiler_stub.c",
 ]
 
 # ── Environment variables ─────────────────────────────────────────────────────
 
 CC        = os.environ.get("CC", "gcc")
 NO_NATIVE = os.environ.get("NO_NATIVE", "0") == "1"
+ARCH_FLAG = os.environ.get("ARCH_FLAG", "")
 DEBUG     = os.environ.get("DEBUG", "")
 SANITIZE  = os.environ.get("SANITIZE", "")
 PREFIX    = os.environ.get("PREFIX", "/usr/local")
 
 BASE_CFLAGS  = ["-Wall", "-Wextra", "-O3", "-std=c11",
-                "-D_POSIX_C_SOURCE=200809L", "-Isrc"]
+                "-D_POSIX_C_SOURCE=200809L", "-Isrc", "-MMD", "-MP"]
 BASE_LDFLAGS = ["-lm"]
 
 # ── Platform configuration ────────────────────────────────────────────────────
@@ -98,11 +106,12 @@ def configure_platform(cflags, ldflags):
         if UNAME_M == "arm64":
             if not NO_NATIVE:
                 cflags += ["-mcpu=apple-m1", "-mtune=apple-m1"]
-            cflags += ["-arch", "arm64"]
+            default_arch = ["-arch", "arm64"]
         else:
             if not NO_NATIVE:
                 cflags += ["-march=native", "-mtune=native"]
-            cflags += ["-arch", "x86_64"]
+            default_arch = ["-arch", "x86_64"]
+        cflags += (ARCH_FLAG.split() if ARCH_FLAG else default_arch)
         cflags += ["-mmacosx-version-min=10.13"]
 
     elif UNAME_S == "FreeBSD":
@@ -116,7 +125,6 @@ def configure_platform(cflags, ldflags):
 
     elif UNAME_S == "OpenBSD":
         cc = "clang"
-        cflags  = [f for f in cflags if f != "-O3"]
         cflags  += ["-DPLATFORM_OPENBSD"]
         ldflags += ["-lpthread"]
 
@@ -165,10 +173,10 @@ def compile_objs(srcs, cc, cflags, extra=None):
         objs.append(obj)
     return objs
 
-def print_banner():
+def print_banner(cc):
     print("╔════════════════════════════════════════════════════════╗")
     print(f"║  Building Xenly for {UNAME_S} {UNAME_M}")
-    print(f"║  Compiler: {CC}")
+    print(f"║  Compiler: {cc}")
     print("╚════════════════════════════════════════════════════════╝")
     print()
 
@@ -202,15 +210,24 @@ def build_runtime(cc, cflags):
     run(["ar", "rcs", RT_LIB] + rt_objs)
     print(f"  Runtime: {RT_LIB}")
 
+def build_compiler_runtime(cc, cflags):
+    print(f"==> Building compiler runtime library: {RTC_LIB}")
+    rtc_objs = compile_objs(RTC_SRCS, cc, cflags)
+    print("Creating compiler runtime library...")
+    run(["ar", "rcs", RTC_LIB] + rtc_objs)
+    print(f"  Compiler runtime: {RTC_LIB}")
+
 def build_all(cc, cflags, ldflags):
     build_interpreter(cc, cflags, ldflags)
     build_compiler(cc, cflags, ldflags)
     build_runtime(cc, cflags)
+    build_compiler_runtime(cc, cflags)
     print()
     print("✓ Build complete!")
-    print(f"  Interpreter: {TARGET}")
-    print(f"  Compiler:    {XENLYC}  (xlnk built-in linker v1.0.0)")
-    print(f"  Runtime:     {RT_LIB}  (includes xly_http HTTP server)")
+    print(f"  Interpreter:     {TARGET}")
+    print(f"  Compiler:        {XENLYC}")
+    print(f"  Runtime (interp):{RT_LIB}")
+    print(f"  Runtime (xenlyc):{RTC_LIB}")
     print()
 
 # ── Commands ──────────────────────────────────────────────────────────────────
@@ -224,7 +241,7 @@ def cmd_run(cc, cflags, ldflags):
 
 def cmd_compile(cc, cflags, ldflags):
     build_compiler(cc, cflags, ldflags)
-    build_runtime(cc, cflags)
+    build_compiler_runtime(cc, cflags)
     run([f"./{XENLYC}", "examples/hello.xe", "-o", "hello_compiled"])
     run(["./hello_compiled"])
     Path("hello_compiled").unlink(missing_ok=True)
@@ -282,7 +299,7 @@ def cmd_clean():
     for pattern in ["src/*.o", "src/*.d"]:
         for f in Path(".").glob(pattern):
             f.unlink()
-    for name in [TARGET, XENLYC, RT_LIB, "a.out", "hello_compiled", "test_compiled"]:
+    for name in [TARGET, XENLYC, RT_LIB, RTC_LIB, "a.out", "hello_compiled", "test_compiled"]:
         Path(name).unlink(missing_ok=True)
     for pattern in ["*.s", "*.o", "*.d"]:
         for f in Path(".").glob(pattern):
@@ -299,28 +316,39 @@ def cmd_install(cc, cflags, ldflags):
     build_all(cc, cflags, ldflags)
     bindir = Path(PREFIX) / "bin"
     libdir = Path(PREFIX) / "lib"
+    xenlylibdir = libdir / "xenly"
     incdir = Path(PREFIX) / "include" / "xenly"
     docdir = Path(PREFIX) / "share" / "doc" / "xenly"
-    for d in (bindir, libdir, incdir, docdir):
+    for d in (bindir, xenlylibdir, incdir, docdir):
         d.mkdir(parents=True, exist_ok=True)
     for exe in (TARGET, XENLYC):
         shutil.copy2(exe, bindir / exe)
         (bindir / exe).chmod(0o755)
     shutil.copy2(RT_LIB, libdir / RT_LIB)
+    shutil.copy2(RTC_LIB, bindir / RTC_LIB)
+    shutil.copy2(RTC_LIB, xenlylibdir / RTC_LIB)
     for h in Path("src").glob("*.h"):
         shutil.copy2(h, incdir / h.name)
     for md in Path(".").glob("*.md"):
         shutil.copy2(md, docdir / md.name)
     print(f"✓ Installed to {PREFIX}")
+    print(f"  xenlyc:       {bindir / XENLYC}")
+    print(f"  libxly_rtc.a: {bindir / RTC_LIB}")
+    print()
+    print("  Try it:")
+    print("    xenlyc main.xe -o main && ./main")
 
 def cmd_uninstall():
     bindir = Path(PREFIX) / "bin"
     libdir = Path(PREFIX) / "lib"
+    xenlylibdir = libdir / "xenly"
     incdir = Path(PREFIX) / "include" / "xenly"
     docdir = Path(PREFIX) / "share" / "doc" / "xenly"
     for exe in (TARGET, XENLYC):
         (bindir / exe).unlink(missing_ok=True)
+    (bindir / RTC_LIB).unlink(missing_ok=True)
     (libdir / RT_LIB).unlink(missing_ok=True)
+    shutil.rmtree(xenlylibdir, ignore_errors=True)
     shutil.rmtree(incdir, ignore_errors=True)
     shutil.rmtree(docdir, ignore_errors=True)
     print(f"✓ Uninstalled from {PREFIX}")
@@ -360,13 +388,11 @@ def cmd_help():
     print(f"Usage: python {sys.argv[0]} [command]")
     print()
     print("  Commands:")
-    print("    all             Build interpreter, compiler, and runtime (default)")
+    print("    all             Build interpreter, compiler, and both runtimes (default)")
     print("    run             Build and run examples/hello.xe")
-    print("    compile         Build and test the native compiler (xenlyc)")
+    print("    compile         Build xenlyc + libxly_rtc.a and test-compile hello.xe")
     print("    test            Run the core test suite")
     print("    test-sys        Run the sys module demo")
-    print("    test-http       HTTP server smoke test (requires curl)")
-    print("    linker-version  Print xlnk built-in linker version")
     print("    format          Auto-format all C source with clang-format")
     print("    clean           Remove all build artifacts")
     print("    distclean       Clean + remove editor temp files")
@@ -381,12 +407,6 @@ def cmd_help():
     print("    DEBUG=1          Debug build (-O0 -g)")
     print("    SANITIZE=1       Enable ASan + UBSan")
     print("    NO_NATIVE=1      Disable -march=native (for cross-compiling)")
-    print()
-    print("  New source files:")
-    print("    src/xenly_linker.c  — in-process ELF/Mach-O linker (20× faster)")
-    print("    src/xly_http.c      — HTTP/1.1 server (Linux & macOS)")
-    print("    src/xly_http.h      — HTTP server public API")
-    print("    src/unicode.c       — comprehensive Unicode support")
     print()
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
@@ -406,8 +426,8 @@ def main():
     if command == "format":
         cmd_format(); return
 
-    print_banner()
     cc, cflags, ldflags = configure_platform(list(BASE_CFLAGS), list(BASE_LDFLAGS))
+    print_banner(cc)
     cflags, ldflags     = apply_debug_sanitize(cflags, ldflags)
 
     dispatch = {
