@@ -33,6 +33,8 @@ XENLYC_SRCS = [
 RT_SRCS = [
     "src/xly_rt.c",
     "src/unicode.c",
+    "src/xly_http.c",
+    "src/xenly_linker.c",
 ]
 
 CC      = os.environ.get("CC", "gcc")
@@ -123,11 +125,10 @@ def compile_objs(srcs, cc, cflags, extra_defines=None):
         objs.append(obj)
     return objs
 
-def compile_modules_rt(cc, cflags):
-    """Compile src/modules.c without multiprocessing for the runtime library."""
-    obj = "src/modules_rt.o"
-    print("  Compiling src/modules.c (runtime, no multiprocessing)...")
-    run([cc] + cflags + ["-DXENLY_NO_MULTIPROC", "-c", "-o", obj, "src/modules.c"])
+def compile_rt_stub(cc, cflags, src, obj):
+    """Compile a source file with -DXENLY_NO_MULTIPROC for the runtime library."""
+    print(f"  Compiling {src} (runtime, no multiprocessing)...")
+    run([cc] + cflags + ["-DXENLY_NO_MULTIPROC", "-c", "-o", obj, src])
     return obj
 
 def print_banner():
@@ -151,10 +152,12 @@ def build_compiler(cc, cflags, ldflags):
 
 def build_runtime(cc, cflags):
     print(f"==> Building runtime library: {RT_LIB}")
-    rt_objs    = compile_objs(RT_SRCS, cc, cflags)
-    modules_rt = compile_modules_rt(cc, cflags)
+    rt_objs = compile_objs(RT_SRCS, cc, cflags)
+    modules_rt = compile_rt_stub(cc, cflags, "src/modules.c", "src/modules_rt.o")
+    multiproc_rt = compile_rt_stub(cc, cflags, "src/multiproc.c", "src/multiproc_rt.o")
+    multiproc_builtins_rt = compile_rt_stub(cc, cflags, "src/multiproc_builtins.c", "src/multiproc_builtins_rt.o")
     print("Creating runtime library...")
-    run(["ar", "rcs", RT_LIB] + rt_objs + [modules_rt])
+    run(["ar", "rcs", RT_LIB] + rt_objs + [modules_rt, multiproc_rt, multiproc_builtins_rt])
     print(f"  Runtime: {RT_LIB}")
 
 def build_all(cc, cflags, ldflags):
