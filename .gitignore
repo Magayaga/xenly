@@ -99,3 +99,4 @@ xenlyrun
 
 # xenly bytecode files
 .xebc
+.env

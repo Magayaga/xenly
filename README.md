@@ -1,3 +1,6 @@
+| :warning: Inactive Development of the `Xenly` programming language since June 17, 2026. I'm going back to being active again.
+| ---
+
 <p align="center">
   <a href="https://github.com/magayaga/xenly">
     <img src="assets/xenly.svg" width="100%" height="100%">
