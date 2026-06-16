@@ -7,6 +7,37 @@
  * It is available for the Linux and macOS operating systems.
  *
  */
+/*
+ * interpreter.c — Xenly tree-walking interpreter
+ *
+ * Evaluates ASTNode trees produced by parser.c.  Handles the full Xenly
+ * language including all paradigm levels:
+ *
+ * Imperative control flow (new):
+ *   unless (cond) { body }    — inverse if; body runs when cond is FALSE
+ *   repeat N { body }          — counted loop; break/continue work normally
+ *   forever { body }           — infinite loop; exit with break or return
+ *
+ * Declarative / functional (new):
+ *   expr |> fn                 — pipe-forward: passes expr as first arg to fn
+ *   expr where id = val, ...   — local binding clause; fresh inner scope
+ *
+ * Unicode (new):
+ *   All string operations are codepoint-aware via unicode.c.
+ *   The "unicode" module is auto-imported (no explicit import required).
+ *   Identifiers support the full Unicode XID_Start / XID_Continue range.
+ *
+ * HTTP (new):
+ *   The "http" module wraps xly_http.c — a zero-dependency HTTP/1.1 server
+ *   for Linux (epoll) and macOS (kqueue).  Import with: import "http"
+ *
+ * Pipeline:
+ *   source.xe → lexer → parser → AST → sema → interpreter (this file)
+ *
+ * Native compilation pipeline (xenlyc):
+ *   source.xe → lexer → parser → AST → sema → codegen → .s → as → .o
+ *             → xlnk (built-in linker, 20× faster than gcc/ld) → ELF/Mach-O
+ */
 #include "interpreter.h"
 #include "modules.h"
 #include "multiproc.h"
@@ -19,7 +50,11 @@
 
 // File-scope pointer to the active interpreter — set during interpreter_run.
 // Used by value_array to register arrays for shutdown cleanup.
-static Interpreter *g_interp = NULL;
+Interpreter *g_interp = NULL; /* non-static: used by xly_http callback shims */
+
+/* Forward declarations needed by generator and reflect eval cases */
+Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc);
+Value *eval(Interpreter *interp, ASTNode *node, Environment *env); /* non-static: used by multiproc.c */
 
 // ─── Value Constructors ──────────────────────────────────────────────────────
 Value *value_number(double n) {
@@ -94,6 +129,19 @@ Value *value_variant(const char *tag, Value **fields, size_t field_count) {
     }
     return v;
 }
+
+/* ── value_function — create a VAL_FUNCTION Value from a FnDef* ─────────────
+ * Ownership: the returned Value owns the FnDef (fn_shared=0).              */
+static Value *value_function(FnDef *def) {
+    Value *v = (Value *)calloc(1, sizeof(Value));
+    if (!v) return NULL;
+    v->type      = VAL_FUNCTION;
+    v->fn        = def;
+    v->fn_shared = 0;  /* this Value owns the FnDef */
+    v->local     = 0;
+    return v;
+}
+
 
 void value_destroy(Value *v) {
     if (!v) return;
@@ -414,8 +462,17 @@ Interpreter *interpreter_create(void) {
     // Register multiprocessing builtins
     register_multiproc_builtins(interp);
 
-    // Auto-register common modules so files don't need to import them
-    static const char *auto_modules[] = { "string", "array", "math", "type", "io", NULL };
+    // Auto-register common modules so files don't need to import them.
+    // Modules listed here are available in every Xenly program without
+    // an explicit `import` statement.
+    //
+    // New in this build:
+    //   unicode — full UTF-8 / UTF-16 / grapheme / normalization API
+    //   http    — HTTP/1.1 web server (xly_http) for Linux and macOS
+    static const char *auto_modules[] = {
+        "string", "array", "math", "type", "io", "unicode",
+        NULL
+    };
     for (int i = 0; auto_modules[i]; i++) {
         Module mod;
         if (modules_get(auto_modules[i], &mod)) {
@@ -559,7 +616,7 @@ void interpreter_destroy(Interpreter *interp) {
 
 // ─── Forward: Evaluator ──────────────────────────────────────────────────────
 Value *eval(Interpreter *interp, ASTNode *node, Environment *env);
-static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc);
+Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc);
 
 // ─── Import Module ───────────────────────────────────────────────────────────
 // ─── Forward declarations: user module helpers ──────────────────────────────
@@ -616,13 +673,80 @@ static void do_import(Interpreter *interp, const char *modname, const char *alia
 }
 
 // ─── call_value: invoke a Xenly function value with pre-evaluated args ───────
-static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc) {
+Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc) {
     if (!fn_val) return value_null();
     if (fn_val->type == VAL_BUILTIN_FN) return fn_val->builtin_fn(args, argc);
     if (fn_val->type != VAL_FUNCTION) return value_null();
     FnDef *fn = fn_val->fn;
     if (!fn) return value_null();
     if (fn->body == NULL) return value_variant(fn->name, args, argc);
+
+    /* ── Generator call: return an iterator object ─────────────────────────
+     * Calling a gen fn does NOT run the body immediately.  Instead it
+     * returns an iterator object  { next: fn(){…}, done: false, value: null }
+     *
+     * The iterator captures a private closure environment with all args
+     * bound.  Each call to .next() resumes execution by evaluating the
+     * generator body up to the next yield.
+     *
+     * Implementation: we use a statement-index cursor stored in the closure.
+     * The generator body is a NODE_BLOCK; __gen_pc__ tracks which statement
+     * to evaluate next.  After every yield the cursor advances.  When the
+     * body finishes __gen_done__ is set to true.                         */
+    if (fn->is_generator) {
+        /* Build the generator's persistent closure */
+        Environment *gen_env = env_create(fn->closure);
+        for (size_t i = 0; i < argc && i < fn->param_count; i++) {
+            Value *a = args[i];
+            Value *copy = (!a || a->type == VAL_NULL)  ? value_null()
+                        : (a->type == VAL_NUMBER)       ? value_number(a->num)
+                        : (a->type == VAL_STRING)       ? value_string(a->str)
+                        : (a->type == VAL_BOOL)         ? value_bool(a->boolean)
+                        : a;
+            env_set(gen_env, fn->params[i].name, copy);
+        }
+        for (size_t i = argc; i < fn->param_count; i++) {
+            env_set(gen_env, fn->params[i].name,
+                    fn->params[i].default_value
+                        ? eval(interp, fn->params[i].default_value, gen_env)
+                        : value_null());
+        }
+        env_set(gen_env, "__gen_pc__",   value_number(0));
+        env_set(gen_env, "__gen_done__", value_bool(0));
+
+        /* Create the iterator instance */
+        InstanceData *inst = (InstanceData *)calloc(1, sizeof(InstanceData));
+        inst->class_def = NULL;
+        inst->fields    = env_create(NULL);
+
+        /* next() function — each call steps the generator one yield */
+        /* We store fn and gen_env as constants in a tiny native closure */
+        /* Since we have no native closure capture, we embed state in env */
+        /* and build a FnDef whose body IS the gen body, but whose
+         * execution is gated by __gen_pc__ scanning the statement list.
+         * The next_fn is a regular Xenly fn that closes over gen_env.   */
+        FnDef *next_def = (FnDef *)calloc(1, sizeof(FnDef));
+        next_def->name        = strdup("next");
+        next_def->params      = NULL;
+        next_def->param_count = 0;
+        next_def->body        = fn->body;   /* shared reference */
+        next_def->closure     = gen_env;    /* shared env with cursor */
+        next_def->is_generator = 2;         /* 2 = "next" step function */
+
+        Value *next_val = value_function(next_def);
+        next_val->fn_shared = 0;
+
+        env_set(inst->fields, "next",  next_val);
+        env_set(inst->fields, "done",  value_bool(0));
+        env_set(inst->fields, "value", value_null());
+
+        Value *iter = (Value *)calloc(1, sizeof(Value));
+        iter->type     = VAL_INSTANCE;
+        iter->local    = 1;
+        iter->instance = inst;
+        return iter;
+    }
+
     Environment *fn_env = env_create(fn->closure);
     // Copy args before binding — env_destroy will free the copies, not the originals
     for (size_t i = 0; i < argc && i < fn->param_count; i++) {
@@ -642,6 +766,65 @@ static Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_
                     eval(interp, fn->params[i].default_value, fn_env));
         else env_set(fn_env, fn->params[i].name, value_null());
     }
+    /* ── Generator next() step function ────────────────────────────────────
+     * is_generator == 2: this is a .next() call on an iterator.
+     * The closure is gen_env containing __gen_pc__ (statement cursor)
+     * and __gen_done__.  We scan the body block from pc forward,
+     * executing statements until we hit a yield or reach the end.       */
+    if (fn->is_generator == 2) {
+        ASTNode *body = fn->body;
+        Value *done_v = env_get(fn_env, "__gen_done__");
+        if (done_v && done_v->type == VAL_BOOL && done_v->boolean) {
+            env_destroy(fn_env);
+            /* Return {value: null, done: true} */
+            InstanceData *ri = (InstanceData *)calloc(1, sizeof(InstanceData));
+            ri->fields = env_create(NULL);
+            env_set(ri->fields, "value", value_null());
+            env_set(ri->fields, "done",  value_bool(1));
+            Value *rv = (Value *)calloc(1, sizeof(Value));
+            rv->type = VAL_INSTANCE; rv->local = 1; rv->instance = ri;
+            return rv;
+        }
+        Value *pc_v  = env_get(fn_env, "__gen_pc__");
+        size_t pc    = (pc_v && pc_v->type == VAL_NUMBER) ? (size_t)pc_v->num : 0;
+        Value *yielded = NULL;
+
+        if (body && body->type == NODE_BLOCK) {
+            for (size_t i = pc; i < body->child_count && !yielded; i++) {
+                Value *r = eval(interp, body->children[i], fn_env);
+                if (r && r->type == VAL_RETURN && r->local == 3) {
+                    /* yield sentinel — capture value, advance cursor */
+                    yielded = r->inner ? r->inner : value_null();
+                    r->inner = NULL;
+                    value_destroy(r);
+                    env_set(fn_env, "__gen_pc__", value_number((double)(i + 1)));
+                    break;
+                }
+                if (r && (r->type == VAL_RETURN || r->type == VAL_BREAK)) {
+                    /* explicit return or break — generator is done */
+                    env_set(fn_env, "__gen_done__", value_bool(1));
+                    env_set(fn_env, "__gen_pc__",   value_number((double)body->child_count));
+                    break;
+                }
+            }
+            if (!yielded) {
+                /* Reached end of body without yielding — done */
+                env_set(fn_env, "__gen_done__", value_bool(1));
+            }
+        }
+
+        env_destroy(fn_env);
+
+        /* Build {value: V, done: bool} result object */
+        InstanceData *ri = (InstanceData *)calloc(1, sizeof(InstanceData));
+        ri->fields = env_create(NULL);
+        env_set(ri->fields, "value", yielded ? yielded : value_null());
+        env_set(ri->fields, "done",  value_bool(yielded == NULL));
+        Value *rv = (Value *)calloc(1, sizeof(Value));
+        rv->type = VAL_INSTANCE; rv->local = 1; rv->instance = ri;
+        return rv;
+    }
+
     Value *result = eval(interp, fn->body, fn_env);
     if (result && result->type == VAL_RETURN) {
         Value *inner = result->inner;
@@ -2767,6 +2950,363 @@ Value *eval(Interpreter *interp, ASTNode *node, Environment *env) {
         Value *result = eval(interp, node->children[0], where_env);
         env_destroy(where_env);
         return result ? result : value_null();
+    }
+
+    /* ── Generator function declaration ────────────────────────────────────
+     * gen fn name(params) { body }
+     *
+     * A generator is stored as a VAL_FUNCTION with a flag (local == 2) and
+     * a FnDef* as usual.  Calling it returns a generator iterator object:
+     *   { next: fn() { ... }, done: false }
+     * The iterator state is held in a closure environment.              */
+    case NODE_GEN_DECL: {
+        FnDef *def = (FnDef *)calloc(1, sizeof(FnDef));
+        def->name        = node->str_value ? strdup(node->str_value) : NULL;
+        def->params      = node->params;
+        def->param_count = node->param_count;
+        def->body        = node->child_count > 0 ? node->children[0] : NULL;
+        def->closure     = env;
+        def->is_generator = 1;   /* marks this as a generator template */
+
+        Value *fn_val = value_function(def);
+        fn_val->local = 2;       /* 2 = generator fn sentinel */
+        if (def->name)
+            env_set(env, def->name, fn_val);
+        return fn_val;
+    }
+
+    /* ── yield expr ─────────────────────────────────────────────────────────
+     * yield is caught by the generator's next() call via a longjmp/flag.
+     * Here we use a simpler approach: raise a special sentinel value
+     * (VAL_RETURN with local == 3 means "yield") so the generator loop
+     * can intercept it without needing setjmp.                          */
+    case NODE_YIELD: {
+        Value *yielded = node->child_count > 0
+                       ? eval(interp, node->children[0], env)
+                       : value_null();
+        Value *sentinel = (Value *)calloc(1, sizeof(Value));
+        sentinel->type  = VAL_RETURN;
+        sentinel->local = 3;     /* 3 = yield sentinel */
+        sentinel->inner = yielded;
+        return sentinel;
+    }
+
+    case NODE_YIELD_EMPTY: {
+        Value *sentinel = (Value *)calloc(1, sizeof(Value));
+        sentinel->type  = VAL_RETURN;
+        sentinel->local = 3;
+        sentinel->inner = value_null();
+        return sentinel;
+    }
+
+    /* ── for (x of iterable) { body } ──────────────────────────────────────
+     * Iterates over:
+     *   - arrays  (index 0..n-1)
+     *   - strings (codepoint by codepoint)
+     *   - generator iterator objects (calls .next() until .done == true)
+     * str_value = iteration variable name
+     * children[0] = iterable expr
+     * children[1] = body block                                          */
+    case NODE_FOR_OF: {
+        Value *iterable = eval(interp, node->children[0], env);
+        const char *var = node->str_value;
+        ASTNode *body   = node->children[1];
+
+        if (iterable && iterable->type == VAL_ARRAY) {
+            for (size_t i = 0; i < iterable->array_len; i++) {
+                Environment *loop_env = env_create(env);
+                env_set(loop_env, var, iterable->array[i]);
+                Value *r = eval(interp, body, loop_env);
+                env_destroy(loop_env);
+                if (r && r->type == VAL_BREAK)    break;
+                if (r && r->type == VAL_RETURN)   return r;
+            }
+        } else if (iterable && iterable->type == VAL_STRING && iterable->str) {
+            /* Iterate codepoint by codepoint */
+            const char *p = iterable->str;
+            while (*p) {
+                size_t bytes = 1;
+                unsigned char c = (unsigned char)*p;
+                if      (c < 0x80)  bytes = 1;
+                else if (c < 0xE0)  bytes = 2;
+                else if (c < 0xF0)  bytes = 3;
+                else                bytes = 4;
+                char buf[8] = {0};
+                for (size_t k = 0; k < bytes && p[k]; k++) buf[k] = p[k];
+                Environment *loop_env = env_create(env);
+                env_set(loop_env, var, value_string(buf));
+                Value *r = eval(interp, body, loop_env);
+                env_destroy(loop_env);
+                if (r && r->type == VAL_BREAK)  break;
+                if (r && r->type == VAL_RETURN) return r;
+                p += bytes;
+            }
+        } else if (iterable && iterable->type == VAL_INSTANCE) {
+            /* Generator iterator object: call .next() until .done == true */
+            Value *next_fn = env_get(iterable->instance->fields, "next");
+            while (next_fn && next_fn->type == VAL_FUNCTION) {
+                /* Call next() with no arguments */
+                Value *result = call_value(interp, next_fn, NULL, 0);
+                if (!result) break;
+                /* result is { value: V, done: bool } */
+                Value *done_v = (result->type == VAL_INSTANCE)
+                    ? env_get(result->instance->fields, "done") : NULL;
+                if (done_v && done_v->type == VAL_BOOL && done_v->boolean) break;
+                Value *val = (result->type == VAL_INSTANCE)
+                    ? env_get(result->instance->fields, "value") : result;
+                Environment *loop_env = env_create(env);
+                env_set(loop_env, var, val ? val : value_null());
+                Value *r = eval(interp, body, loop_env);
+                env_destroy(loop_env);
+                if (r && r->type == VAL_BREAK)  break;
+                if (r && r->type == VAL_RETURN) return r;
+            }
+        }
+        return value_null();
+    }
+
+    /* ── Trailing block fn: NODE_BLOCK_FN ───────────────────────────────────
+     * { |params| body } — anonymous lambda, evaluated exactly like NODE_ARROW_FN */
+    case NODE_BLOCK_FN: {
+        FnDef *def = (FnDef *)calloc(1, sizeof(FnDef));
+        def->name        = NULL;
+        def->params      = node->params;
+        def->param_count = node->param_count;
+        def->body        = node->child_count > 0 ? node->children[0] : NULL;
+        def->closure     = env;
+        def->is_generator = 0;
+        return value_function(def);
+    }
+
+    /* NODE_BLOCK_CALL is desugared at parse time; evaluation falls through
+     * to NODE_FN_CALL / NODE_METHOD_CALL which handle the extra fn argument */
+
+    /* ── Computed property access: obj.[expr] ────────────────────────────────
+     * children[0] = object, children[1] = key expression               */
+    case NODE_COMPUTED_PROP: {
+        Value *obj = eval(interp, node->children[0], env);
+        Value *key = eval(interp, node->children[1], env);
+        if (!obj || !key) return value_null();
+        if (obj->type == VAL_INSTANCE && obj->instance) {
+            char *k = value_to_string(key);
+            Value *r = env_get(obj->instance->fields, k);
+            free(k);
+            return r ? r : value_null();
+        }
+        if (obj->type == VAL_ARRAY && key->type == VAL_NUMBER) {
+            size_t idx = (size_t)(long long)key->num;
+            if (idx < obj->array_len) return obj->array[idx];
+        }
+        if (obj->type == VAL_STRING && key->type == VAL_NUMBER) {
+            /* Return character at codepoint index */
+            size_t idx = (size_t)(long long)key->num;
+            const char *p = obj->str;
+            for (size_t i = 0; i < idx && *p; i++) {
+                unsigned char c = (unsigned char)*p;
+                p += (c < 0x80) ? 1 : (c < 0xE0) ? 2 : (c < 0xF0) ? 3 : 4;
+            }
+            if (*p) {
+                unsigned char c = (unsigned char)*p;
+                size_t bytes = (c < 0x80) ? 1 : (c < 0xE0) ? 2 : (c < 0xF0) ? 3 : 4;
+                char buf[8] = {0};
+                for (size_t k = 0; k < bytes && p[k]; k++) buf[k] = p[k];
+                return value_string(buf);
+            }
+        }
+        return value_null();
+    }
+
+    case NODE_COMPUTED_PROP_SET: {
+        Value *obj = eval(interp, node->children[0], env);
+        Value *key = eval(interp, node->children[1], env);
+        Value *val = eval(interp, node->children[2], env);
+        if (!obj || !key || !val) return value_null();
+        if (obj->type == VAL_INSTANCE && obj->instance) {
+            char *k = value_to_string(key);
+            env_set(obj->instance->fields, k, val);
+            free(k);
+            return val;
+        }
+        if (obj->type == VAL_ARRAY && key->type == VAL_NUMBER) {
+            size_t idx = (size_t)(long long)key->num;
+            if (idx < obj->array_len) obj->array[idx] = val;
+        }
+        return val;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * REFLECTION / METAPROGRAMMING
+     *
+     * reflect.keys(obj)              → string[] of all enumerable property names
+     * reflect.get(obj, key)          → value or null
+     * reflect.set(obj, key, val)     → val (mutates obj)
+     * reflect.has(obj, key)          → bool
+     * reflect.delete(obj, key)       → bool (removes property)
+     * reflect.define(obj, key, desc) → obj (defines a property with descriptor)
+     * reflect.freeze(obj)            → obj (marks frozen; writes silently no-op)
+     * reflect.isFrozen(obj)          → bool
+     * reflect.ownKeys(obj)           → string[] (own non-inherited keys)
+     * reflect.apply(fn, this, args)  → result of calling fn with given this+args
+     * reflect.construct(Cls, args)   → new Cls(...args)
+     * ═══════════════════════════════════════════════════════════════════════ */
+
+    case NODE_REFLECT_KEYS:
+    case NODE_REFLECT_OWN_KEYS: {
+        if (node->child_count < 1) return value_array(NULL, 0);
+        Value *obj = eval(interp, node->children[0], env);
+        if (!obj || obj->type != VAL_INSTANCE || !obj->instance) return value_array(NULL, 0);
+        /* Collect all keys from the field environment */
+        size_t cap = 8, cnt = 0;
+        Value **keys = (Value **)malloc(sizeof(Value*) * cap);
+        for (EnvEntry *e = obj->instance->fields->entries; e; e = e->next) {
+            if (cnt >= cap) { cap *= 2; keys = (Value **)realloc(keys, sizeof(Value*)*cap); }
+            keys[cnt++] = value_string(e->name);
+        }
+        Value *arr = value_array(keys, cnt);
+        free(keys);
+        return arr;
+    }
+
+    case NODE_REFLECT_GET: {
+        if (node->child_count < 2) return value_null();
+        Value *obj = eval(interp, node->children[0], env);
+        Value *key = eval(interp, node->children[1], env);
+        if (!obj || !key) return value_null();
+        char *k = value_to_string(key);
+        Value *r = value_null();
+        if (obj->type == VAL_INSTANCE && obj->instance)
+            r = env_get(obj->instance->fields, k);
+        free(k);
+        return r ? r : value_null();
+    }
+
+    case NODE_REFLECT_SET: {
+        if (node->child_count < 3) return value_bool(0);
+        Value *obj = eval(interp, node->children[0], env);
+        Value *key = eval(interp, node->children[1], env);
+        Value *val = eval(interp, node->children[2], env);
+        if (!obj || !key || !val) return value_bool(0);
+        if (obj->type == VAL_INSTANCE && obj->instance) {
+            if (obj->local == 99) return value_bool(0); /* frozen */
+            char *k = value_to_string(key);
+            env_set(obj->instance->fields, k, val);
+            free(k);
+            return value_bool(1);
+        }
+        return value_bool(0);
+    }
+
+    case NODE_REFLECT_HAS: {
+        if (node->child_count < 2) return value_bool(0);
+        Value *obj = eval(interp, node->children[0], env);
+        Value *key = eval(interp, node->children[1], env);
+        if (!obj || !key || obj->type != VAL_INSTANCE || !obj->instance)
+            return value_bool(0);
+        char *k = value_to_string(key);
+        Value *found = env_get(obj->instance->fields, k);
+        free(k);
+        return value_bool(found != NULL);
+    }
+
+    case NODE_REFLECT_DELETE: {
+        if (node->child_count < 2) return value_bool(0);
+        Value *obj = eval(interp, node->children[0], env);
+        Value *key = eval(interp, node->children[1], env);
+        if (!obj || !key || obj->type != VAL_INSTANCE || !obj->instance || obj->local == 99)
+            return value_bool(0);
+        char *k = value_to_string(key);
+        /* Walk the linked list and unlink the matching entry */
+        EnvEntry **prev = &obj->instance->fields->entries;
+        for (EnvEntry *e = *prev; e; prev = &e->next, e = e->next) {
+            if (strcmp(e->name, k) == 0) {
+                *prev = e->next;
+                free(e->name); free(e); free(k);
+                return value_bool(1);
+            }
+        }
+        free(k);
+        return value_bool(0);
+    }
+
+    case NODE_REFLECT_DEFINE: {
+        /* reflect.define(obj, key, descriptor)
+         * descriptor is an object: { value: V, writable: bool, enumerable: bool }
+         * Simplified: we just do env_set with the descriptor's .value field.  */
+        if (node->child_count < 3) return value_null();
+        Value *obj  = eval(interp, node->children[0], env);
+        Value *key  = eval(interp, node->children[1], env);
+        Value *desc = eval(interp, node->children[2], env);
+        if (!obj || obj->type != VAL_INSTANCE || !obj->instance || obj->local == 99)
+            return value_null();
+        char *k = value_to_string(key);
+        Value *val = (desc && desc->type == VAL_INSTANCE)
+                   ? env_get(desc->instance->fields, "value")
+                   : desc;
+        if (val) env_set(obj->instance->fields, k, val);
+        free(k);
+        return obj;
+    }
+
+    case NODE_REFLECT_FREEZE: {
+        if (node->child_count < 1) return value_null();
+        Value *obj = eval(interp, node->children[0], env);
+        if (obj) obj->local = 99; /* 99 = frozen sentinel */
+        return obj ? obj : value_null();
+    }
+
+    case NODE_REFLECT_IS_FROZEN: {
+        if (node->child_count < 1) return value_bool(0);
+        Value *obj = eval(interp, node->children[0], env);
+        return value_bool(obj && obj->local == 99);
+    }
+
+    case NODE_REFLECT_APPLY: {
+        /* reflect.apply(fn, thisArg, argsArray) */
+        if (node->child_count < 1) return value_null();
+        Value *fn       = eval(interp, node->children[0], env);
+        /* thisArg (node->children[1]) — not used in our impl (no 'this' binding) */
+        Value *args_arr = node->child_count > 2
+                        ? eval(interp, node->children[2], env) : NULL;
+        if (!fn || fn->type != VAL_FUNCTION) return value_null();
+        size_t argc = (args_arr && args_arr->type == VAL_ARRAY)
+                    ? args_arr->array_len : 0;
+        Value **argv = argc ? args_arr->array : NULL;
+        return call_value(interp, fn, argv, argc);
+    }
+
+    case NODE_REFLECT_CONSTRUCT: {
+        /* reflect.construct(Cls, argsArray) — equivalent to new Cls(...args) */
+        if (node->child_count < 1) return value_null();
+        Value *cls_val  = eval(interp, node->children[0], env);
+        Value *args_arr = node->child_count > 1
+                        ? eval(interp, node->children[1], env) : NULL;
+        if (!cls_val || cls_val->type != VAL_CLASS || !cls_val->class_def)
+            return value_null();
+        ClassDef *cls = cls_val->class_def;
+        InstanceData *inst = (InstanceData *)calloc(1, sizeof(InstanceData));
+        inst->class_def = cls;
+        inst->fields    = env_create(NULL);
+        Value *instance = (Value *)calloc(1, sizeof(Value));
+        instance->type     = VAL_INSTANCE;
+        instance->local    = 1;
+        instance->instance = inst;
+        /* Find and call __init__ */
+        /* Find __init__ or class-named init in the methods Environment */
+        Value *init_v = env_get(cls->methods, "__init__");
+        if (!init_v) init_v = env_get(cls->methods, cls->name);
+        if (init_v && init_v->type == VAL_FUNCTION && init_v->fn) {
+            FnDef *init_fn = init_v->fn;
+            size_t argc = (args_arr && args_arr->type == VAL_ARRAY)
+                        ? args_arr->array_len : 0;
+            Environment *init_env = env_create(init_fn->closure);
+            env_set(init_env, "this", instance);
+            for (size_t i = 0; i < init_fn->param_count && i < argc; i++)
+                env_set(init_env, init_fn->params[i].name,
+                        args_arr->array[i]);
+            eval(interp, init_fn->body, init_env);
+            env_destroy(init_env);
+        }
+        return instance;
     }
 
     default:

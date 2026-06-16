@@ -24,11 +24,11 @@ ifeq ($(UNAME_S),Linux)
     LDFLAGS += -lpthread -ldl -lresolv
 
     ifneq ($(NO_NATIVE),1)
-        CFLAGS += -march=native -mtune=native -ffast-math
+	CFLAGS += -march=native -mtune=native -ffast-math
     endif
 
     ifneq ($(shell which ld.gold 2>/dev/null),)
-        LDFLAGS += -fuse-ld=gold
+	LDFLAGS += -fuse-ld=gold
     endif
 
     INSTALL = install
@@ -40,17 +40,17 @@ ifeq ($(UNAME_S),Darwin)
     LDFLAGS += -lpthread
 
     ifeq ($(UNAME_M),arm64)
-        ifneq ($(NO_NATIVE),1)
-            CFLAGS += -mcpu=apple-m1 -mtune=apple-m1
-        endif
-        # FIX: Store arch flag separately so the universal target can override it
-        #      cleanly without a fragile filter-out on a "-arch%" prefix pattern.
-        ARCH_FLAG = -arch arm64
+	ifneq ($(NO_NATIVE),1)
+	    CFLAGS += -mcpu=apple-m1 -mtune=apple-m1
+	endif
+	# FIX: Store arch flag separately so the universal target can override it
+	#      cleanly without a fragile filter-out on a "-arch%" prefix pattern.
+	ARCH_FLAG = -arch arm64
     else
-        ifneq ($(NO_NATIVE),1)
-            CFLAGS += -march=native -mtune=native
-        endif
-        ARCH_FLAG = -arch x86_64
+	ifneq ($(NO_NATIVE),1)
+	    CFLAGS += -march=native -mtune=native
+	endif
+	ARCH_FLAG = -arch x86_64
     endif
 
     CFLAGS += $(ARCH_FLAG) -mmacosx-version-min=10.13
@@ -64,11 +64,11 @@ ifeq ($(UNAME_S),FreeBSD)
     LDFLAGS += -lpthread
 
     ifneq ($(NO_NATIVE),1)
-        CFLAGS += -march=native -mtune=native
+	CFLAGS += -march=native -mtune=native
     endif
 
     ifneq ($(shell which ld.lld 2>/dev/null),)
-        LDFLAGS += -fuse-ld=lld
+	LDFLAGS += -fuse-ld=lld
     endif
 
     INSTALL = install
@@ -115,14 +115,15 @@ $(info )
 
 TARGET = xenly
 INTERP_SRCS = src/main.c src/lexer.c src/ast.c src/parser.c \
-              src/interpreter.c src/modules.c src/typecheck.c \
-              src/unicode.c src/multiproc.c src/multiproc_builtins.c
+	      src/interpreter.c src/modules.c src/typecheck.c \
+	      src/unicode.c src/multiproc.c src/multiproc_builtins.c \
+	      src/xly_http.c
 INTERP_OBJS = $(INTERP_SRCS:.c=.o)
 
 XENLYC = xenlyc
 XENLYC_SRCS = src/xenlyc_main.c src/lexer.c src/ast.c src/parser.c \
-              src/codegen.c src/unicode.c src/sema.c \
-              src/xenly_linker.c
+	      src/codegen.c src/unicode.c src/sema.c \
+	      src/xenly_linker.c
 XENLYC_OBJS = $(XENLYC_SRCS:.c=.o)
 
 RT_LIB = libxly_rt.a
@@ -130,19 +131,30 @@ RT_LIB = libxly_rt.a
 #      They were compiled into the interpreter but missing from libxly_rt.a,
 #      causing linker errors for anyone who links against the static runtime.
 RT_OBJS = src/xly_rt.o src/modules_rt.o src/unicode.o \
-          src/multiproc_rt.o src/multiproc_builtins_rt.o \
-          src/xly_http.o src/xenly_linker.o
+	  src/multiproc_rt.o src/multiproc_builtins_rt.o \
+	  src/xly_http.o src/xenly_linker.o
+
+# libxly_rtc.a — minimal compiler-only runtime (no interpreter symbols).
+# xenlyc links compiled .xe programs against this instead of libxly_rt.a.
+# It must live next to the xenlyc binary so xenlyc can find it at link time.
+RTC_LIB  = libxly_rtc.a
+RTC_OBJS = src/xly_rt.o src/unicode.o src/xly_rt_compiler_stub.o
 
 # ─── Build Targets ───────────────────────────────────────────────────────────
 
 .PHONY: all clean distclean install uninstall test test-sys run compile format help
 
-all: $(TARGET) $(XENLYC) $(RT_LIB)
+all: $(TARGET) $(XENLYC) $(RT_LIB) $(RTC_LIB)
 	@echo ""
 	@echo "✓ Build complete!"
-	@echo "  Interpreter: $(TARGET)"
-	@echo "  Compiler:    $(XENLYC)"
-	@echo "  Runtime:     $(RT_LIB)"
+	@echo "  Interpreter:     $(TARGET)"
+	@echo "  Compiler:        $(XENLYC)"
+	@echo "  Runtime (interp):$(RT_LIB)"
+	@echo "  Runtime (xenlyc):$(RTC_LIB)"
+	@echo ""
+	@echo "  Usage:"
+	@echo "    ./$(XENLYC) main.xe -o main   # compile a Xenly source file"
+	@echo "    ./main                         # run the compiled executable"
 	@echo ""
 
 # FIX: Link step now uses only $(LDFLAGS), not $(CFLAGS).
@@ -163,6 +175,15 @@ $(RT_LIB): $(RT_OBJS)
 	$(AR) rcs $@ $^
 	@echo "  Runtime: $(RT_LIB)"
 
+$(RTC_LIB): $(RTC_OBJS)
+	@echo "Creating compiler runtime library..."
+	$(AR) rcs $@ $^
+	@echo "  Compiler runtime: $(RTC_LIB)"
+
+src/xly_rt_compiler_stub.o: src/xly_rt_compiler_stub.c
+	@echo "Compiling $<..."
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 # Runtime-specific object rules (XENLY_NO_MULTIPROC disables threading)
 src/modules_rt.o: src/modules.c
 	@echo "Compiling $< (runtime, no multiprocessing)..."
@@ -172,7 +193,8 @@ src/multiproc_rt.o: src/multiproc.c
 	@echo "Compiling $< (runtime stub)..."
 	$(CC) $(CFLAGS) -DXENLY_NO_MULTIPROC -c -o $@ $<
 
-src/multiproc_builtins_rt.o: src/multiproc_builtins.c
+src/multiproc_builtins_rt.o: src/multiproc_builtins.c \
+	      src/xly_http.c
 	@echo "Compiling $< (runtime stub)..."
 	$(CC) $(CFLAGS) -DXENLY_NO_MULTIPROC -c -o $@ $<
 
@@ -236,7 +258,7 @@ format:
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -f src/*.o src/*.d
-	rm -f $(TARGET) $(XENLYC) $(RT_LIB)
+	rm -f $(TARGET) $(XENLYC) $(RT_LIB) $(RTC_LIB)
 	rm -f *.s *.o *.d a.out hello_compiled test_compiled
 	@echo "✓ Clean complete"
 
@@ -254,17 +276,26 @@ INCDIR  = $(PREFIX)/include
 DATADIR = $(PREFIX)/share
 
 install: all
-	$(INSTALL) -d $(BINDIR) $(LIBDIR) $(INCDIR)/xenly $(DATADIR)/doc/xenly
+	$(INSTALL) -d $(BINDIR) $(LIBDIR)/xenly $(INCDIR)/xenly $(DATADIR)/doc/xenly
 	$(INSTALL) -m 755 $(TARGET) $(XENLYC) $(BINDIR)/
 	$(INSTALL) -m 644 $(RT_LIB) $(LIBDIR)/
+	# libxly_rtc.a must sit beside xenlyc so it can be found at compile time
+	$(INSTALL) -m 644 $(RTC_LIB) $(BINDIR)/
+	$(INSTALL) -m 644 $(RTC_LIB) $(LIBDIR)/xenly/
 	$(INSTALL) -m 644 src/*.h $(INCDIR)/xenly/
 	$(INSTALL) -m 644 *.md $(DATADIR)/doc/xenly/ 2>/dev/null || true
 	@echo "✓ Installed to $(PREFIX)"
+	@echo "  xenlyc:       $(BINDIR)/$(XENLYC)"
+	@echo "  libxly_rtc.a: $(BINDIR)/$(RTC_LIB)"
+	@echo ""
+	@echo "  Try it:"
+	@echo "    xenlyc main.xe -o main && ./main"
 
 uninstall:
 	rm -f $(BINDIR)/$(TARGET) $(BINDIR)/$(XENLYC)
+	rm -f $(BINDIR)/$(RTC_LIB)
 	rm -f $(LIBDIR)/$(RT_LIB)
-	rm -rf $(INCDIR)/xenly $(DATADIR)/doc/xenly
+	rm -rf $(LIBDIR)/xenly $(INCDIR)/xenly $(DATADIR)/doc/xenly
 	@echo "✓ Uninstalled"
 
 # ─── macOS Universal Binary ──────────────────────────────────────────────────
@@ -296,12 +327,19 @@ help:
 	@echo "Xenly Build System"
 	@echo "══════════════════════════════════════════════════════"
 	@echo ""
+	@echo "  Quick start (Linux):"
+	@echo "    make NO_NATIVE=1           # build everything"
+	@echo "    ./xenlyc main.xe -o main   # compile a .xe file"
+	@echo "    ./main                     # run the executable"
+	@echo ""
+	@echo "  Compiler pipeline:"
+	@echo "    .xe → lexer → parser → AST → sema → codegen → .s"
+	@echo "        → gcc -nostartfiles … libxly_rtc.a → ELF binary"
+	@echo ""
 	@echo "  Targets:"
-	@echo "    all          Build interpreter, compiler, and runtime (default)"
-	@echo "    run          Build and run examples/hello.xe"
-	@echo "    compile      Build and test the native compiler (xenlyc)"
-	@echo "                   Pipeline: .xe → lexer → parser → AST → sema"
-	@echo "                             → codegen → .s → as → .o → xlnk → binary"
+	@echo "    all          Build interpreter, compiler, and both runtimes (default)"
+	@echo "    run          Build and run examples/hello.xe (interpreter)"
+	@echo "    compile      Build xenlyc + libxly_rtc.a and test-compile hello.xe"
 	@echo "    test         Run the core test suite"
 	@echo "    test-sys     Run the sys module demo (examples/sys_demo.xe)"
 	@echo "    format       Auto-format all C source with clang-format"
@@ -316,14 +354,14 @@ help:
 	@echo "    PREFIX=<path>  Install prefix       (default: /usr/local)"
 	@echo "    DEBUG=1        Debug build (-O0 -g)"
 	@echo "    SANITIZE=1     Enable ASan + UBSan"
-	@echo "    NO_NATIVE=1    Disable -march=native (for cross-compiling)"
+	@echo "    NO_NATIVE=1    Disable -march=native (portable build)"
 	@echo "    CC=<compiler>  Override compiler     (default: gcc)"
 	@echo ""
 	@echo "  Examples:"
-	@echo "    make                       # standard build"
-	@echo "    make test                  # build + run tests"
-	@echo "    make test-sys              # run sys module demo"
-	@echo "    make DEBUG=1               # debug build"
-	@echo "    make SANITIZE=1            # build with sanitizers"
-	@echo "    make install PREFIX=~/.local"
+	@echo "    make NO_NATIVE=1                    # portable build (recommended)"
+	@echo "    make                                # native-optimised build"
+	@echo "    make test                           # build + run tests"
+	@echo "    make install PREFIX=~/.local        # install for current user"
+	@echo "    make DEBUG=1                        # debug build"
+	@echo "    make SANITIZE=1                     # build with sanitizers"
 	@echo ""

@@ -44,6 +44,7 @@ typedef struct {
     ASTNode *body;          // NODE_BLOCK
     Environment *closure;   // captured env at definition time
     int      is_async;      // 1 = async function (can be spawned)
+    int      is_generator;  // 0=normal, 1=gen template, 2=next() step fn
 } FnDef;
 
 // ─── Class definition (stored inside a VAL_CLASS value) ─────────────────────

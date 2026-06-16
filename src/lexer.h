@@ -120,6 +120,17 @@ typedef enum {
     TOKEN_SEMICOLON,    // ; (optional, newline also works)
     TOKEN_NEWLINE,      // \n
 
+    // ── Generators & Iterators ─────────────────────────────────────────
+    TOKEN_YIELD,        // yield expr    — suspend generator, emit value
+    TOKEN_GEN,          // gen fn name() — generator function keyword
+    TOKEN_OF,           // for x of iter — for-of iterator loop
+
+    // ── Reflection / Metaprogramming ──────────────────────────────────
+    TOKEN_REFLECT,      // reflect       — built-in reflection namespace
+    TOKEN_DOT_BRACKET,  // .[            — computed dynamic property access
+
+    TOKEN_PIPE_PARAM,   // | in { |params| body } — block parameter delimiter
+
     // Special
     TOKEN_EOF,
     TOKEN_ERROR

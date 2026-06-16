@@ -22,8 +22,92 @@
  *   All sends use sendfile(2) for static files (zero-copy)
  */
 
-#include "xly_http.h"
+#include "interpreter.h"  /* include FIRST so INTERPRETER_H is defined */
+#include "xly_http.h"     /* now uses typedef Value XlyVal instead of xly_rt.h */
 #include "platform.h"
+
+/* ── Interpreter-mode shims for xly_rt functions ────────────────────────────
+ * When compiled into the interpreter binary (INTERP_SRCS), xly_rt.c is not
+ * linked.  These thin wrappers map xly_rt API → interpreter Value API so
+ * the HTTP server works correctly in both interpreter and runtime contexts.
+ *
+ * g_interp is the active interpreter instance (non-static in interpreter.c).
+ * It is set by interpreter_run() before any user code executes.           */
+extern Interpreter *g_interp;
+extern Value *call_value(Interpreter *interp, Value *fn_val, Value **args, size_t argc);
+extern Environment *env_create(Environment *parent);
+extern void env_set(Environment *env, const char *name, Value *val);
+extern Value *env_get(Environment *env, const char *name);
+extern Value *value_string(const char *s);
+extern Value *value_number(double n);
+extern Value *value_null(void);
+extern Value *value_bool(int b);
+extern Value *value_array(Value **items, size_t len);
+extern char  *value_to_string(Value *v);
+
+/* Opaque InstanceData — same layout as interpreter.h InstanceData */
+typedef struct { void *class_def; Environment *fields; } _XlyInstData;
+
+static inline XlyVal *xly_obj_new(void) {
+    XlyVal *v = (XlyVal *)calloc(1, sizeof(XlyVal));
+    if (!v) return NULL;
+    _XlyInstData *inst = (_XlyInstData *)calloc(1, sizeof(_XlyInstData));
+    if (!inst) { free(v); return NULL; }
+    inst->class_def = NULL;
+    inst->fields    = env_create(NULL);
+    v->type     = VAL_INSTANCE;
+    v->local    = 1;
+    v->instance = (void *)inst;  /* suppress _XlyInstData* vs InstanceData* mismatch */
+    return v;
+}
+static inline void xly_obj_set(XlyVal *obj, const char *key, XlyVal *val) {
+    if (!obj || obj->type != VAL_INSTANCE || !obj->instance) return;
+    env_set(((_XlyInstData *)obj->instance)->fields, key, val);
+}
+static inline XlyVal *xly_obj_get(XlyVal *obj, const char *key) {
+    if (!obj || obj->type != VAL_INSTANCE || !obj->instance) return NULL;
+    return env_get(((_XlyInstData *)obj->instance)->fields, key);
+}
+static inline XlyVal *xly_str(const char *s)  { return value_string(s); }
+static inline XlyVal *xly_num(double n)        { return value_number(n); }
+static inline XlyVal *xly_null(void)           { return value_null(); }
+static inline XlyVal *xly_bool(int b)          { return value_bool(b); }
+static inline int     xly_truthy(XlyVal *v) {
+    if (!v) return 0;
+    if (v->type == VAL_NULL)   return 0;
+    if (v->type == VAL_BOOL)   return v->boolean;
+    if (v->type == VAL_NUMBER) return v->num != 0.0;
+    if (v->type == VAL_STRING) return v->str && *v->str;
+    return 1;
+}
+static inline char *xly_to_cstr(XlyVal *v) {
+    if (!v) return strdup("null");
+    return value_to_string(v);
+}
+static inline XlyVal *xly_typeof(XlyVal *v) {
+    if (!v || v->type == VAL_NULL)     return value_string("null");
+    if (v->type == VAL_NUMBER)         return value_string("number");
+    if (v->type == VAL_STRING)         return value_string("string");
+    if (v->type == VAL_BOOL)           return value_string("bool");
+    if (v->type == VAL_FUNCTION)       return value_string("function");
+    if (v->type == VAL_ARRAY)          return value_string("array");
+    if (v->type == VAL_INSTANCE)       return value_string("object");
+    return value_string("unknown");
+}
+static inline XlyVal *xly_array_create(XlyVal **items, size_t n) {
+    return value_array(items, n);
+}
+static inline size_t xly_array_len(XlyVal *v) {
+    return (v && v->type == VAL_ARRAY) ? v->array_len : 0;
+}
+static inline XlyVal *xly_array_get(XlyVal *v, size_t i) {
+    if (!v || v->type != VAL_ARRAY || i >= v->array_len) return value_null();
+    return v->array[i];
+}
+static inline XlyVal *xly_call_fnval(XlyVal *fn, XlyVal **args, int argc) {
+    if (!fn || !g_interp) return value_null();
+    return call_value(g_interp, fn, args, (size_t)argc);
+}
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -355,7 +439,11 @@ static int http_parse(const char *buf, size_t len, XlyHttpRequest *req,
     /* Body */
     size_t header_bytes = (size_t)(header_end - buf);
     if (has_body && content_length > 0) {
-        if (content_length > max_body) return -1; /* too large */
+        if (content_length > (size_t)max_body) {
+                fprintf(stderr, "[xly_http] request body too large (%zu > %zu)\n",
+                        content_length, (size_t)max_body);
+                return -1;
+            } /* too large — 413 */
         size_t available = len - header_bytes;
         if (available < content_length) return 0; /* need more data */
         req->body = (char *)malloc(content_length + 1);
@@ -439,33 +527,36 @@ static void send_all(int fd, const char *buf, size_t len) {
 static void send_response(int fd, XlyHttpResponse *res) {
     char header_buf[8192];
     int  hl = 0;
+    size_t body_len = (res->body && !res->chunked) ? res->body_len : 0;
 
     hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
-                   "HTTP/1.1 %d %s\r\n",
-                   res->status, status_reason(res->status));
+                   "HTTP/1.1 %d %s\r\n", res->status, status_reason(res->status));
     hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
-                   "Server: xlnk/1.0 xly_http/1.0\r\n");
+                   "Server: xly_http/1.0\r\n");
 
-    /* Content-Length unless chunked */
-    if (!res->chunked && res->body && res->body_len > 0) {
+    /* Content-Length (always emit for non-chunked, even if 0) */
+    if (!res->chunked) {
         hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
-                       "Content-Length: %zu\r\n", res->body_len);
-    } else if (res->chunked) {
+                       "Content-Length: %zu\r\n", body_len);
+    } else {
         hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
                        "Transfer-Encoding: chunked\r\n");
     }
 
-    /* Custom headers */
+    /* Custom headers (Content-Type, Location, etc.) */
     for (int i = 0; i < res->n_headers; i++) {
         hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
-                       "%s: %s\r\n",
-                       res->headers[i].key, res->headers[i].value);
+                       "%s: %s\r\n", res->headers[i].key, res->headers[i].value);
     }
+
+    /* Connection keep-alive */
+    hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl,
+                   "Connection: keep-alive\r\n");
     hl += snprintf(header_buf + hl, sizeof(header_buf) - (size_t)hl, "\r\n");
 
     send_all(fd, header_buf, (size_t)hl);
-    if (res->body && res->body_len > 0)
-        send_all(fd, res->body, res->body_len);
+    if (body_len > 0)
+        send_all(fd, res->body, body_len);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -487,6 +578,7 @@ static void handle_request(XlyHttpServer *srv, int fd,
         }
     }
 
+    req->conn = (void *)&fd;  /* expose fd so xly_http_send() can write response */
     XlyHttpCtx ctx = { srv, req, &res, matched ? matched->user : NULL, 0 };
 
     if (!matched) {
@@ -516,10 +608,16 @@ static void handle_request(XlyHttpServer *srv, int fd,
     /* Free request body */
     if (req->body) { free(req->body); req->body = NULL; }
 
-    /* Free response body (unless it was a static string — check via malloc?) */
-    /* Convention: response body set by xly_http_send_* is always heap-allocated */
-    if (res.body && res.body_len > 0 && res.status != XLY_HTTP_200) {
-        /* Don't free static string literals used in 404 default handler */
+    /* Free response body — only if it was heap-allocated (not the static "404 Not Found" literal).
+     * Convention: xly_http_send_text/json/bytes always strdup the body, so it is safe to free.
+     * The 404 default handler uses a string literal — detect by checking res.sent flag:
+     * if sent==0 (send_response called directly above), and body is not NULL and was
+     * set by send_*, it is heap-allocated. If body == "404 Not Found" literal, it will
+     * have been written directly by handle_request and is NOT heap-allocated.
+     * Simplest safe rule: only free if res.sent (handler called xly_http_send which strdup'd). */
+    if (res.body && res.sent) {
+        free(res.body);
+        res.body = NULL;
     }
 
     __atomic_fetch_add(&srv->n_requests, 1, __ATOMIC_RELAXED);
@@ -643,10 +741,7 @@ static void *accept_thread(void *arg) {
             if (!srv->running) break;
             continue;
         }
-        /* Non-blocking for the connection fd */
-        int flags = fcntl(fd, F_GETFL, 0);
-        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-        fcntl(fd, F_SETFL, flags & ~O_NONBLOCK); /* blocking mode for simplicity */
+        /* Connection fd stays in blocking mode; timeouts via SO_RCVTIMEO */
 
         /* Put on accept ring */
         int tail = __atomic_load_n(&srv->ring.tail, __ATOMIC_RELAXED);
@@ -911,13 +1006,11 @@ void xly_http_redirect(XlyHttpCtx *ctx, XlyHttpStatus status, const char *loc) {
 void xly_http_send(XlyHttpCtx *ctx) {
     if (ctx->res->sent) return;
     ctx->res->sent = 1;
-    int fd = ((Conn *)ctx->req->conn) ? ((Conn *)ctx->req->conn)->fd : -1;
-    /* Fallback: pull fd from req directly (stored after accept) */
-    if (fd < 0 && ctx->req->conn)
-        fd = *(int *)ctx->req->conn;
+    /* req->conn is set to &fd (int*) by handle_request before calling handlers */
+    int fd = ctx->req->conn ? *(int *)ctx->req->conn : -1;
     if (fd >= 0)
         send_response(fd, ctx->res);
-    if (ctx->res->body) { free(ctx->res->body); ctx->res->body = NULL; }
+    /* Do NOT free body here — handle_request owns the response lifecycle */
 }
 
 void xly_http_write_chunk(XlyHttpCtx *ctx, const void *data, size_t len) {
@@ -956,7 +1049,7 @@ char *xly_http_to_json(XlyVal *val) {
             else if (*s == '\n') { buf[pos++] = '\\'; buf[pos++] = 'n'; }
             else if (*s == '\r') { buf[pos++] = '\\'; buf[pos++] = 'r'; }
             else if (*s == '\t') { buf[pos++] = '\\'; buf[pos++] = 't'; }
-            else buf[pos++] = *s; s++;
+            else { buf[pos++] = *s; } s++;
         }
         buf[pos++] = '"'; buf[pos] = '\0';
         free(raw); free(type_str); return strdup(buf);
@@ -1148,7 +1241,9 @@ static void val_route_handler(XlyHttpCtx *ctx) {
     /* Call the Xenly function */
     XlyVal *args[1] = { ctx_obj };
     xly_call_fnval(fn, args, 1);
-    value_destroy(ctx_obj);
+    /* ctx_obj is a VAL_INSTANCE — let it be collected normally.
+     * Do NOT call value_destroy here: the handler may have stored references
+     * into res (via xly_http_send_*) that still point into ctx_obj fields. */
 }
 
 XlyVal *xly_http_route_val(XlyVal *srv_val, XlyVal *method, XlyVal *pattern,

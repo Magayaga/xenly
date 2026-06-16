@@ -14,7 +14,7 @@
  * Designed to be embedded inside Xenly programs via the runtime ABI.
  *
  * Features:
- *   • HTTP/1.1 persistent connections (keep-alive)
+ *   • HTTP/1.0 persistent connections (keep-alive)
  *   • Non-blocking I/O with epoll (Linux) / kqueue (macOS)
  *   • URL routing with pattern matching (:param, *wildcard)
  *   • Chunked and content-length response bodies
@@ -44,7 +44,15 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "xly_rt.h"   /* XlyVal* runtime ABI */
+/* When included after interpreter.h, use Value* as XlyVal to avoid
+ * conflicts between the interpreter and runtime type systems.
+ * Both structs have identical memory layout so the ABI is compatible. */
+#ifdef INTERPRETER_H
+    struct Value;
+    typedef struct Value XlyVal;
+#else
+#  include "xly_rt.h"   /* XlyVal* runtime ABI */
+#endif
 
 /* ── Version ─────────────────────────────────────────────────────────────── */
 #define XLY_HTTP_VERSION       "1.0.0"

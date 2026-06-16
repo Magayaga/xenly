@@ -1388,3 +1388,157 @@ XlyVal *xly_utf16_decode(XlyVal *high_val, XlyVal *low_val) {
 XlyVal *xly_uni_is_surrogate(XlyVal *v) {
     return xly_bool(utf16_is_surrogate(xly_to_cp(v)));
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * REFLECT RUNTIME HELPERS
+ *
+ * In xly_rt.c the XlyVal.instance field is void* — the interpreter's
+ * InstanceData layout is not directly accessible.  We use the interpreter's
+ * public obj API (xly_obj_get / xly_obj_set / xly_obj_new) which are
+ * already implemented in this file and work through the same void* handle.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Helper: iterate object keys via the interpreter-level obj store.
+ * We use the xly_array + xly_obj_get pattern: list all known keys by
+ * walking the internal env pointer through the void* handle.
+ * Since we can't dereference instance->fields directly, we call
+ * xly_call_module("reflect","keys",…) — but that would be circular.
+ * Instead, expose a thin wrapper that calls back into the interpreter
+ * via xly_call_module which IS available here.                        */
+XlyVal *xly_reflect_keys(XlyVal *obj) {
+    if (!obj) return xly_array_create(NULL, 0);
+    XlyVal *args[1] = { obj };
+    return xly_call_module("reflect", "keys", args, 1);
+}
+
+XlyVal *xly_reflect_get(XlyVal *obj, XlyVal *key) {
+    if (!obj || !key) return xly_null();
+    XlyVal *args[2] = { obj, key };
+    return xly_call_module("reflect", "get", args, 2);
+}
+
+XlyVal *xly_reflect_set(XlyVal *obj, XlyVal *key, XlyVal *val) {
+    if (!obj || !key || !val) return xly_bool(0);
+    XlyVal *args[3] = { obj, key, val };
+    return xly_call_module("reflect", "set", args, 3);
+}
+
+XlyVal *xly_reflect_has(XlyVal *obj, XlyVal *key) {
+    if (!obj || !key) return xly_bool(0);
+    XlyVal *args[2] = { obj, key };
+    return xly_call_module("reflect", "has", args, 2);
+}
+
+XlyVal *xly_reflect_delete(XlyVal *obj, XlyVal *key) {
+    if (!obj || !key) return xly_bool(0);
+    XlyVal *args[2] = { obj, key };
+    return xly_call_module("reflect", "delete", args, 2);
+}
+
+XlyVal *xly_reflect_freeze(XlyVal *obj) {
+    if (!obj) return xly_null();
+    /* Set the frozen sentinel directly — local is accessible in xly_rt.c */
+    obj->local = 99;
+    return obj;
+}
+
+XlyVal *xly_reflect_is_frozen(XlyVal *obj) {
+    return xly_bool(obj && obj->local == 99);
+}
+
+XlyVal *xly_reflect_define(XlyVal *obj, XlyVal *key, XlyVal *desc) {
+    if (!obj || !key) return xly_null();
+    XlyVal *args[3] = { obj, key, desc };
+    return xly_call_module("reflect", "define", args, 3);
+}
+
+XlyVal *xly_reflect_apply(XlyVal *fn, XlyVal *args_arr) {
+    if (!fn) return xly_null();
+    size_t argc = (args_arr && args_arr->type == VAL_ARRAY)
+                ? args_arr->array_len : 0;
+    XlyVal **argv = argc ? args_arr->array : NULL;
+    return xly_call_fnval(fn, argv, (int)argc);
+}
+
+XlyVal *xly_reflect_construct(XlyVal *cls, XlyVal *args_arr) {
+    if (!cls) return xly_null();
+    XlyVal *args[2] = { cls, args_arr ? args_arr : xly_array_create(NULL,0) };
+    return xly_call_module("reflect", "construct", args, 2);
+}
+
+XlyVal *xly_index_set(XlyVal *collection, XlyVal *index, XlyVal *val) {
+    if (!collection || !index || !val) return xly_null();
+    /* For arrays with numeric index */
+    if (collection->type == VAL_ARRAY && index->type == VAL_NUMBER) {
+        size_t idx = (size_t)(long long)index->num;
+        if (idx < collection->array_len)
+            collection->array[idx] = val;
+        return val;
+    }
+    /* For instances with string key — via reflect_set */
+    return xly_reflect_set(collection, index, val);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * GENERATOR RUNTIME HELPERS
+ *
+ * Native generator bodies compiled by xenlyc call xly_gen_yield() to
+ * suspend, and the iterator's .next() calls through xly_for_of_next().
+ *
+ * Thread-local yield state: _gen_yield_val / _gen_yielded.
+ * On macOS this is safe for single-threaded generator use.  Multi-threaded
+ * generator use requires per-generator state (future work).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+#if defined(__GNUC__) || defined(__clang__)
+#  define XLY_THREAD_LOCAL __thread
+#else
+#  define XLY_THREAD_LOCAL
+#endif
+
+static XLY_THREAD_LOCAL XlyVal *_gen_yield_val = NULL;
+static XLY_THREAD_LOCAL int     _gen_yielded   = 0;
+
+XlyVal *xly_gen_create(void *fn_ptr, void *env_ptr) {
+    (void)env_ptr;
+    XlyVal *iter = xly_obj_new();
+    xly_obj_set(iter, "done",       xly_bool(0));
+    xly_obj_set(iter, "value",      xly_null());
+    xly_obj_set(iter, "__gen_fn__", xly_num((double)(uintptr_t)fn_ptr));
+    return iter;
+}
+
+void xly_gen_yield(XlyVal *val) {
+    _gen_yield_val = val;
+    _gen_yielded   = 1;
+    /* The generator body returns here; xly_for_of_next detects the yield */
+}
+
+XlyVal *xly_for_of_next(XlyVal *iter) {
+    if (!iter) return NULL;
+
+    /* Check done flag */
+    XlyVal *done = xly_obj_get(iter, "done");
+    if (done && xly_truthy(done)) return NULL;
+
+    /* Get generator body function pointer */
+    XlyVal *fn_val = xly_obj_get(iter, "__gen_fn__");
+    if (!fn_val || fn_val->type != VAL_NUMBER) return NULL;
+
+    typedef void (*GenBodyFn)(XlyVal *);
+    GenBodyFn body = (GenBodyFn)(uintptr_t)(unsigned long long)(fn_val->num);
+
+    _gen_yielded   = 0;
+    _gen_yield_val = NULL;
+    body(iter);   /* body calls xly_gen_yield() then returns */
+
+    if (!_gen_yielded) {
+        xly_obj_set(iter, "done",  xly_bool(1));
+        xly_obj_set(iter, "value", xly_null());
+        return NULL;
+    }
+
+    XlyVal *yval = _gen_yield_val ? _gen_yield_val : xly_null();
+    xly_obj_set(iter, "value", yval);
+    return yval;
+}
