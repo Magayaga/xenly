@@ -1,4 +1,4 @@
-| :warning: Inactive Development of `Xenly` programming language since June 20, 2026. I'm going back to being active again.
+| :warning: Inactive Development of the `Xenly` programming language since June 17, 2026. I'm going back to being active again.
 | ---
 
 <p align="center">
