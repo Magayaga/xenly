@@ -164,9 +164,35 @@ func Array(items []*Value) *Value {
 	}
 	return &Value{Tag: TypeArray, ArrayVal: items}
 }
+func newValueMap(sizeHint int) map[string]*Value {
+	if sizeHint < 0 {
+		sizeHint = 0
+	}
+	// Go gives each map an unpredictable hash seed. Keeping VM object tables
+	// behind this constructor makes that randomized-hash-table property explicit
+	// for user-controlled property names and helps avoid collision-based DoS.
+	return make(map[string]*Value, sizeHint)
+}
+
+func newEnvEntryMap(sizeHint int) map[string]*envEntry {
+	if sizeHint < 0 {
+		sizeHint = 0
+	}
+	// Environment overflow tables also receive Go's per-map random hash seed.
+	return make(map[string]*envEntry, sizeHint)
+}
+
+func newMethodMap(sizeHint int) map[string]*FunctionVal {
+	if sizeHint < 0 {
+		sizeHint = 0
+	}
+	// Method lookup tables are randomized maps too, protecting class member names.
+	return make(map[string]*FunctionVal, sizeHint)
+}
+
 func Object(m map[string]*Value) *Value {
 	if m == nil {
-		m = make(map[string]*Value)
+		m = newValueMap(0)
 	}
 	return &Value{Tag: TypeObject, ObjVal: m}
 }
@@ -218,7 +244,7 @@ func (v *Value) Clone() *Value {
 		if v.ObjVal == nil {
 			return Object(nil)
 		}
-		cloned := make(map[string]*Value)
+		cloned := newValueMap(len(v.ObjVal))
 		for k, val := range v.ObjVal {
 			cloned[k] = val.Clone()
 		}
@@ -246,7 +272,7 @@ func (v *Value) Clone() *Value {
 		if v.InstVal == nil {
 			return &Value{Tag: TypeInstance, InstVal: nil}
 		}
-		clonedFields := make(map[string]*Value)
+		clonedFields := newValueMap(len(v.InstVal.Fields))
 		for k, val := range v.InstVal.Fields {
 			clonedFields[k] = val.Clone()
 		}
@@ -507,7 +533,7 @@ func (e *Env) Define(name string, val *Value, isConst bool) {
 		return
 	}
 	if e.overflow == nil {
-		e.overflow = make(map[string]*envEntry, 8)
+		e.overflow = newEnvEntryMap(8)
 	}
 	e.overflow[name] = &envEntry{name: name, value: val, isConst: isConst}
 }
