@@ -77,17 +77,57 @@ func splitTarget(target string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
+func findModuleRootFrom(start string) (string, bool) {
+	if start == "" {
+		return "", false
+	}
+	start, err := filepath.Abs(start)
+	if err != nil {
+		return "", false
+	}
+	info, err := os.Stat(start)
+	if err == nil && !info.IsDir() {
+		start = filepath.Dir(start)
+	}
+	for {
+		gomod := filepath.Join(start, "go.mod")
+		if data, err := os.ReadFile(gomod); err == nil && strings.Contains(string(data), "module xvm") {
+			return start, true
+		}
+		parent := filepath.Dir(start)
+		if parent == start {
+			return "", false
+		}
+		start = parent
+	}
+}
+
 func moduleRoot() (string, error) {
+	if root, ok := findModuleRootFrom(os.Getenv("XVM_ROOT")); ok {
+		return root, nil
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		if root, ok := findModuleRootFrom(cwd); ok {
+			return root, nil
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		if root, ok := findModuleRootFrom(exe); ok {
+			return root, nil
+		}
+	}
+
 	cmd := exec.Command("go", "env", "GOMOD")
 	out, err := cmd.Output()
-	if err != nil {
-		return "", err
+	if err == nil {
+		gomod := strings.TrimSpace(string(out))
+		if gomod != "" && gomod != os.DevNull {
+			if root, ok := findModuleRootFrom(gomod); ok {
+				return root, nil
+			}
+		}
 	}
-	gomod := strings.TrimSpace(string(out))
-	if gomod == "" || gomod == os.DevNull {
-		return "", fmt.Errorf("cannot locate xvm/go.mod")
-	}
-	return filepath.Dir(gomod), nil
+	return "", fmt.Errorf("cannot locate xvm/go.mod; run from the xvm tree or set XVM_ROOT")
 }
 
 func writeBuildFiles(dir, moduleDir, encoded string) error {
@@ -203,6 +243,11 @@ func main() {
 	}
 	if outputFile == "" {
 		outputFile = defaultOutput(inputFile, goos)
+	}
+	outputFile, err = filepath.Abs(outputFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[xenlyimg] cannot resolve output path: %v\n", err)
+		os.Exit(1)
 	}
 	moduleDir, err := moduleRoot()
 	if err != nil {

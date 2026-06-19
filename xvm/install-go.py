@@ -24,9 +24,9 @@ if os.name == "nt":
 
 LDFLAGS = ["-ldflags", "-s -w"]
 
-def run(cmd):
+def run(cmd, env=None):
     print(" ".join(cmd))
-    subprocess.check_call(cmd)
+    subprocess.check_call(cmd, env=env)
 
 def ensure_bindir():
     os.makedirs(BINDIR, exist_ok=True)
@@ -72,9 +72,9 @@ def cross_compile(goos, goarch):
     env["GOOS"] = goos
     env["GOARCH"] = goarch
 
-    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlybyc-{suffix}{exe}", "./xenlybyc/"])
-    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlyrun-{suffix}{exe}", "./xenlyrun/"])
-    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlyimg-{suffix}{exe}", "./xenlyimg/"])
+    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlybyc-{suffix}{exe}", "./xenlybyc/"], env=env)
+    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlyrun-{suffix}{exe}", "./xenlyrun/"], env=env)
+    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlyimg-{suffix}{exe}", "./xenlyimg/"], env=env)
 
 def cross_all():
     targets = [
