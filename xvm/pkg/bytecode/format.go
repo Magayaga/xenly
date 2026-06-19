@@ -56,6 +56,7 @@
 package bytecode
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -321,37 +322,47 @@ func Read(path string) (*Module, error) {
 	}
 	defer f.Close()
 
+	return ReadFrom(f)
+}
+
+// ReadBytes decodes a Module from an in-memory XVM bytecode image.
+func ReadBytes(data []byte) (*Module, error) {
+	return ReadFrom(bytes.NewReader(data))
+}
+
+// ReadFrom decodes a Module from an XVM bytecode stream.
+func ReadFrom(r io.Reader) (*Module, error) {
 	le := binary.LittleEndian
 
 	readU8 := func() (uint8, error) {
 		var v uint8
-		err := binary.Read(f, le, &v)
+		err := binary.Read(r, le, &v)
 		return v, err
 	}
 	readU16 := func() (uint16, error) {
 		var v uint16
-		err := binary.Read(f, le, &v)
+		err := binary.Read(r, le, &v)
 		return v, err
 	}
 	readU32 := func() (uint32, error) {
 		var v uint32
-		err := binary.Read(f, le, &v)
+		err := binary.Read(r, le, &v)
 		return v, err
 	}
 	readU64 := func() (uint64, error) {
 		var v uint64
-		err := binary.Read(f, le, &v)
+		err := binary.Read(r, le, &v)
 		return v, err
 	}
 	readBytes := func(n uint32) ([]byte, error) {
 		b := make([]byte, n)
-		_, err := io.ReadFull(f, b)
+		_, err := io.ReadFull(r, b)
 		return b, err
 	}
 
 	// Header
 	var magic [4]byte
-	if _, err := io.ReadFull(f, magic[:]); err != nil {
+	if _, err := io.ReadFull(r, magic[:]); err != nil {
 		return nil, fmt.Errorf("read magic: %w", err)
 	}
 	if magic != Magic {

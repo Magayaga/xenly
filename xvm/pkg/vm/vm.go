@@ -135,7 +135,7 @@ func (xvm *XVM) buildClasses() {
 	for i, cd := range xvm.module.Classes {
 		xvm.classes[i] = &ClassVal{
 			Name:    xvm.poolStr(cd.NameIdx),
-			Methods: make(map[string]*FunctionVal),
+			Methods: newMethodMap(len(cd.Methods)),
 		}
 	}
 	for i, cd := range xvm.module.Classes {
@@ -616,7 +616,7 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		// ── Objects ──────────────────────────────────────────────────────────
 		case bytecode.OP_MAKE_OBJ:
 			count := int(readU32(&ip))
-			m := make(map[string]*Value, count)
+			m := newValueMap(count)
 			// For small objects (≤ 8 pairs) use a stack-allocated array to
 			// collect pairs instead of heap-allocating a []*Value slice.
 			if count <= 8 {
@@ -1178,13 +1178,13 @@ func (xvm *XVM) propSet(obj *Value, name string, val *Value) {
 	switch obj.Tag {
 	case TypeObject:
 		if obj.ObjVal == nil {
-			obj.ObjVal = make(map[string]*Value)
+			obj.ObjVal = newValueMap(0)
 		}
 		obj.ObjVal[name] = val
 	case TypeInstance:
 		if obj.InstVal != nil {
 			if obj.InstVal.Fields == nil {
-				obj.InstVal.Fields = make(map[string]*Value)
+				obj.InstVal.Fields = newValueMap(0)
 			}
 			obj.InstVal.Fields[name] = val
 		}
@@ -1246,7 +1246,7 @@ func (xvm *XVM) indexSet(container *Value, idx *Value, val *Value) {
 		}
 	case TypeObject:
 		if container.ObjVal == nil {
-			container.ObjVal = make(map[string]*Value)
+			container.ObjVal = newValueMap(0)
 		}
 		container.ObjVal[idx.String()] = val
 	}
@@ -1272,7 +1272,7 @@ func (xvm *XVM) instantiateClassVal(cls *ClassVal, args []*Value) (*Value, error
 	}
 	inst := &InstanceVal{
 		Class:  cls,
-		Fields: make(map[string]*Value),
+		Fields: newValueMap(0),
 	}
 	instVal := &Value{Tag: TypeInstance, InstVal: inst}
 
@@ -1904,13 +1904,14 @@ func (xvm *XVM) objectMethod(obj *Value, name string, args []*Value) (*Value, bo
 // ─── Variant method dispatch ──────────────────────────────────────────────────
 // Implements the Optional / ADT API on TypeVariant values.
 // Supports the Some(x) / None pattern used in functional.xe and elsewhere:
-//   some.getOr(default)  →  inner value (Some) or default (None)
-//   some.isSome()        →  true if tag != "None"
-//   some.isNone()        →  true if tag == "None"
-//   some.unwrap()        →  inner value or runtime error on None
-//   some.orElse(fn)      →  self (Some) or fn() result (None)
-//   some.map(fn)         →  Some(fn(inner)) or None  (functor map)
-//   some.tag()           →  variant tag string
+//
+//	some.getOr(default)  →  inner value (Some) or default (None)
+//	some.isSome()        →  true if tag != "None"
+//	some.isNone()        →  true if tag == "None"
+//	some.unwrap()        →  inner value or runtime error on None
+//	some.orElse(fn)      →  self (Some) or fn() result (None)
+//	some.map(fn)         →  Some(fn(inner)) or None  (functor map)
+//	some.tag()           →  variant tag string
 func (xvm *XVM) variantMethod(v *Value, name string, args []*Value) (*Value, bool, error) {
 	isNone := v.VarTag == "None" || len(v.VarFields) == 0
 	switch name {
@@ -2031,7 +2032,7 @@ func (xvm *XVM) nullMethod(name string, args []*Value) (*Value, bool, error) {
 // Numbers and bools are always "present" values so they participate in Optional
 // chaining without any wrapping.  This makes code like:
 //
-//   const n = maybeNum.getOr(0)   // works whether maybeNum is a number or null
+//	const n = maybeNum.getOr(0)   // works whether maybeNum is a number or null
 //
 // work uniformly regardless of the runtime type.
 //
