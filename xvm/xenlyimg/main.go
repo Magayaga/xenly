@@ -1,8 +1,17 @@
 /*
+ * XENLY VIRTUAL MACHINE (XVM) - high-performance of the Virtual Machine
+ * created, designed, and developed by Cyril John Magayaga (cjmagayaga957@gmail.com, cyrilmagayaga@proton.me).
+ *
+ * It is initially written in Go programming language.
+ *
+ * It is available for the Linux, macOS, and Windows operating systems.
+ *
+ */
+/*
  * XENLY - Xenly Virtual Machine (XVM)
  * xenlyimg — XVM Native Image Builder
  *
- * Compiles portable XVM bytecode (.xebc/.xyc) into a standalone,
+ * Compiles portable XVM bytecode (.xebc) into a standalone,
  * platform-specific native executable by embedding the bytecode image into a
  * small optimized XVM runner and invoking the Go AOT toolchain.
  */
@@ -44,7 +53,7 @@ func reset() string {
 
 func usage(prog string) {
 	fmt.Printf("\n  %sxenlyimg%s  XVM Native Image Builder  %sv%s%s\n", col("1;36"), reset(), col("1;33"), xenlyimgVersion, reset())
-	fmt.Printf("\n  %sUsage:%s   %s [options] <file.xebc|file.xyc>\n", col("1;33"), reset(), prog)
+	fmt.Printf("\n  %sUsage:%s   %s [options] <file.xebc>\n", col("1;33"), reset(), prog)
 	fmt.Printf("\n  %sOptions:%s\n", col("1;33"), reset())
 	fmt.Printf("    %s-o <file>%s             Output native executable (default: input name)\n", col("1"), reset())
 	fmt.Printf("    %s--target <os/arch>%s    Build for linux/amd64, darwin/arm64, windows/amd64, ...\n", col("1"), reset())
