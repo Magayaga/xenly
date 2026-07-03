@@ -481,7 +481,7 @@ static void collect_variant_names(CG *cg, ASTNode *node) {
 /* ── pre-pass: count VAR_DECLs recursively ─────────────────────────────── */
 static int count_locals(ASTNode *node) {
     if (!node) return 0;
-    int n = (node->type == NODE_VAR_DECL || node->type == NODE_CONST_DECL) ? 1 : 0;
+    int n = (node->type == NODE_VAR_DECL || node->type == NODE_LET_DECL || node->type == NODE_CONST_DECL) ? 1 : 0;
     /* for-in declares 4 hidden slots per loop; count conservatively */
     if (node->type == NODE_FOR_IN) n += 4;
     for (size_t i = 0; i < node->child_count; i++)
@@ -1161,8 +1161,14 @@ static void emit_expr(CG *cg, ASTNode *node) {
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
+        int gi = (off == 0) ? gvar_find(cg, node->str_value) : -1;
         /* load current value — aligned spill across xly_num call */
-        emit(cg, "    movq    %d(%%rbp), %%rax", off);
+        if (off != 0)
+            emit(cg, "    movq    %d(%%rbp), %%rax", off);
+        else if (gi >= 0)
+            emit(cg, "    movq    " XLY_SYM("__xly_globals") "+%d(%%rip), %%rax", gi * 8);
+        else
+            emit(cg, "    call    " XLY_SYM("xly_null"));
         emit(cg, "    subq    $16, %%rsp");       /* aligned spill slot */
         emit(cg, "    movq    %%rax, (%%rsp)");   /* save current */
         emit_load_double(cg, 1.0);
@@ -1172,7 +1178,10 @@ static void emit_expr(CG *cg, ASTNode *node) {
         emit(cg, "    addq    $16, %%rsp");
         emit(cg, "    call    %s",
              node->type == NODE_INCREMENT ? XLY_SYM("xly_add") : XLY_SYM("xly_sub"));
-        emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        if (off != 0)
+            emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        else if (gi >= 0)
+            emit(cg, "    movq    %%rax, " XLY_SYM("__xly_globals") "+%d(%%rip)", gi * 8);
         break;
     }
 
@@ -1315,20 +1324,26 @@ static void emit_stmt(CG *cg, ASTNode *node) {
 
     switch (node->type) {
 
-    /* ── var/const decl ────────────────────────────────────────────── */
+    /* ── var/let/const decl ────────────────────────────────────────── */
     case NODE_VAR_DECL:
+    case NODE_LET_DECL:
     case NODE_CONST_DECL: {
         if (node->child_count > 0)
             emit_expr(cg, node->children[0]);
         else
             emit(cg, "    call    " XLY_SYM("xly_null"));
         if (cg->in_main_scope && cg->scope_depth == 0) {
-            /* Top-level decl: store in global slot so functions can read it */
+            /* Top-level decl: store only in the global slot. (Previously this
+             * also created a "local alias" stack slot in main()'s own frame,
+             * but that copy only stayed in sync with assignments made
+             * directly in main() — any assignment to the same name from
+             * inside a called function updates __xly_globals but has no way
+             * to reach back into main()'s frame, so the local alias would
+             * silently go stale. Routing everything through __xly_globals
+             * keeps a single source of truth, matching how non-main
+             * functions already read/write top-level names.) */
             int gi = gvar_declare(cg, node->str_value);
             emit(cg, "    movq    %%rax, " XLY_SYM("__xly_globals") "+%d(%%rip)", gi * 8);
-            /* Also declare a local alias for use within main() */
-            int off = var_declare(cg, node->str_value);
-            emit(cg, "    movq    %%rax, %d(%%rbp)", off);
         } else {
             int off = var_declare(cg, node->str_value);
             emit(cg, "    movq    %%rax, %d(%%rbp)", off);
@@ -1340,7 +1355,18 @@ static void emit_stmt(CG *cg, ASTNode *node) {
     case NODE_ASSIGN: {
         emit_expr(cg, node->children[0]);
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        if (off != 0) {
+            emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        } else {
+            int gi = gvar_find(cg, node->str_value);
+            if (gi >= 0) {
+                /* Global variable: store into __xly_globals array */
+                emit(cg, "    movq    %%rax, " XLY_SYM("__xly_globals") "+%d(%%rip)", gi * 8);
+            }
+            /* else: assignment to an undeclared name — sema should have
+             * already flagged this; drop the store rather than clobbering
+             * 0(%%rbp) (the saved frame pointer). */
+        }
         break;
     }
 
@@ -1350,9 +1376,15 @@ static void emit_stmt(CG *cg, ASTNode *node) {
     case NODE_COMPOUND_ASSIGN: {
         const char *varname = node->children[0]->str_value;
         int off = var_offset(cg, varname);
+        int gi = (off == 0) ? gvar_find(cg, varname) : -1;
 
         /* load current value, spill across rhs eval — aligned slot */
-        emit(cg, "    movq    %d(%%rbp), %%rax", off);
+        if (off != 0)
+            emit(cg, "    movq    %d(%%rbp), %%rax", off);
+        else if (gi >= 0)
+            emit(cg, "    movq    " XLY_SYM("__xly_globals") "+%d(%%rip), %%rax", gi * 8);
+        else
+            emit(cg, "    call    " XLY_SYM("xly_null"));
         emit(cg, "    subq    $16, %%rsp");        /* aligned spill */
         emit(cg, "    movq    %%rax, (%%rsp)");    /* save current */
         emit_expr(cg, node->children[1]);          /* rhs → %rax */
@@ -1368,7 +1400,10 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         else if (strcmp(op, "/=") == 0) fn = XLY_SYM("xly_div");
 
         emit(cg, "    call    %s", fn);
-        emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        if (off != 0)
+            emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        else if (gi >= 0)
+            emit(cg, "    movq    %%rax, " XLY_SYM("__xly_globals") "+%d(%%rip)", gi * 8);
         break;
     }
 
@@ -1376,7 +1411,13 @@ static void emit_stmt(CG *cg, ASTNode *node) {
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        emit(cg, "    movq    %d(%%rbp), %%rax", off);
+        int gi = (off == 0) ? gvar_find(cg, node->str_value) : -1;
+        if (off != 0)
+            emit(cg, "    movq    %d(%%rbp), %%rax", off);
+        else if (gi >= 0)
+            emit(cg, "    movq    " XLY_SYM("__xly_globals") "+%d(%%rip), %%rax", gi * 8);
+        else
+            emit(cg, "    call    " XLY_SYM("xly_null"));
         emit(cg, "    subq    $16, %%rsp");        /* aligned spill */
         emit(cg, "    movq    %%rax, (%%rsp)");    /* save current */
         emit_load_double(cg, 1.0);
@@ -1386,7 +1427,10 @@ static void emit_stmt(CG *cg, ASTNode *node) {
         emit(cg, "    addq    $16, %%rsp");
         emit(cg, "    call    %s",
              node->type == NODE_INCREMENT ? XLY_SYM("xly_add") : XLY_SYM("xly_sub"));
-        emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        if (off != 0)
+            emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+        else if (gi >= 0)
+            emit(cg, "    movq    %%rax, " XLY_SYM("__xly_globals") "+%d(%%rip)", gi * 8);
         break;
     }
 
@@ -2734,7 +2778,16 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        safe_ldr_a64(cg, "x0", off);                   /* current value */
+        int gi = (off == 0) ? gvar_find(cg, node->str_value) : -1;
+        if (off != 0) {
+            safe_ldr_a64(cg, "x0", off);
+        } else if (gi >= 0) {
+            emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+            emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+            emit(cg, "    ldr     x0, [x9, #%d]", gi * 8);
+        } else {
+            emit(cg, "    bl      " XLY_SYM("xly_null"));
+        }
         spill_push_a64(cg, "x0");
         emit_load_double_a64(cg, 1.0);
         emit(cg, "    bl      " XLY_SYM("xly_num"));   /* x0 = num(1) */
@@ -2742,7 +2795,13 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         spill_pop_a64(cg, "x0");
         { char isym[64]; emit(cg, "    bl      %s",
               XLY_RSYM(isym, node->type == NODE_INCREMENT ? "xly_add" : "xly_sub")); }
-        safe_str_a64(cg, "x0", off);
+        if (off != 0) {
+            safe_str_a64(cg, "x0", off);
+        } else if (gi >= 0) {
+            emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+            emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+            emit(cg, "    str     x0, [x9, #%d]", gi * 8);
+        }
         break;
     }
 
@@ -2855,18 +2914,19 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
     switch (node->type) {
 
     case NODE_VAR_DECL:
+    case NODE_LET_DECL:
     case NODE_CONST_DECL: {
         if (node->child_count > 0)
             emit_expr_a64(cg, node->children[0]);
         else
             emit(cg, "    bl      " XLY_SYM("xly_null"));
         if (cg->in_main_scope && cg->scope_depth == 0) {
+            /* Top-level decl: global slot only — see x86-64 NODE_VAR_DECL
+             * comment for why the old local-alias slot went stale. */
             int gi = gvar_declare(cg, node->str_value);
             emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
             emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
             emit(cg, "    str     x0, [x9, #%d]", gi * 8);
-            int off = var_declare(cg, node->str_value);
-            safe_str_a64(cg, "x0", off);
         } else {
             int off = var_declare(cg, node->str_value);
             safe_str_a64(cg, "x0", off);
@@ -2877,14 +2937,35 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
     case NODE_ASSIGN: {
         emit_expr_a64(cg, node->children[0]);
         int off = var_offset(cg, node->str_value);
-        safe_str_a64(cg, "x0", off);
+        if (off != 0) {
+            safe_str_a64(cg, "x0", off);
+        } else {
+            int gi = gvar_find(cg, node->str_value);
+            if (gi >= 0) {
+                emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+                emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+                emit(cg, "    str     x0, [x9, #%d]", gi * 8);
+            }
+            /* else: assignment to an undeclared name — sema should have
+             * already flagged this; drop the store rather than clobbering
+             * the frame via a bogus offset-0 store. */
+        }
         break;
     }
 
     case NODE_COMPOUND_ASSIGN: {
         const char *varname = node->children[0]->str_value;
         int off = var_offset(cg, varname);
-        safe_ldr_a64(cg, "x0", off);
+        int gi = (off == 0) ? gvar_find(cg, varname) : -1;
+        if (off != 0) {
+            safe_ldr_a64(cg, "x0", off);
+        } else if (gi >= 0) {
+            emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+            emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+            emit(cg, "    ldr     x0, [x9, #%d]", gi * 8);
+        } else {
+            emit(cg, "    bl      " XLY_SYM("xly_null"));
+        }
         spill_push_a64(cg, "x0");
         emit_expr_a64(cg, node->children[1]);
         emit(cg, "    mov     x1, x0");
@@ -2896,14 +2977,29 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         else if (strcmp(op,"*=") == 0) fn = "xly_mul";
         else if (strcmp(op,"/=") == 0) fn = "xly_div";
         { char csym[64]; emit(cg, "    bl      %s", XLY_RSYM(csym, fn)); }
-        safe_str_a64(cg, "x0", off);
+        if (off != 0) {
+            safe_str_a64(cg, "x0", off);
+        } else if (gi >= 0) {
+            emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+            emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+            emit(cg, "    str     x0, [x9, #%d]", gi * 8);
+        }
         break;
     }
 
     case NODE_INCREMENT:
     case NODE_DECREMENT: {
         int off = var_offset(cg, node->str_value);
-        safe_ldr_a64(cg, "x0", off);
+        int gi = (off == 0) ? gvar_find(cg, node->str_value) : -1;
+        if (off != 0) {
+            safe_ldr_a64(cg, "x0", off);
+        } else if (gi >= 0) {
+            emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+            emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+            emit(cg, "    ldr     x0, [x9, #%d]", gi * 8);
+        } else {
+            emit(cg, "    bl      " XLY_SYM("xly_null"));
+        }
         spill_push_a64(cg, "x0");
         emit_load_double_a64(cg, 1.0);
         emit(cg, "    bl      " XLY_SYM("xly_num"));
@@ -2911,7 +3007,13 @@ static void emit_stmt_a64(CG *cg, ASTNode *node) {
         spill_pop_a64(cg, "x0");
         { char isym2[64]; emit(cg, "    bl      %s",
               XLY_RSYM(isym2, node->type == NODE_INCREMENT ? "xly_add" : "xly_sub")); }
-        safe_str_a64(cg, "x0", off);
+        if (off != 0) {
+            safe_str_a64(cg, "x0", off);
+        } else if (gi >= 0) {
+            emit(cg, "    adrp    x9, " XLY_SYM("__xly_globals") "@PAGE");
+            emit(cg, "    add     x9, x9, " XLY_SYM("__xly_globals") "@PAGEOFF");
+            emit(cg, "    str     x0, [x9, #%d]", gi * 8);
+        }
         break;
     }
 

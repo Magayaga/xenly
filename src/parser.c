@@ -618,156 +618,65 @@ static ASTNode *parse_statement(Parser *p) {
         int line = p->current.line;
         expect(p, TOKEN_LPAREN, "Expected '(' after 'for'.");
 
-        // ── Detect for-of: for (x of iterable) ──────────────────────────────
-        // Peek ahead: VAR/LET IDENT OF  or  IDENT OF
-        {
-            int is_for_of = 0;
-            char *of_var = NULL;
-            if (check(p, TOKEN_VAR) || check(p, TOKEN_LET) || check(p, TOKEN_CONST)) {
-                advance(p);
-                if (check(p, TOKEN_IDENTIFIER)) {
-                    of_var = strdup(p->current.value);
-                    advance(p);
-                    if (check(p, TOKEN_OF)) {
-                        is_for_of = 1;
-                        advance(p); // consume 'of'
-                    } else {
-                        // put back — not for-of; fall through via fake token replay
-                        // We'll handle this by inserting the var name back
-                        // (simplest: just create a let_decl and continue)
-                    }
-                }
-                if (is_for_of && of_var) {
-                    ASTNode *iter = parse_expression(p);
-                    expect(p, TOKEN_RPAREN, "Expected ')' after for-of iterable.");
-                    skip_newlines(p);
-                    expect(p, TOKEN_LBRACE, "Expected '{' for for-of body.");
-                    ASTNode *body = ast_node_create(NODE_BLOCK, line);
-                    skip_newlines(p);
-                    while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
-                        ASTNode *st = parse_statement(p);
-                        if (st) ast_node_add_child(body, st);
-                        skip_newlines(p);
-                    }
-                    expect(p, TOKEN_RBRACE, "Expected '}' to close for-of body.");
-                    ASTNode *node = ast_node_create(NODE_FOR_OF, line);
-                    node->str_value = of_var; // iteration variable name
-                    ast_node_add_child(node, iter);   // children[0] = iterable expr
-                    ast_node_add_child(node, body);   // children[1] = body block
-                    skip_newlines(p);
-                    return node;
-                }
-                if (of_var) free(of_var);
-            }
-        }
+        // ── Unified lookahead ────────────────────────────────────────────
+        // A declaration keyword (var/let/const) and/or a leading identifier
+        // is consumed AT MOST ONCE here, then we branch on what follows:
+        //   'of' → for-of      'in' → for-in      otherwise → C-style init.
+        // (Previously this was two separate lookahead blocks that each
+        //  tried to consume "var/let IDENT" independently; the first
+        //  block always consumed those tokens even when it wasn't a
+        //  for-of loop, so the second block's VAR/LET check could never
+        //  fire and for-in / C-style "for (var i = 0; ...)" loops with a
+        //  declaration keyword failed to parse.)
+        int has_decl_kw = check(p, TOKEN_VAR) || check(p, TOKEN_LET) || check(p, TOKEN_CONST);
+        char *decl_var = NULL;
+        int is_for_of = 0, is_for_in = 0;
 
-        // Detect for-in: for (var x in expr) or for (let x in expr) or for (x in expr)
-        // Peek: if we see VAR/LET IDENT IN  or  IDENT IN  → for-in
-        int is_for_in = 0;
-        char *iter_var = NULL;
-        if (check(p, TOKEN_VAR) || check(p, TOKEN_LET)) {
-            // Check if next-next is IN
-            // Save state: advance past VAR/LET, read IDENT, check IN
-            advance(p);  // consume VAR/LET
+        if (has_decl_kw) {
+            advance(p); // consume var/let/const
             if (check(p, TOKEN_IDENTIFIER)) {
-                iter_var = strdup(p->current.value);
-                advance(p);  // consume IDENT
-                if (check(p, TOKEN_IN)) {
+                decl_var = strdup(p->current.value);
+                advance(p); // consume IDENT
+                if (check(p, TOKEN_OF)) {
+                    is_for_of = 1;
+                    advance(p); // consume 'of'
+                } else if (check(p, TOKEN_IN)) {
                     is_for_in = 1;
-                    advance(p);  // consume IN
-                } else {
-                    // Not for-in — this is "var/let IDENT = expr" C-style init
-                    ASTNode *init_node = ast_node_create(NODE_LET_DECL, line);
-                    init_node->str_value = iter_var;  // takes ownership
-                    iter_var = NULL;
-                    if (check(p, TOKEN_ASSIGN)) {
-                        advance(p);  // consume =
-                        ast_node_add_child(init_node, parse_expression(p));
-                    }
-                    expect(p, TOKEN_SEMICOLON, "Expected ';' after for init.");
-                    ASTNode *cond = check(p, TOKEN_SEMICOLON) ? NULL : parse_expression(p);
-                    expect(p, TOKEN_SEMICOLON, "Expected ';' after for condition.");
-                    ASTNode *update = check(p, TOKEN_RPAREN) ? NULL : parse_update_expr(p);
-                    expect(p, TOKEN_RPAREN, "Expected ')' after for clauses.");
-                    skip_newlines(p);
-                    expect(p, TOKEN_LBRACE, "Expected '{' for for body.");
-                    ASTNode *body = ast_node_create(NODE_BLOCK, line);
-                    skip_newlines(p);
-                    while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
-                        ASTNode *s = parse_statement(p);
-                        if (s) ast_node_add_child(body, s);
-                        skip_newlines(p);
-                    }
-                    expect(p, TOKEN_RBRACE, "Expected '}' to close for body.");
-                    ASTNode *node = ast_node_create(NODE_FOR, line);
-                    ast_node_add_child(node, init_node);
-                    ast_node_add_child(node, cond ? cond : ast_node_create(NODE_BOOL, line));
-                    if (!cond) node->children[1]->bool_value = 1;
-                    ast_node_add_child(node, update ? update : ast_node_create(NODE_NULL, line));
-                    ast_node_add_child(node, body);
-                    skip_newlines(p);
-                    return node;
+                    advance(p); // consume 'in'
                 }
+                // else: fall through — decl_var already consumed, used as
+                // the C-style init declaration below.
             }
         } else if (check(p, TOKEN_IDENTIFIER)) {
-            // Could be: IDENT IN  (for-in without var)  or  IDENT = ... (C-style init)
-            // Save and peek
-            char *maybe_var = strdup(p->current.value);
-            advance(p);  // consume IDENT
+            decl_var = strdup(p->current.value);
+            advance(p); // consume IDENT
             if (check(p, TOKEN_IN)) {
-                iter_var = maybe_var;
                 is_for_in = 1;
-                advance(p);  // consume IN
-            } else {
-                // Not for-in — this is the start of a C-style init expression.
-                // We already consumed the IDENT. We need to handle the rest as an expression.
-                // The identifier is now consumed; build an IDENT node and continue parsing
-                // the init as an assignment or expression statement.
-                // Simplest: reconstruct. We have IDENT already consumed. Check for = (assign).
-                ASTNode *init_node = NULL;
-                if (check(p, TOKEN_ASSIGN)) {
-                    advance(p);  // consume =
-                    ASTNode *val = parse_expression(p);
-                    init_node = ast_node_create(NODE_ASSIGN, line);
-                    init_node->str_value = maybe_var;  // takes ownership
-                    ast_node_add_child(init_node, val);
-                    maybe_var = NULL;  // transferred
-                } else {
-                    // Bare expression statement starting with identifier
-                    // Just wrap identifier as expression
-                    init_node = ast_node_create(NODE_IDENTIFIER, line);
-                    init_node->str_value = maybe_var;
-                    maybe_var = NULL;
-                }
-                if (maybe_var) free(maybe_var);
-
-                // Now parse rest of C-style for: ; cond ; update
-                expect(p, TOKEN_SEMICOLON, "Expected ';' after for init.");
-                ASTNode *cond = check(p, TOKEN_SEMICOLON) ? NULL : parse_expression(p);
-                expect(p, TOKEN_SEMICOLON, "Expected ';' after for condition.");
-                ASTNode *update = check(p, TOKEN_RPAREN) ? NULL : parse_update_expr(p);
-                expect(p, TOKEN_RPAREN, "Expected ')' after for clauses.");
-                skip_newlines(p);
-
-                expect(p, TOKEN_LBRACE, "Expected '{' for for body.");
-                ASTNode *body = ast_node_create(NODE_BLOCK, line);
-                skip_newlines(p);
-                while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
-                    ASTNode *s = parse_statement(p);
-                    if (s) ast_node_add_child(body, s);
-                    skip_newlines(p);
-                }
-                expect(p, TOKEN_RBRACE, "Expected '}' to close for body.");
-
-                ASTNode *node = ast_node_create(NODE_FOR, line);
-                ast_node_add_child(node, init_node ? init_node : ast_node_create(NODE_NULL, line));
-                ast_node_add_child(node, cond ? cond : ast_node_create(NODE_BOOL, line));  // default true
-                if (!cond) node->children[1]->bool_value = 1;
-                ast_node_add_child(node, update ? update : ast_node_create(NODE_NULL, line));
-                ast_node_add_child(node, body);
-                skip_newlines(p);
-                return node;
+                advance(p); // consume 'in'
             }
+            // else: fall through — decl_var holds a plain (non-decl)
+            // identifier, used as the C-style init below.
+        }
+
+        if (is_for_of) {
+            ASTNode *iter = parse_expression(p);
+            expect(p, TOKEN_RPAREN, "Expected ')' after for-of iterable.");
+            skip_newlines(p);
+            expect(p, TOKEN_LBRACE, "Expected '{' for for-of body.");
+            ASTNode *body = ast_node_create(NODE_BLOCK, line);
+            skip_newlines(p);
+            while (!check(p, TOKEN_RBRACE) && !check(p, TOKEN_EOF) && !p->had_error) {
+                ASTNode *st = parse_statement(p);
+                if (st) ast_node_add_child(body, st);
+                skip_newlines(p);
+            }
+            expect(p, TOKEN_RBRACE, "Expected '}' to close for-of body.");
+            ASTNode *node = ast_node_create(NODE_FOR_OF, line);
+            node->str_value = decl_var; // iteration variable name, ownership transferred
+            ast_node_add_child(node, iter);   // children[0] = iterable expr
+            ast_node_add_child(node, body);   // children[1] = body block
+            skip_newlines(p);
+            return node;
         }
 
         if (is_for_in) {
@@ -787,7 +696,7 @@ static ASTNode *parse_statement(Parser *p) {
             expect(p, TOKEN_RBRACE, "Expected '}' to close for-in body.");
 
             ASTNode *node = ast_node_create(NODE_FOR_IN, line);
-            node->str_value = iter_var;  // takes ownership
+            node->str_value = decl_var;  // takes ownership
             ast_node_add_child(node, iterable);
             ast_node_add_child(node, body);
             skip_newlines(p);
@@ -795,21 +704,37 @@ static ASTNode *parse_statement(Parser *p) {
         }
 
         // C-style for: for (init; cond; update) { body }
-        // init can be: var/let decl, assignment, or empty
+        // init can be: var/let decl (keyword + IDENT already consumed above),
+        // a bare identifier already consumed above (assignment or expr stmt),
+        // any other expression, or empty.
         ASTNode *init_node = NULL;
-        if (check(p, TOKEN_VAR) || check(p, TOKEN_LET)) {
-            advance(p);
-            ASTNode *decl = ast_node_create(NODE_LET_DECL, p->current.line);
-            decl->str_value = strdup(p->current.value);
-            expect(p, TOKEN_IDENTIFIER, "Expected variable name in for init.");
+        if (has_decl_kw && decl_var) {
+            ASTNode *decl = ast_node_create(NODE_LET_DECL, line);
+            decl->str_value = decl_var; // ownership transferred
+            decl_var = NULL;
             if (check(p, TOKEN_ASSIGN)) {
                 advance(p);
                 ast_node_add_child(decl, parse_expression(p));
             }
             init_node = decl;
+        } else if (decl_var) {
+            if (check(p, TOKEN_ASSIGN)) {
+                advance(p); // consume =
+                ASTNode *val = parse_expression(p);
+                init_node = ast_node_create(NODE_ASSIGN, line);
+                init_node->str_value = decl_var; // ownership transferred
+                decl_var = NULL;
+                ast_node_add_child(init_node, val);
+            } else {
+                // Bare expression statement starting with identifier
+                init_node = ast_node_create(NODE_IDENTIFIER, line);
+                init_node->str_value = decl_var; // ownership transferred
+                decl_var = NULL;
+            }
         } else if (!check(p, TOKEN_SEMICOLON)) {
             init_node = parse_expression(p);
         }
+        if (decl_var) free(decl_var); // safety net; should be NULL by now
         expect(p, TOKEN_SEMICOLON, "Expected ';' after for init.");
 
         ASTNode *cond = check(p, TOKEN_SEMICOLON) ? NULL : parse_expression(p);
