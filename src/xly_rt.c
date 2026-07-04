@@ -38,6 +38,15 @@
 #include <math.h>
 #include <unistd.h>
 #include <errno.h>
+#include <ctype.h>
+#include <time.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#ifndef M_E
+#define M_E 2.71828182845904523536
+#endif
 #include <stdint.h>
 
 /* ── internal struct layout ─────────────────────────────────────────────
@@ -848,6 +857,677 @@ XlyVal *xly_call_module(const char *mod, const char *fn,
             }
             return xly_bool(1);
         }
+
+        /* ── basic accessors/mutators — thin wrappers over existing helpers ── */
+        if (strcmp(fn, "len") == 0)
+            return xly_num((double)xly_array_len(args && argc >= 1 ? args[0] : NULL));
+        if (strcmp(fn, "get") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY) return xly_null();
+            long long idx = (long long)args[1]->num;
+            long long len = (long long)args[0]->array_len;
+            if (idx < 0) idx += len;
+            if (idx < 0 || idx >= len) return xly_null();
+            return xly_array_get(args[0], (size_t)idx);
+        }
+        if (strcmp(fn, "set") == 0) {
+            if (argc < 3 || !args || !args[0] || args[0]->type != VAL_ARRAY) return xly_null();
+            long long idx = (long long)args[1]->num;
+            long long len = (long long)args[0]->array_len;
+            if (idx < 0) idx += len;
+            if (idx < 0 || idx >= len) return args[0];
+            xly_array_set(args[0], (size_t)idx, args[2]);
+            return args[0];
+        }
+        if (strcmp(fn, "push") == 0) {
+            if (argc < 2 || !args || !args[0]) return xly_num(0);
+            return xly_array_push(args[0], args[1]);
+        }
+        if (strcmp(fn, "pop") == 0)
+            return xly_array_pop(argc >= 1 && args ? args[0] : NULL);
+        if (strcmp(fn, "shift") == 0) {
+            if (argc < 1 || !args || !args[0] || args[0]->type != VAL_ARRAY || args[0]->array_len == 0)
+                return xly_null();
+            XlyVal *arr = args[0];
+            XlyVal *first = arr->array[0];
+            memmove(arr->array, arr->array + 1, sizeof(XlyVal*) * (arr->array_len - 1));
+            arr->array_len--;
+            return first;
+        }
+        if (strcmp(fn, "unshift") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY) return xly_num(0);
+            XlyVal *arr = args[0];
+            if (arr->array_len >= arr->array_cap) {
+                arr->array_cap = arr->array_cap ? arr->array_cap * 2 : 4;
+                arr->array = (XlyVal**)realloc(arr->array, sizeof(XlyVal*) * arr->array_cap);
+            }
+            memmove(arr->array + 1, arr->array, sizeof(XlyVal*) * arr->array_len);
+            arr->array[0] = args[1];
+            arr->array_len++;
+            return arr;
+        }
+        if (strcmp(fn, "create") == 0) {
+            long long n = (argc >= 1 && args && args[0]) ? (long long)args[0]->num : 0;
+            if (n < 0) n = 0;
+            XlyVal *fill = (argc >= 2 && args) ? args[1] : NULL;
+            XlyVal **items = (XlyVal**)malloc(sizeof(XlyVal*) * (size_t)(n > 0 ? n : 1));
+            for (long long i = 0; i < n; i++)
+                items[i] = fill ? fill : xly_num(0);
+            XlyVal *r = xly_array_create(items, (size_t)n);
+            free(items);
+            return r;
+        }
+        if (strcmp(fn, "of") == 0)
+            return xly_array_create(args, argc);
+        if (strcmp(fn, "empty") == 0)
+            return xly_array_create(NULL, 0);
+        if (strcmp(fn, "fill") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY) return xly_null();
+            for (size_t k = 0; k < args[0]->array_len; k++) args[0]->array[k] = args[1];
+            return args[0];
+        }
+        if (strcmp(fn, "concat") == 0)
+            return xly_array_concat(argc >= 1 && args ? args[0] : NULL,
+                                     argc >= 2 && args ? args[1] : NULL);
+        if (strcmp(fn, "slice") == 0)
+            return xly_array_slice(argc >= 1 && args ? args[0] : NULL,
+                                    argc >= 2 && args ? args[1] : NULL,
+                                    argc >= 3 && args ? args[2] : NULL);
+        if (strcmp(fn, "reverse") == 0)
+            return xly_array_reverse(argc >= 1 && args ? args[0] : NULL);
+        if (strcmp(fn, "contains") == 0)
+            return xly_array_contains(argc >= 1 && args ? args[0] : NULL,
+                                       argc >= 2 && args ? args[1] : NULL);
+        if (strcmp(fn, "indexOf") == 0) {
+            if (argc < 2 || !args || !args[0] || args[0]->type != VAL_ARRAY) return xly_num(-1);
+            for (size_t k = 0; k < args[0]->array_len; k++)
+                if (vals_equal(args[0]->array[k], args[1])) return xly_num((double)k);
+            return xly_num(-1);
+        }
+        if (strcmp(fn, "sum") == 0) {
+            double s = 0;
+            if (argc >= 1 && args && args[0] && args[0]->type == VAL_ARRAY)
+                for (size_t k = 0; k < args[0]->array_len; k++)
+                    if (args[0]->array[k]->type == VAL_NUMBER) s += args[0]->array[k]->num;
+            return xly_num(s);
+        }
+        if (strcmp(fn, "min") == 0 || strcmp(fn, "max") == 0) {
+            if (argc < 1 || !args || !args[0] || args[0]->type != VAL_ARRAY || args[0]->array_len == 0)
+                return xly_null();
+            int is_min = strcmp(fn, "min") == 0;
+            double m = 0; int found = 0;
+            for (size_t k = 0; k < args[0]->array_len; k++) {
+                if (args[0]->array[k]->type != VAL_NUMBER) continue;
+                double v = args[0]->array[k]->num;
+                if (!found || (is_min ? v < m : v > m)) m = v;
+                found = 1;
+            }
+            return found ? xly_num(m) : xly_null();
+        }
+        if (strcmp(fn, "unique") == 0) {
+            if (argc < 1 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_array_create(NULL, 0);
+            XlyVal *arr = args[0];
+            size_t cap = arr->array_len ? arr->array_len : 1;
+            XlyVal **items = (XlyVal**)malloc(sizeof(XlyVal*) * cap);
+            size_t count = 0;
+            for (size_t k = 0; k < arr->array_len; k++) {
+                int dup = 0;
+                for (size_t j = 0; j < count; j++)
+                    if (vals_equal(arr->array[k], items[j])) { dup = 1; break; }
+                if (!dup) items[count++] = arr->array[k];
+            }
+            XlyVal *r = xly_array_create(items, count);
+            free(items);
+            return r;
+        }
+        if (strcmp(fn, "flatten") == 0) {
+            if (argc < 1 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_array_create(NULL, 0);
+            XlyVal *arr = args[0];
+            size_t cap = 16, count = 0;
+            XlyVal **items = (XlyVal**)malloc(sizeof(XlyVal*) * cap);
+            for (size_t k = 0; k < arr->array_len; k++) {
+                XlyVal *el = arr->array[k];
+                if (el->type == VAL_ARRAY) {
+                    for (size_t j = 0; j < el->array_len; j++) {
+                        if (count >= cap) { cap *= 2; items = (XlyVal**)realloc(items, sizeof(XlyVal*)*cap); }
+                        items[count++] = el->array[j];
+                    }
+                } else {
+                    if (count >= cap) { cap *= 2; items = (XlyVal**)realloc(items, sizeof(XlyVal*)*cap); }
+                    items[count++] = el;
+                }
+            }
+            XlyVal *r = xly_array_create(items, count);
+            free(items);
+            return r;
+        }
+        if (strcmp(fn, "range") == 0) {
+            if (argc < 1 || !args) return xly_array_create(NULL, 0);
+            double start = 0, end_val, step = 1;
+            if (argc == 1) end_val = args[0]->num;
+            else { start = args[0]->num; end_val = args[1]->num; }
+            if (argc >= 3) step = args[2]->num;
+            if (step == 0) return xly_array_create(NULL, 0);
+            size_t count = 0;
+            if (step > 0) for (double v = start; v < end_val; v += step) count++;
+            else          for (double v = start; v > end_val; v += step) count++;
+            XlyVal **items = (XlyVal**)malloc(sizeof(XlyVal*) * (count ? count : 1));
+            size_t idx = 0;
+            if (step > 0) for (double v = start; v < end_val; v += step) items[idx++] = xly_num(v);
+            else          for (double v = start; v > end_val; v += step) items[idx++] = xly_num(v);
+            XlyVal *r = xly_array_create(items, idx);
+            free(items);
+            return r;
+        }
+        if (strcmp(fn, "join") == 0) {
+            if (argc < 1 || !args || !args[0] || args[0]->type != VAL_ARRAY) return xly_str("");
+            const char *sep = (argc >= 2 && args[1] && args[1]->type == VAL_STRING) ? args[1]->str : ",";
+            XlyVal *arr = args[0];
+            size_t cap = 128, pos = 0;
+            char *buf = (char*)malloc(cap);
+            buf[0] = '\0';
+            for (size_t k = 0; k < arr->array_len; k++) {
+                if (k > 0) {
+                    size_t sl = strlen(sep);
+                    while (pos + sl + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+                    memcpy(buf + pos, sep, sl); pos += sl;
+                }
+                char *elem = xly_to_cstr(arr->array[k]);
+                size_t el = strlen(elem);
+                while (pos + el + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+                memcpy(buf + pos, elem, el); pos += el;
+                free(elem);
+            }
+            buf[pos] = '\0';
+            XlyVal *r = xly_str(buf);
+            free(buf);
+            return r;
+        }
+        if (strcmp(fn, "sort") == 0 || strcmp(fn, "sortDesc") == 0) {
+            if (argc < 1 || !args || !args[0] || args[0]->type != VAL_ARRAY)
+                return xly_array_create(NULL, 0);
+            XlyVal *arr = args[0];
+            size_t n = arr->array_len;
+            XlyVal **items = (XlyVal**)malloc(sizeof(XlyVal*) * (n ? n : 1));
+            memcpy(items, arr->array, sizeof(XlyVal*) * n);
+            int desc = strcmp(fn, "sortDesc") == 0;
+            int by_str = (n > 0 && items[0]->type == VAL_STRING);
+            /* simple insertion sort — arrays here are small (benchmarks aside) */
+            for (size_t i = 1; i < n; i++) {
+                XlyVal *key = items[i];
+                size_t j = i;
+                while (j > 0) {
+                    int gt;
+                    if (by_str) {
+                        const char *a = (items[j-1]->type == VAL_STRING) ? items[j-1]->str : "";
+                        const char *b = (key->type == VAL_STRING) ? key->str : "";
+                        gt = desc ? (strcmp(a,b) < 0) : (strcmp(a,b) > 0);
+                    } else {
+                        double a = (items[j-1]->type == VAL_NUMBER) ? items[j-1]->num : 0;
+                        double b = (key->type == VAL_NUMBER) ? key->num : 0;
+                        gt = desc ? (a < b) : (a > b);
+                    }
+                    if (!gt) break;
+                    items[j] = items[j-1];
+                    j--;
+                }
+                items[j] = key;
+            }
+            XlyVal *r = xly_array_create(items, n);
+            free(items);
+            return r;
+        }
+    }
+
+    if (strcmp(mod, "io") == 0) {
+        if (strcmp(fn, "write") == 0) {
+            for (size_t k = 0; k < argc; k++) {
+                char *s = xly_to_cstr(args[k]);
+                fputs(s, stdout);
+                free(s);
+            }
+            fflush(stdout);
+            return xly_null();
+        }
+        if (strcmp(fn, "writeln") == 0) {
+            for (size_t k = 0; k < argc; k++) {
+                if (k > 0) fputs(" ", stdout);
+                char *s = xly_to_cstr(args[k]);
+                fputs(s, stdout);
+                free(s);
+            }
+            fputs("\n", stdout);
+            return xly_null();
+        }
+        if (strcmp(fn, "read") == 0) {
+            if (argc > 0 && args[0]) {
+                char *s = xly_to_cstr(args[0]);
+                fputs(s, stdout); fflush(stdout); free(s);
+            }
+            char buf[4096];
+            if (fgets(buf, sizeof(buf), stdin)) {
+                size_t len = strlen(buf);
+                if (len > 0 && buf[len-1] == '\n') buf[len-1] = '\0';
+                return xly_str(buf);
+            }
+            return xly_str("");
+        }
+    }
+
+    if (strcmp(mod, "string") == 0) {
+        XlyVal *a0 = argc >= 1 ? args[0] : NULL;
+        int a0_is_str = a0 && a0->type == VAL_STRING;
+
+        if (strcmp(fn, "len") == 0)
+            return xly_num(a0_is_str ? (double)strlen(a0->str) : 0.0);
+        if (strcmp(fn, "toString") == 0) {
+            if (!a0) return xly_str("null");
+            char *s = xly_to_cstr(a0);
+            XlyVal *r = xly_str(s);
+            free(s);
+            return r;
+        }
+        if (strcmp(fn, "toNumber") == 0) {
+            if (!a0) return xly_num(0);
+            if (a0->type == VAL_NUMBER) return xly_num(a0->num);
+            if (a0->type == VAL_STRING) return xly_num(strtod(a0->str, NULL));
+            if (a0->type == VAL_BOOL)   return xly_num(a0->boolean ? 1.0 : 0.0);
+            return xly_num(0);
+        }
+        if (strcmp(fn, "upper") == 0) {
+            if (!a0_is_str) return xly_str("");
+            char *copy = strdup(a0->str);
+            for (char *p = copy; *p; p++) *p = (char)toupper((unsigned char)*p);
+            XlyVal *r = xly_str(copy); free(copy); return r;
+        }
+        if (strcmp(fn, "lower") == 0) {
+            if (!a0_is_str) return xly_str("");
+            char *copy = strdup(a0->str);
+            for (char *p = copy; *p; p++) *p = (char)tolower((unsigned char)*p);
+            XlyVal *r = xly_str(copy); free(copy); return r;
+        }
+        if (strcmp(fn, "contains") == 0)
+            return xly_bool(argc >= 2 && a0_is_str && args[1]->type == VAL_STRING &&
+                             strstr(a0->str, args[1]->str) != NULL);
+        if (strcmp(fn, "startsWith") == 0)
+            return xly_bool(argc >= 2 && a0_is_str && args[1]->type == VAL_STRING &&
+                             strncmp(a0->str, args[1]->str, strlen(args[1]->str)) == 0);
+        if (strcmp(fn, "endsWith") == 0) {
+            if (argc < 2 || !a0_is_str || args[1]->type != VAL_STRING) return xly_bool(0);
+            size_t slen = strlen(a0->str), plen = strlen(args[1]->str);
+            if (plen > slen) return xly_bool(0);
+            return xly_bool(strcmp(a0->str + slen - plen, args[1]->str) == 0);
+        }
+        if (strcmp(fn, "indexOf") == 0) {
+            if (argc < 2 || !a0_is_str || args[1]->type != VAL_STRING) return xly_num(-1);
+            const char *p = strstr(a0->str, args[1]->str);
+            return xly_num(p ? (double)(p - a0->str) : -1.0);
+        }
+        if (strcmp(fn, "lastIndexOf") == 0) {
+            if (argc < 2 || !a0_is_str || args[1]->type != VAL_STRING) return xly_num(-1);
+            const char *needle = args[1]->str;
+            size_t nlen = strlen(needle);
+            const char *last = NULL, *p = a0->str;
+            while ((p = strstr(p, needle)) != NULL) { last = p; p += nlen; }
+            return xly_num(last ? (double)(last - a0->str) : -1.0);
+        }
+        if (strcmp(fn, "charAt") == 0) {
+            if (argc < 2 || !a0_is_str) return xly_str("");
+            int idx = (int)args[1]->num, len = (int)strlen(a0->str);
+            if (idx < 0 || idx >= len) return xly_str("");
+            char buf[2] = { a0->str[idx], '\0' };
+            return xly_str(buf);
+        }
+        if (strcmp(fn, "charCodeAt") == 0) {
+            if (argc < 2 || !a0_is_str) return xly_num(-1);
+            int idx = (int)args[1]->num, len = (int)strlen(a0->str);
+            if (idx < 0 || idx >= len) return xly_num(-1);
+            return xly_num((double)(unsigned char)a0->str[idx]);
+        }
+        if (strcmp(fn, "fromCharCode") == 0) {
+            if (argc < 1) return xly_str("");
+            char buf[2] = { (char)(int)args[0]->num, '\0' };
+            return xly_str(buf);
+        }
+        if (strcmp(fn, "repeat") == 0)
+            return xly_str_repeat(a0, argc >= 2 ? args[1] : NULL);
+        if (strcmp(fn, "reverse") == 0) {
+            if (!a0_is_str) return xly_str("");
+            size_t len = strlen(a0->str);
+            char *buf = (char*)malloc(len + 1);
+            for (size_t k = 0; k < len; k++) buf[k] = a0->str[len - 1 - k];
+            buf[len] = '\0';
+            XlyVal *r = xly_str(buf); free(buf); return r;
+        }
+        if (strcmp(fn, "trim") == 0) {
+            if (!a0_is_str) return xly_str("");
+            char *s = strdup(a0->str);
+            char *start = s;
+            while (*start && isspace((unsigned char)*start)) start++;
+            char *end = start + strlen(start);
+            while (end > start && isspace((unsigned char)*(end-1))) end--;
+            *end = '\0';
+            XlyVal *r = xly_str(start); free(s); return r;
+        }
+        if (strcmp(fn, "trimStart") == 0) {
+            if (!a0_is_str) return xly_str("");
+            const char *s = a0->str;
+            while (*s && isspace((unsigned char)*s)) s++;
+            return xly_str(s);
+        }
+        if (strcmp(fn, "trimEnd") == 0) {
+            if (!a0_is_str) return xly_str("");
+            char *s = strdup(a0->str);
+            char *end = s + strlen(s);
+            while (end > s && isspace((unsigned char)*(end-1))) end--;
+            *end = '\0';
+            XlyVal *r = xly_str(s); free(s); return r;
+        }
+        if (strcmp(fn, "replace") == 0) {
+            if (argc < 3 || !a0_is_str || args[1]->type != VAL_STRING || args[2]->type != VAL_STRING)
+                return xly_str("");
+            const char *src = a0->str, *old = args[1]->str, *neu = args[2]->str;
+            size_t old_len = strlen(old);
+            if (old_len == 0) return xly_str(src);
+            size_t count = 0;
+            const char *p = src;
+            while ((p = strstr(p, old)) != NULL) { count++; p += old_len; }
+            size_t new_len = strlen(neu), src_len = strlen(src);
+            size_t buf_size = src_len - count * old_len + count * new_len + 1;
+            char *buf = (char*)malloc(buf_size);
+            char *out = buf;
+            p = src;
+            while (*p) {
+                if (strstr(p, old) == p) { memcpy(out, neu, new_len); out += new_len; p += old_len; }
+                else { *out++ = *p++; }
+            }
+            *out = '\0';
+            XlyVal *r = xly_str(buf); free(buf); return r;
+        }
+        if (strcmp(fn, "substr") == 0) {
+            if (argc < 2 || !a0_is_str) return xly_str("");
+            const char *s = a0->str;
+            int start = (int)args[1]->num, len = (int)strlen(s);
+            if (start < 0) start = 0;
+            if (start >= len) return xly_str("");
+            int count = (argc >= 3) ? (int)args[2]->num : (len - start);
+            if (count < 0) count = 0;
+            if (start + count > len) count = len - start;
+            char *buf = (char*)malloc((size_t)count + 1);
+            memcpy(buf, s + start, (size_t)count);
+            buf[count] = '\0';
+            XlyVal *r = xly_str(buf); free(buf); return r;
+        }
+        if (strcmp(fn, "slice") == 0)
+            return xly_str_slice(a0, argc >= 2 ? args[1] : NULL, argc >= 3 ? args[2] : NULL);
+        if (strcmp(fn, "padStart") == 0 || strcmp(fn, "padEnd") == 0) {
+            if (argc < 2 || !a0_is_str) return xly_str("");
+            const char *s = a0->str;
+            int pad = (int)args[1]->num;
+            const char *ch = (argc >= 3 && args[2]->type == VAL_STRING && args[2]->str[0]) ? args[2]->str : " ";
+            int slen = (int)strlen(s);
+            if (slen >= pad) return xly_str(s);
+            int need = pad - slen, chlen = (int)strlen(ch);
+            char *buf = (char*)malloc((size_t)pad + 1);
+            if (strcmp(fn, "padStart") == 0) {
+                for (int i = 0; i < need; i++) buf[i] = ch[i % chlen];
+                memcpy(buf + need, s, (size_t)slen);
+            } else {
+                memcpy(buf, s, (size_t)slen);
+                for (int i = slen; i < pad; i++) buf[i] = ch[(i - slen) % chlen];
+            }
+            buf[pad] = '\0';
+            XlyVal *r = xly_str(buf); free(buf); return r;
+        }
+        if (strcmp(fn, "split") == 0) {
+            if (!a0_is_str) return xly_array_create(NULL, 0);
+            const char *s = a0->str;
+            const char *sep = (argc >= 2 && args[1]->type == VAL_STRING) ? args[1]->str : " ";
+            size_t sep_len = strlen(sep);
+            size_t parts = 1;
+            if (sep_len > 0) { const char *p = s; while ((p = strstr(p, sep)) != NULL) { parts++; p += sep_len; } }
+            XlyVal **items = (XlyVal**)malloc(sizeof(XlyVal*) * parts);
+            size_t idx = 0;
+            if (sep_len == 0) {
+                size_t slen = strlen(s);
+                items = (XlyVal**)realloc(items, sizeof(XlyVal*) * (slen ? slen : 1));
+                if (slen == 0) { items[0] = xly_str(""); idx = 1; }
+                else for (size_t k = 0; k < slen; k++) { char c[2] = {s[k], 0}; items[k] = xly_str(c); idx = k + 1; }
+            } else {
+                const char *p = s;
+                while (1) {
+                    const char *found = strstr(p, sep);
+                    if (!found) { items[idx++] = xly_str(p); break; }
+                    size_t chunk = (size_t)(found - p);
+                    char *buf = (char*)malloc(chunk + 1);
+                    memcpy(buf, p, chunk); buf[chunk] = '\0';
+                    items[idx++] = xly_str(buf);
+                    free(buf);
+                    p = found + sep_len;
+                }
+            }
+            XlyVal *r = xly_array_create(items, idx);
+            free(items);
+            return r;
+        }
+        if (strcmp(fn, "join") == 0) {
+            if (argc < 1 || !args[0] || args[0]->type != VAL_ARRAY) return xly_str("");
+            const char *sep = (argc >= 2 && args[1]->type == VAL_STRING) ? args[1]->str : ",";
+            XlyVal *arr = args[0];
+            size_t cap = 128, pos = 0;
+            char *buf = (char*)malloc(cap);
+            buf[0] = '\0';
+            for (size_t k = 0; k < arr->array_len; k++) {
+                if (k > 0) {
+                    size_t sl = strlen(sep);
+                    while (pos + sl + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+                    memcpy(buf + pos, sep, sl); pos += sl;
+                }
+                char *elem = xly_to_cstr(arr->array[k]);
+                size_t el = strlen(elem);
+                while (pos + el + 1 >= cap) { cap *= 2; buf = (char*)realloc(buf, cap); }
+                memcpy(buf + pos, elem, el); pos += el;
+                free(elem);
+            }
+            buf[pos] = '\0';
+            XlyVal *r = xly_str(buf); free(buf); return r;
+        }
+        if (strcmp(fn, "unicodeLength") == 0)
+            return xly_utf8_len(a0);
+        if (strcmp(fn, "unicodeCharAt") == 0)
+            return xly_utf8_char_at(a0, argc >= 2 ? args[1] : NULL);
+        if (strcmp(fn, "codePointAt") == 0)
+            return xly_uni_codepoint_at(a0, argc >= 2 ? args[1] : NULL);
+        if (strcmp(fn, "fromCodePoint") == 0)
+            return xly_uni_from_codepoint(argc >= 1 ? args[0] : NULL);
+        if (strcmp(fn, "normalize") == 0)
+            return a0_is_str ? xly_str(a0->str) : xly_str("");
+    }
+
+    if (strcmp(mod, "math") == 0) {
+        XlyVal *a0 = argc >= 1 ? args[0] : NULL;
+        XlyVal *a1 = argc >= 2 ? args[1] : NULL;
+        double  n0 = a0 ? a0->num : 0.0;
+        double  n1 = a1 ? a1->num : 0.0;
+
+        if (strcmp(fn, "abs") == 0)   return xly_num(fabs(n0));
+        if (strcmp(fn, "sqrt") == 0)  return xly_num(sqrt(n0));
+        if (strcmp(fn, "cbrt") == 0)  return xly_num(cbrt(n0));
+        if (strcmp(fn, "pow") == 0)   return xly_num(pow(n0, n1));
+        if (strcmp(fn, "hypot") == 0) return xly_num(hypot(n0, n1));
+        if (strcmp(fn, "sign") == 0)  return xly_num(n0 > 0 ? 1.0 : (n0 < 0 ? -1.0 : 0.0));
+        if (strcmp(fn, "fmod") == 0)  return xly_num(fmod(n0, n1));
+        if (strcmp(fn, "clamp") == 0) {
+            double lo = a1 ? a1->num : 0.0, hi = (argc >= 3 && args[2]) ? args[2]->num : 0.0;
+            double v = n0;
+            if (v < lo) v = lo;
+            if (v > hi) v = hi;
+            return xly_num(v);
+        }
+        if (strcmp(fn, "exp") == 0)    return xly_num(exp(n0));
+        if (strcmp(fn, "floor") == 0)  return xly_num(floor(n0));
+        if (strcmp(fn, "ceil") == 0)   return xly_num(ceil(n0));
+        if (strcmp(fn, "round") == 0)  return xly_num(round(n0));
+        if (strcmp(fn, "trunc") == 0)  return xly_num(trunc(n0));
+        if (strcmp(fn, "max") == 0)    return xly_num(n0 > n1 ? n0 : n1);
+        if (strcmp(fn, "min") == 0)    return xly_num(n0 < n1 ? n0 : n1);
+        if (strcmp(fn, "sin") == 0)    return xly_num(sin(n0));
+        if (strcmp(fn, "cos") == 0)    return xly_num(cos(n0));
+        if (strcmp(fn, "tan") == 0)    return xly_num(tan(n0));
+        if (strcmp(fn, "asin") == 0)   return xly_num(asin(n0));
+        if (strcmp(fn, "acos") == 0)   return xly_num(acos(n0));
+        if (strcmp(fn, "atan") == 0)   return xly_num(atan(n0));
+        if (strcmp(fn, "atan2") == 0)  return xly_num(atan2(n0, n1));
+        if (strcmp(fn, "log") == 0)    return xly_num(log(n0));
+        if (strcmp(fn, "log2") == 0)   return xly_num(log2(n0));
+        if (strcmp(fn, "log10") == 0)  return xly_num(log10(n0));
+        if (strcmp(fn, "random") == 0) {
+            static int seeded = 0;
+            if (!seeded) { srand((unsigned int)time(NULL)); seeded = 1; }
+            return xly_num((double)rand() / (double)RAND_MAX);
+        }
+        if (strcmp(fn, "randomInt") == 0) {
+            static int seeded = 0;
+            if (!seeded) { srand((unsigned int)time(NULL)); seeded = 1; }
+            int lo = (int)n0, hi = (int)n1;
+            if (hi <= lo) return xly_num((double)lo);
+            return xly_num((double)(lo + rand() % (hi - lo)));
+        }
+        if (strcmp(fn, "PI") == 0)   return xly_num(M_PI);
+        if (strcmp(fn, "E") == 0)    return xly_num(M_E);
+        if (strcmp(fn, "INF") == 0)  return xly_num(HUGE_VAL);
+        if (strcmp(fn, "NAN") == 0)  return xly_num(NAN);
+        if (strcmp(fn, "isNaN") == 0)    return xly_bool(isnan(n0));
+        if (strcmp(fn, "isInf") == 0)    return xly_bool(isinf(n0));
+        if (strcmp(fn, "isFinite") == 0) return xly_bool(isfinite(n0));
+        if (strcmp(fn, "complex") == 0) {
+            XlyVal **elems = (XlyVal**)malloc(sizeof(XlyVal*) * 2);
+            elems[0] = xly_num(n0);
+            elems[1] = xly_num(argc >= 2 ? n1 : 0.0);
+            XlyVal *r = xly_array_create(elems, 2);
+            free(elems);
+            return r;
+        }
+        if (strcmp(fn, "complexAdd") == 0 || strcmp(fn, "complexMul") == 0) {
+            if (argc < 2 || !a0 || !a1 || a0->type != VAL_ARRAY || a1->type != VAL_ARRAY ||
+                a0->array_len < 2 || a1->array_len < 2) return xly_null();
+            double r1 = a0->array[0]->num, i1 = a0->array[1]->num;
+            double r2 = a1->array[0]->num, i2 = a1->array[1]->num;
+            XlyVal **elems = (XlyVal**)malloc(sizeof(XlyVal*) * 2);
+            if (strcmp(fn, "complexAdd") == 0) {
+                elems[0] = xly_num(r1 + r2);
+                elems[1] = xly_num(i1 + i2);
+            } else {
+                elems[0] = xly_num(r1 * r2 - i1 * i2);
+                elems[1] = xly_num(r1 * i2 + i1 * r2);
+            }
+            XlyVal *r = xly_array_create(elems, 2);
+            free(elems);
+            return r;
+        }
+        if (strcmp(fn, "complexAbs") == 0) {
+            if (!a0 || a0->type != VAL_ARRAY || a0->array_len < 2) return xly_num(0);
+            double re = a0->array[0]->num, im = a0->array[1]->num;
+            return xly_num(sqrt(re*re + im*im));
+        }
+        if (strcmp(fn, "complexConj") == 0) {
+            if (!a0 || a0->type != VAL_ARRAY || a0->array_len < 2) return xly_null();
+            XlyVal **elems = (XlyVal**)malloc(sizeof(XlyVal*) * 2);
+            elems[0] = xly_num(a0->array[0]->num);
+            elems[1] = xly_num(-a0->array[1]->num);
+            XlyVal *r = xly_array_create(elems, 2);
+            free(elems);
+            return r;
+        }
+        if (strcmp(fn, "complexPhase") == 0) {
+            if (!a0 || a0->type != VAL_ARRAY || a0->array_len < 2) return xly_num(0);
+            return xly_num(atan2(a0->array[1]->num, a0->array[0]->num));
+        }
+        if (strcmp(fn, "sum") == 0 || strcmp(fn, "product") == 0 || strcmp(fn, "mean") == 0) {
+            int is_sum = strcmp(fn, "sum") == 0, is_mean = strcmp(fn, "mean") == 0;
+            double total = is_sum || is_mean ? 0.0 : 1.0;
+            size_t count = 0;
+            if (a0 && a0->type == VAL_ARRAY) {
+                for (size_t k = 0; k < a0->array_len; k++)
+                    if (a0->array[k]->type == VAL_NUMBER) {
+                        if (is_sum || is_mean) total += a0->array[k]->num; else total *= a0->array[k]->num;
+                        count++;
+                    }
+            } else {
+                for (size_t k = 0; k < argc; k++)
+                    if (args[k]->type == VAL_NUMBER) {
+                        if (is_sum || is_mean) total += args[k]->num; else total *= args[k]->num;
+                        count++;
+                    }
+            }
+            if (is_mean) return xly_num(count > 0 ? total / (double)count : 0.0);
+            return xly_num(total);
+        }
+        if (strcmp(fn, "median") == 0 || strcmp(fn, "variance") == 0 || strcmp(fn, "stddev") == 0) {
+            if (!a0 || a0->type != VAL_ARRAY || a0->array_len == 0) return xly_num(0);
+            double *nums = (double*)malloc(sizeof(double) * a0->array_len);
+            size_t count = 0;
+            for (size_t k = 0; k < a0->array_len; k++)
+                if (a0->array[k]->type == VAL_NUMBER) nums[count++] = a0->array[k]->num;
+            if (count == 0) { free(nums); return xly_num(0); }
+            if (strcmp(fn, "median") == 0) {
+                for (size_t i = 0; i < count - 1; i++)
+                    for (size_t j = 0; j < count - i - 1; j++)
+                        if (nums[j] > nums[j+1]) { double t = nums[j]; nums[j] = nums[j+1]; nums[j+1] = t; }
+                double result = (count % 2 == 0) ? (nums[count/2-1] + nums[count/2]) / 2.0 : nums[count/2];
+                free(nums);
+                return xly_num(result);
+            }
+            double mean = 0;
+            for (size_t k = 0; k < count; k++) mean += nums[k];
+            mean /= (double)count;
+            double var = 0;
+            for (size_t k = 0; k < count; k++) { double d = nums[k] - mean; var += d * d; }
+            var /= (double)count;
+            free(nums);
+            return xly_num(strcmp(fn, "stddev") == 0 ? sqrt(var) : var);
+        }
+        if (strcmp(fn, "gcd") == 0) {
+            long long a = llabs((long long)n0), b = llabs((long long)n1);
+            while (b != 0) { long long t = b; b = a % b; a = t; }
+            return xly_num((double)a);
+        }
+        if (strcmp(fn, "lcm") == 0) {
+            long long a = (long long)n0, b = (long long)n1;
+            if (a == 0 || b == 0) return xly_num(0);
+            long long x = llabs(a), y = llabs(b), g = x, h = y;
+            while (h != 0) { long long t = h; h = g % h; g = t; }
+            return xly_num((double)((x / g) * y));
+        }
+        if (strcmp(fn, "factorial") == 0) {
+            int n = (int)n0;
+            if (n < 0) return xly_num(NAN);
+            if (n > 170) return xly_num(INFINITY);
+            double result = 1;
+            for (int i = 2; i <= n; i++) result *= i;
+            return xly_num(result);
+        }
+        if (strcmp(fn, "combinations") == 0 || strcmp(fn, "permutations") == 0) {
+            int n = (int)n0, k = (int)n1;
+            if (k > n || k < 0 || n < 0) return xly_num(0);
+            if (strcmp(fn, "permutations") == 0) {
+                double result = 1;
+                for (int i = 0; i < k; i++) result *= (n - i);
+                return xly_num(result);
+            }
+            if (k == 0 || k == n) return xly_num(1);
+            int kk = (k > n - k) ? n - k : k;
+            double result = 1;
+            for (int i = 0; i < kk; i++) { result *= (n - i); result /= (i + 1); }
+            return xly_num(result);
+        }
+        if (strcmp(fn, "lerp") == 0) {
+            double b = a1 ? a1->num : 0.0, t = (argc >= 3 && args[2]) ? args[2]->num : 0.0;
+            return xly_num(n0 + (b - n0) * t);
+        }
+        if (strcmp(fn, "degrees") == 0) return xly_num(n0 * 180.0 / M_PI);
+        if (strcmp(fn, "radians") == 0) return xly_num(n0 * M_PI / 180.0);
     }
 
     Mod m;

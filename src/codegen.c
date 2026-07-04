@@ -125,6 +125,7 @@ typedef struct {
 
     /* set of declared function names (for call-site dispatch) */
     char  **fn_names;
+    size_t *fn_name_paramcounts;   /* parallel array: declared param_count per fn_names[i] */
     int     fn_name_count, fn_name_cap;
 
     /* set of asm labels already claimed for fn bodies (never reset) */
@@ -270,19 +271,35 @@ static void emit_stmt(CG *cg, ASTNode *node);
 #endif
 
 /* ── declared-function name registry ───────────────────────────────────── */
-static void fn_name_register(CG *cg, const char *name) {
+static void fn_name_register_pc(CG *cg, const char *name, size_t param_count) {
     for (int i = 0; i < cg->fn_name_count; i++)
         if (strcmp(cg->fn_names[i], name) == 0) return;
     if (cg->fn_name_count >= cg->fn_name_cap) {
         cg->fn_name_cap = cg->fn_name_cap ? cg->fn_name_cap * 2 : 16;
         cg->fn_names = realloc(cg->fn_names, sizeof(char*) * (size_t)cg->fn_name_cap);
+        cg->fn_name_paramcounts = realloc(cg->fn_name_paramcounts,
+                                           sizeof(size_t) * (size_t)cg->fn_name_cap);
     }
-    cg->fn_names[cg->fn_name_count++] = strdup(name);
+    cg->fn_names[cg->fn_name_count] = strdup(name);
+    cg->fn_name_paramcounts[cg->fn_name_count] = param_count;
+    cg->fn_name_count++;
+}
+static void fn_name_register(CG *cg, const char *name) {
+    fn_name_register_pc(cg, name, 0);
 }
 static int fn_name_is_declared(CG *cg, const char *name) {
     for (int i = 0; i < cg->fn_name_count; i++)
         if (strcmp(cg->fn_names[i], name) == 0) return 1;
     return 0;
+}
+/* Returns the declared param_count for a known top-level function, or -1
+ * if the name isn't a registered top-level function (e.g. a closure/var-fn,
+ * whose arity isn't known at compile time and is handled via xly_call_fnval
+ * instead of the fixed-arity SysV path). */
+static int fn_name_param_count(CG *cg, const char *name) {
+    for (int i = 0; i < cg->fn_name_count; i++)
+        if (strcmp(cg->fn_names[i], name) == 0) return (int)cg->fn_name_paramcounts[i];
+    return -1;
 }
 
 /* ── fn label uniquification helpers ────────────────────────────────────
@@ -452,7 +469,7 @@ static void collect_free_vars(CG *cg, ASTNode *node, NameSet *params, NameSet *o
 static void collect_fn_names(CG *cg, ASTNode *node) {
     if (!node) return;
     if (node->type == NODE_FN_DECL && node->str_value) {
-        fn_name_register(cg, node->str_value);
+        fn_name_register_pc(cg, node->str_value, node->param_count);
         return; /* do NOT recurse into body — nested fn labels assigned at emit time */
     }
     for (size_t i = 0; i < node->child_count; i++)
@@ -955,22 +972,39 @@ static void emit_expr(CG *cg, ASTNode *node) {
          * Args 0-5 → rdi,rsi,rdx,rcx,r8,r9
          * Args 6+  → [rsp], [rsp+8], ...  (callee reads at [rbp+16], ...)
          *
-         * We evaluate all args into a staging area first, then:
-         *  1. Copy staging[nreg..nargs-1] to positions above staging
+         * If the call site supplies fewer args than the function declares
+         * (optional/default params), the missing trailing slots are passed
+         * as literal 0 rather than left unset — the callee's prologue
+         * detects "no argument" via testq/jnz on the raw register value,
+         * so any garbage left in an unset register would be misread as a
+         * real (non-null) argument and later dereferenced.
+         *
+         * We evaluate all *provided* args into a staging area, zero-fill
+         * any remaining declared-but-omitted slots, then:
+         *  1. Copy staging[nreg..total-1] to positions above staging
          *     (these become the stack args once staging is freed)
          *  2. Load staging[0..nreg-1] into the register args
          *  3. Free staging (stack args slide into place at rsp)
          *  4. call
          *  5. Caller cleans up stack args (SysV: caller-cleanup for stack args)
          */
-        int stage_bytes = nargs > 0 ? (((nargs * 8) + 15) & ~15) : 0;
+        int declared_params = fn_name_param_count(cg, node->str_value);
+        int total = nargs > declared_params ? nargs : declared_params;
+        if (total < 0) total = nargs;   /* declared_params == -1: unknown arity */
+        nreg = total < 6 ? total : 6;
+        nstk = total - nreg;
+
+        int stage_bytes = total > 0 ? (((total * 8) + 15) & ~15) : 0;
         int stk_bytes   = nstk > 0  ? (((nstk * 8)  + 15) & ~15) : 0;
 
-        /* Evaluate all args into staging */
+        /* Evaluate provided args into staging; zero-fill the rest */
         if (stage_bytes > 0)
             emit(cg, "    subq    $%d, %%rsp", stage_bytes);
-        for (int i = 0; i < nargs; i++) {
-            emit_expr(cg, node->children[i]);
+        for (int i = 0; i < total; i++) {
+            if (i < nargs)
+                emit_expr(cg, node->children[i]);
+            else
+                emit(cg, "    xorq    %%rax, %%rax");  /* omitted optional/default arg */
             emit(cg, "    movq    %%rax, %d(%%rsp)", i * 8);
         }
 
@@ -1934,10 +1968,21 @@ static void emit_function(CG *cg, ASTNode *fn, const char *asm_label,
 
     /* spill incoming SysV register args into stack slots.
      * For closures param_reg_start=1 (rdi=env), so register params cap at
-     * reg index 5, meaning up to (6 - param_reg_start) params in registers. */
+     * reg index 5, meaning up to (6 - param_reg_start) params in registers.
+     *
+     * This MUST be a separate pass from default-value handling below: a
+     * default-value expression can involve a function call (e.g. xly_num,
+     * xly_str, or an arbitrary user expression), which clobbers volatile
+     * registers (rdx, rcx, r8, r9, rsi, rdi, rax, ...) under the SysV ABI.
+     * If a later parameter's raw argument is still sitting in one of those
+     * registers when an earlier parameter's default is evaluated, it gets
+     * corrupted before it's ever saved. So: save every raw argument to
+     * memory first, then do defaults as a second pass over memory only. */
     int nreg_params = 6 - param_reg_start;  /* how many params fit in regs */
+    int *param_offs = (int*)malloc(sizeof(int) * (nparams ? nparams : 1));
     for (size_t i = 0; i < nparams; i++) {
         int off = var_declare(cg, fn->params[i].name);
+        param_offs[i] = off;
         int reg_idx = (int)i + param_reg_start;
         if (reg_idx < 6) {
             /* Register-passed arg */
@@ -1950,7 +1995,9 @@ static void emit_function(CG *cg, ASTNode *fn, const char *asm_label,
             emit(cg, "    movq    %d(%%rbp), %%rax", stk_slot);
             emit(cg, "    movq    %%rax, %d(%%rbp)", off);
         }
-        
+    }
+    for (size_t i = 0; i < nparams; i++) {
+        int off = param_offs[i];
         /* Handle optional/default parameters */
         if (fn->params[i].is_optional || fn->params[i].default_value) {
             char lbl_has_arg[64];
@@ -1963,11 +2010,20 @@ static void emit_function(CG *cg, ASTNode *fn, const char *asm_label,
             if (fn->params[i].default_value) {
                 emit_expr(cg, fn->params[i].default_value);
                 emit(cg, "    movq    %%rax, %d(%%rbp)", off);
+            } else {
+                /* Optional with no default: the omitted-arg placeholder is
+                 * a raw 0 (null pointer), used only so this check can detect
+                 * "no argument". The parameter's actual value must be a
+                 * proper boxed null so later reads of it (e.g. `b == null`)
+                 * don't dereference a bare 0. */
+                emit(cg, "    call    " XLY_SYM("xly_null"));
+                emit(cg, "    movq    %%rax, %d(%%rbp)", off);
             }
             
             emit(cg, "%s:", lbl_has_arg);
         }
     }
+    free(param_offs);
     (void)nreg_params; /* suppress unused-variable warning if nparams==0 */
 
     /* body */
@@ -2638,8 +2694,18 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         }
 
         /* AArch64: args go in x0–x7.  We eval left-to-right, spill each,
-         * then reload in reverse order into the correct registers.         */
+         * then reload in reverse order into the correct registers.
+         * If this is a known declared fn called with fewer args than it
+         * declares (optional/default params), zero-fill the remaining
+         * registers up to its declared arity so the callee's "was this
+         * argument provided?" check sees a real zero, not garbage. */
         static const char *aregs[] = {"x0","x1","x2","x3","x4","x5","x6","x7"};
+        int declared_params = fn_name_param_count(cg, node->str_value);
+        int total = nargs;
+        if (fn_is_known(cg, node->str_value) && declared_params > total)
+            total = declared_params;
+        if (total > 8) total = 8;  /* ARM64 register-arg cap */
+
         for (int i = 0; i < nargs; i++) {
             emit_expr_a64(cg, node->children[i]);
             spill_push_a64(cg, "x0");
@@ -2647,6 +2713,8 @@ static void emit_expr_a64(CG *cg, ASTNode *node) {
         /* Reload: top of spill stack is arg[nargs-1] → last reg */
         for (int i = nargs - 1; i >= 0; i--)
             spill_pop_a64(cg, (char*)aregs[i]);
+        for (int i = nargs; i < total; i++)
+            emit(cg, "    mov     %s, #0", aregs[i]);  /* omitted optional/default arg */
 
         /* Dispatch: declared fn → bl direct; variable fn → xly_call_fnval */
         if (fn_is_known(cg, node->str_value)) {
@@ -3546,22 +3614,39 @@ static void emit_function_a64(CG *cg, ASTNode *fn, const char *asm_label,
         }
     }
 
-    /* Spill incoming args into their stack slots */
-    for (size_t i = 0; i < nparams && (i + (size_t)param_reg_start_a) < 8; i++) {
-        int off = var_declare(cg, fn->params[i].name);
-        safe_str_a64(cg, aregs[i + param_reg_start_a], off);
-
-        if (fn->params[i].is_optional || fn->params[i].default_value) {
-            char lbl_has_arg[64];
-            fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
-            safe_ldr_a64(cg, "x9", off);
-            emit(cg, "    cbnz    x9, %s", lbl_has_arg);
-            if (fn->params[i].default_value) {
-                emit_expr_a64(cg, fn->params[i].default_value);
-                safe_str_a64(cg, "x0", off);
-            }
-            emit(cg, "%s:", lbl_has_arg);
+    /* Spill incoming args into their stack slots — two passes (see x86-64
+     * NODE_FN_DECL comment for why): saving raw args must complete before
+     * any default-value expression (a call) can clobber volatile registers
+     * still holding a later parameter's incoming value. */
+    {
+        size_t nreg_here = 0;
+        while (nreg_here < nparams && (nreg_here + (size_t)param_reg_start_a) < 8) nreg_here++;
+        int *param_offs_a = (int*)malloc(sizeof(int) * (nreg_here ? nreg_here : 1));
+        for (size_t i = 0; i < nreg_here; i++) {
+            int off = var_declare(cg, fn->params[i].name);
+            param_offs_a[i] = off;
+            safe_str_a64(cg, aregs[i + param_reg_start_a], off);
         }
+        for (size_t i = 0; i < nreg_here; i++) {
+            int off = param_offs_a[i];
+            if (fn->params[i].is_optional || fn->params[i].default_value) {
+                char lbl_has_arg[64];
+                fresh_label(cg, lbl_has_arg, sizeof(lbl_has_arg));
+                safe_ldr_a64(cg, "x9", off);
+                emit(cg, "    cbnz    x9, %s", lbl_has_arg);
+                if (fn->params[i].default_value) {
+                    emit_expr_a64(cg, fn->params[i].default_value);
+                    safe_str_a64(cg, "x0", off);
+                } else {
+                    /* Optional with no default: store a proper boxed null,
+                     * not the raw 0 placeholder used to detect a missing arg. */
+                    emit(cg, "    bl      " XLY_SYM("xly_null"));
+                    safe_str_a64(cg, "x0", off);
+                }
+                emit(cg, "%s:", lbl_has_arg);
+            }
+        }
+        free(param_offs_a);
     }
 
     scope_enter(cg);
