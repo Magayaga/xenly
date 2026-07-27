@@ -15,16 +15,18 @@ import shutil
 BINDIR = "bin"
 XENLYBYC = os.path.join(BINDIR, "xenlybyc")
 XENLYRUN = os.path.join(BINDIR, "xenlyrun")
+XENLYIMG = os.path.join(BINDIR, "xenlyimg")
 
 if os.name == "nt":
     XENLYBYC += ".exe"
     XENLYRUN += ".exe"
+    XENLYIMG += ".exe"
 
 LDFLAGS = ["-ldflags", "-s -w"]
 
-def run(cmd):
+def run(cmd, env=None):
     print(" ".join(cmd))
-    subprocess.check_call(cmd)
+    subprocess.check_call(cmd, env=env)
 
 def ensure_bindir():
     os.makedirs(BINDIR, exist_ok=True)
@@ -43,12 +45,20 @@ def build_xenlyrun():
     run(["go", "build", *LDFLAGS, "-o", XENLYRUN, "./xenlyrun/"])
     print("✓", XENLYRUN)
 
+def build_xenlyimg():
+    ensure_bindir()
+    print("Building xenlyimg...")
+    run(["go", "build", *LDFLAGS, "-o", XENLYIMG, "./xenlyimg/"])
+    print("✓", XENLYIMG)
+
 def build():
     build_xenlybyc()
     build_xenlyrun()
+    build_xenlyimg()
     print("\n✓ XVM build complete")
     print("Bytecode compiler :", XENLYBYC)
     print("VM launcher       :", XENLYRUN)
+    print("Native image AOT  :", XENLYIMG)
 
 # ── Cross Compile ─────────────────────────────────────
 
@@ -62,8 +72,9 @@ def cross_compile(goos, goarch):
     env["GOOS"] = goos
     env["GOARCH"] = goarch
 
-    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlybyc-{suffix}{exe}", "./xenlybyc/"])
-    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlyrun-{suffix}{exe}", "./xenlyrun/"])
+    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlybyc-{suffix}{exe}", "./xenlybyc/"], env=env)
+    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlyrun-{suffix}{exe}", "./xenlyrun/"], env=env)
+    run(["go", "build", *LDFLAGS, "-o", f"{BINDIR}/xenlyimg-{suffix}{exe}", "./xenlyimg/"], env=env)
 
 def cross_all():
     targets = [
@@ -98,8 +109,15 @@ def test():
     run([XENLYRUN, bytecode])
     print("✓ xenlyrun executed hello")
 
+    native = "/tmp/xvm_test_native" + (".exe" if os.name == "nt" else "")
+    run([XENLYIMG, bytecode, "-o", native])
+    run([native])
+    print("✓ xenlyimg built and executed native hello")
+
     os.remove(testfile)
     os.remove(bytecode)
+    if os.path.exists(native):
+        os.remove(native)
 
     run(["go","test","./..."])
     print("✓ All tests passed")
@@ -135,6 +153,7 @@ Commands:
   build        Build xenlybyc + xenlyrun
   xenlybyc     Build bytecode compiler only
   xenlyrun     Build VM launcher only
+  xenlyimg     Build native image builder only
   test         Build and run test suite
   fmt          Format Go source
   vet          Run go vet
@@ -155,6 +174,7 @@ commands = {
     "build": build,
     "xenlybyc": build_xenlybyc,
     "xenlyrun": build_xenlyrun,
+    "xenlyimg": build_xenlyimg,
     "cross-all": cross_all,
     "test": test,
     "fmt": fmt,

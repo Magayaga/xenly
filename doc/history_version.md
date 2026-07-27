@@ -13,6 +13,7 @@
 | `v0.1.0-preview8` | June 27, 2024      | [`d1a0e3d`](https://github.com/Magayaga/xenly/commit/d1a0e3d3b35879940ad28880bb44a0365f7bb09f) |
 | `v0.1.0-preview9` | July 16, 2024      | [`83c7c53`](https://github.com/Magayaga/xenly/commit/83c7c53d8ce7646c84bfa1f871a7af86b68b90a5) |
 | `v0.1.0-preview10` | April 29, 2025     | [`aa6ceda`](https://github.com/Magayaga/xenly/commit/aa6ceda12696178e4c2c37b365c40e1ec3473efa) |
+| `v0.1.0-preview11` | June 17, 2026      | [`bcd44a4`](https://github.com/Magayaga/xenly/commit/bcd44a45bac4d1b7630f86152648c2bcc928fbee) |
 
 ## Xenly's `nanopreview` versions
 

@@ -216,7 +216,7 @@ func main() {
 	}
 
 	// ── Compile ──────────────────────────────────────────────────────────
-	comp := compiler.NewCompiler()
+	comp := compiler.NewCompiler(filepath.Dir(inputFile))
 	mod, compErrs := comp.Compile(ast)
 	tCompile := time.Now()
 

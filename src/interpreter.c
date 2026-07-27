@@ -471,6 +471,7 @@ Interpreter *interpreter_create(void) {
     //   http    — HTTP/1.1 web server (xly_http) for Linux and macOS
     static const char *auto_modules[] = {
         "string", "array", "math", "type", "io", "unicode",
+        "numeric", "matrix", "diff",
         NULL
     };
     for (int i = 0; auto_modules[i]; i++) {
@@ -908,6 +909,251 @@ static Value *call_module_fn(Interpreter *interp, const char *modname,
             }
             return cur_acc;
         }
+    }
+
+    /* ── numeric: callback-based numerical methods ──────────────────────── */
+    if (strcmp(modname, "numeric") == 0) {
+        Value *f_fn = argc >= 1 ? args[0] : NULL;
+        Value *df_fn = argc >= 2 ? args[1] : NULL;
+        double n1 = argc >= 2 && args[1] && args[1]->type == VAL_NUMBER ? args[1]->num : 0.0;
+        double n2 = argc >= 3 && args[2] && args[2]->type == VAL_NUMBER ? args[2]->num : 0.0;
+        Value *a3 = argc >= 4 ? args[3] : NULL;
+
+        #define CNUM1(fn_v, xv) ({ Value *_a[1]={(xv)}; Value *_r=call_value(interp,(fn_v),_a,1); _r?_r->num:0.0; })
+
+        if (strcmp(fnname,"bisect")==0) {
+            if (!f_fn||argc<3) return value_null();
+            double lo=n1,hi=n2,tol=(a3&&a3->type==VAL_NUMBER)?a3->num:1e-10;
+            double flo=CNUM1(f_fn,value_number(lo)), fhi=CNUM1(f_fn,value_number(hi));
+            if (flo*fhi>0) return value_null();
+            for (int it=0;it<200;it++){
+                double mid=(lo+hi)*0.5;
+                if ((hi-lo)<tol) return value_number(mid);
+                double fm=CNUM1(f_fn,value_number(mid));
+                if (fm*flo<=0){hi=mid;fhi=fm;}else{lo=mid;flo=fm;}
+            }
+            return value_number((lo+hi)*0.5);
+        }
+        if (strcmp(fnname,"secant")==0) {
+            if (!f_fn||argc<3) return value_null();
+            double x0=n1,x1=n2,tol=(a3&&a3->type==VAL_NUMBER)?a3->num:1e-10;
+            double f0=CNUM1(f_fn,value_number(x0));
+            for (int it=0;it<100;it++){
+                double f1=CNUM1(f_fn,value_number(x1));
+                double d=f1-f0; if(fabs(d)<1e-15) break;
+                double x2=x1-f1*(x1-x0)/d;
+                if (fabs(x2-x1)<tol) return value_number(x2);
+                x0=x1;f0=f1;x1=x2;
+            }
+            return value_number(x1);
+        }
+        if (strcmp(fnname,"newton")==0) {
+            if (!f_fn||!df_fn||argc<3) return value_null();
+            double x=n2,tol=(a3&&a3->type==VAL_NUMBER)?a3->num:1e-10;
+            for (int it=0;it<100;it++){
+                double fv=CNUM1(f_fn,value_number(x));
+                double dv=CNUM1(df_fn,value_number(x));
+                if (fabs(dv)<1e-15) break;
+                double dx=fv/dv; x-=dx;
+                if (fabs(dx)<tol) break;
+            }
+            return value_number(x);
+        }
+        if (strcmp(fnname,"integrate")==0||strcmp(fnname,"simpson")==0) {
+            if (!f_fn||argc<3) return value_number(0.0);
+            double lo=n1,hi=n2;
+            int n=(a3&&a3->type==VAL_NUMBER)?(int)a3->num:1000;
+            if (n%2!=0) n++;
+            double h=(hi-lo)/n;
+            double s=CNUM1(f_fn,value_number(lo))+CNUM1(f_fn,value_number(hi));
+            for (int i=1;i<n;i++) s+=(i%2==0?2.0:4.0)*CNUM1(f_fn,value_number(lo+i*h));
+            return value_number(s*h/3.0);
+        }
+        if (strcmp(fnname,"trapezoid")==0) {
+            if (!f_fn||argc<3) return value_number(0.0);
+            double lo=n1,hi=n2;
+            int n=(a3&&a3->type==VAL_NUMBER)?(int)a3->num:1000;
+            double h=(hi-lo)/n;
+            double s=CNUM1(f_fn,value_number(lo))+CNUM1(f_fn,value_number(hi));
+            for (int i=1;i<n;i++) s+=2.0*CNUM1(f_fn,value_number(lo+i*h));
+            return value_number(s*h*0.5);
+        }
+        if (strcmp(fnname,"romberg")==0) {
+            if (!f_fn||argc<3) return value_number(0.0);
+            double lo=n1,hi=n2;
+            int md=(a3&&a3->type==VAL_NUMBER)?(int)a3->num:8; if(md>16)md=16;
+            double R[16][16]; memset(R,0,sizeof(R));
+            R[0][0]=(hi-lo)*(CNUM1(f_fn,value_number(lo))+CNUM1(f_fn,value_number(hi)))*0.5;
+            for (int i=1;i<md;i++){
+                int steps=1<<i; double hh=(hi-lo)/steps,inner=0.0;
+                for (int k=1;k<steps;k+=2) inner+=CNUM1(f_fn,value_number(lo+k*hh));
+                R[i][0]=R[i-1][0]*0.5+inner*hh;
+                for (int j=1;j<=i;j++){double p4=pow(4.0,(double)j);R[i][j]=(p4*R[i][j-1]-R[i-1][j-1])/(p4-1.0);}
+                if (i>1&&fabs(R[i][i]-R[i-1][i-1])<1e-12) return value_number(R[i][i]);
+            }
+            return value_number(R[md-1][md-1]);
+        }
+        #undef CNUM1
+    }
+
+    /* ── diff: all functions use callbacks ──────────────────────────────── */
+    if (strcmp(modname, "diff") == 0) {
+        Value *f_fn = argc >= 1 ? args[0] : NULL;
+        Value *xs   = argc >= 2 ? args[1] : NULL;
+        double n1d  = (xs && xs->type == VAL_NUMBER) ? xs->num : 0.0;
+        Value *a2d  = argc >= 3 ? args[2] : NULL;
+        Value *a3d  = argc >= 4 ? args[3] : NULL;
+        double h_default = 1e-5;
+
+        #define DCALL1(fn_v,xv) ({ Value *_a[1]={(xv)}; Value *_r=call_value(interp,(fn_v),_a,1); _r?_r->num:0.0; })
+        #define DCALLA(fn_v,av) ({ Value *_a[1]={(av)}; Value *_r=call_value(interp,(fn_v),_a,1); _r?_r->num:0.0; })
+
+        if (!f_fn) return value_null();
+
+        if (strcmp(fnname,"forward")==0) {
+            double x=n1d, h=(a2d&&a2d->type==VAL_NUMBER)?a2d->num:h_default;
+            return value_number((DCALL1(f_fn,value_number(x+h))-DCALL1(f_fn,value_number(x)))/h);
+        }
+        if (strcmp(fnname,"backward")==0) {
+            double x=n1d, h=(a2d&&a2d->type==VAL_NUMBER)?a2d->num:h_default;
+            return value_number((DCALL1(f_fn,value_number(x))-DCALL1(f_fn,value_number(x-h)))/h);
+        }
+        if (strcmp(fnname,"central")==0||strcmp(fnname,"deriv")==0||strcmp(fnname,"d")==0) {
+            double x=n1d, h=(a2d&&a2d->type==VAL_NUMBER)?a2d->num:h_default;
+            return value_number((DCALL1(f_fn,value_number(x+h))-DCALL1(f_fn,value_number(x-h)))/(2.0*h));
+        }
+        if (strcmp(fnname,"second")==0||strcmp(fnname,"d2")==0) {
+            double x=n1d, h=(a2d&&a2d->type==VAL_NUMBER)?a2d->num:1e-4;
+            return value_number((DCALL1(f_fn,value_number(x+h))-2.0*DCALL1(f_fn,value_number(x))+DCALL1(f_fn,value_number(x-h)))/(h*h));
+        }
+        if (strcmp(fnname,"nth")==0) {
+            double x=n1d; int ord=(int)(a2d?a2d->num:1);
+            double h=(a3d&&a3d->type==VAL_NUMBER)?a3d->num:1e-3;
+            if (ord<0||ord>30) return value_null();
+            double bk[31]; bk[0]=1.0;
+            for (int i=1;i<=ord;i++) bk[i]=bk[i-1]*(ord-i+1.0)/i;
+            double res=0.0;
+            for (int k=0;k<=ord;k++){
+                double sgn=((ord-k)%2==0)?1.0:-1.0;
+                res+=sgn*bk[k]*DCALL1(f_fn,value_number(x+k*h));
+            }
+            return value_number(res/pow(h,(double)ord));
+        }
+        if (strcmp(fnname,"partial")==0) {
+            if (!xs||xs->type!=VAL_ARRAY) return value_number(0.0);
+            size_t idx=(size_t)(a2d?a2d->num:0);
+            double h=(a3d&&a3d->type==VAL_NUMBER)?a3d->num:h_default;
+            size_t dim=xs->array_len;
+            Value **xsp=(Value**)malloc(sizeof(Value*)*dim);
+            Value **xsm=(Value**)malloc(sizeof(Value*)*dim);
+            for(size_t k=0;k<dim;k++){double v=xs->array[k]?xs->array[k]->num:0.0;xsp[k]=value_number(k==idx?v+h:v);xsm[k]=value_number(k==idx?v-h:v);}
+            Value *ap=value_array(xsp,dim);free(xsp);
+            Value *am=value_array(xsm,dim);free(xsm);
+            return value_number((DCALLA(f_fn,ap)-DCALLA(f_fn,am))/(2.0*h));
+        }
+        if (strcmp(fnname,"gradient")==0||strcmp(fnname,"grad")==0) {
+            if (!xs||xs->type!=VAL_ARRAY) return value_null();
+            size_t dim=xs->array_len;
+            double h=(a2d&&a2d->type==VAL_NUMBER)?a2d->num:h_default;
+            Value **grad=(Value**)malloc(sizeof(Value*)*dim);
+            for (size_t idx=0;idx<dim;idx++){
+                Value **xsp=(Value**)malloc(sizeof(Value*)*dim);
+                Value **xsm=(Value**)malloc(sizeof(Value*)*dim);
+                for(size_t k=0;k<dim;k++){double v=xs->array[k]?xs->array[k]->num:0.0;xsp[k]=value_number(k==idx?v+h:v);xsm[k]=value_number(k==idx?v-h:v);}
+                Value *ap=value_array(xsp,dim);free(xsp);
+                Value *am=value_array(xsm,dim);free(xsm);
+                grad[idx]=value_number((DCALLA(f_fn,ap)-DCALLA(f_fn,am))/(2.0*h));
+            }
+            Value *res=value_array(grad,dim); free(grad); return res;
+        }
+        if (strcmp(fnname,"hessian")==0) {
+            if (!xs||xs->type!=VAL_ARRAY) return value_null();
+            size_t dim=xs->array_len;
+            double h=(a2d&&a2d->type==VAL_NUMBER)?a2d->num:1e-4;
+            Value *xs0=xs; double f0=DCALLA(f_fn,xs0);
+            /* Build Hessian using modules.c helper via a shared helper */
+            /* Inline the matrix creation using value_array */
+            Value **rows=(Value**)malloc(sizeof(Value*)*dim);
+            for (size_t i=0;i<dim;i++){
+                Value **cols=(Value**)malloc(sizeof(Value*)*dim);
+                for (size_t j=0;j<dim;j++) cols[j]=value_number(0.0);
+                rows[i]=value_array(cols,dim); free(cols);
+            }
+            Value *H=value_array(rows,dim); free(rows);
+            for (size_t i=0;i<dim;i++) for (size_t j=i;j<dim;j++){
+                double val;
+                if (i==j){
+                    Value **xp=(Value**)malloc(sizeof(Value*)*dim);
+                    Value **xm=(Value**)malloc(sizeof(Value*)*dim);
+                    for(size_t k=0;k<dim;k++){double v=xs->array[k]?xs->array[k]->num:0.0;xp[k]=value_number(k==i?v+h:v);xm[k]=value_number(k==i?v-h:v);}
+                    Value *ap=value_array(xp,dim);free(xp);
+                    Value *am=value_array(xm,dim);free(xm);
+                    val=(DCALLA(f_fn,ap)-2.0*f0+DCALLA(f_fn,am))/(h*h);
+                } else {
+                    Value **xpp=(Value**)malloc(sizeof(Value*)*dim);
+                    Value **xpm=(Value**)malloc(sizeof(Value*)*dim);
+                    Value **xmp=(Value**)malloc(sizeof(Value*)*dim);
+                    Value **xmm=(Value**)malloc(sizeof(Value*)*dim);
+                    for(size_t k=0;k<dim;k++){
+                        double v=xs->array[k]?xs->array[k]->num:0.0;
+                        xpp[k]=value_number(k==i?v+h:(k==j?v+h:v));
+                        xpm[k]=value_number(k==i?v+h:(k==j?v-h:v));
+                        xmp[k]=value_number(k==i?v-h:(k==j?v+h:v));
+                        xmm[k]=value_number(k==i?v-h:(k==j?v-h:v));
+                    }
+                    Value *app=value_array(xpp,dim);free(xpp);
+                    Value *apm=value_array(xpm,dim);free(xpm);
+                    Value *amp=value_array(xmp,dim);free(xmp);
+                    Value *amm=value_array(xmm,dim);free(xmm);
+                    val=(DCALLA(f_fn,app)-DCALLA(f_fn,apm)-DCALLA(f_fn,amp)+DCALLA(f_fn,amm))/(4.0*h*h);
+                }
+                if (H->array[i]->array[j]) H->array[i]->array[j]->num=val;
+                if (H->array[j]->array[i]) H->array[j]->array[i]->num=val;
+            }
+            return H;
+        }
+        if (strcmp(fnname,"jacobian")==0) {
+            if (!f_fn||!xs||f_fn->type!=VAL_ARRAY||xs->type!=VAL_ARRAY) return value_null();
+            /* f_fn is an array of functions; xs is the point */
+            Value *fs_arr=f_fn;
+            size_t m=fs_arr->array_len, n=xs->array_len;
+            double h=(a2d&&a2d->type==VAL_NUMBER)?a2d->num:h_default;
+            Value **jrows=(Value**)malloc(sizeof(Value*)*m);
+            for (size_t i=0;i<m;i++){
+                Value **jcols=(Value**)malloc(sizeof(Value*)*n);
+                Value *fi=fs_arr->array[i];
+                for (size_t j=0;j<n;j++){
+                    Value **xsp=(Value**)malloc(sizeof(Value*)*n);
+                    Value **xsm=(Value**)malloc(sizeof(Value*)*n);
+                    for(size_t k=0;k<n;k++){double v=xs->array[k]?xs->array[k]->num:0.0;xsp[k]=value_number(k==j?v+h:v);xsm[k]=value_number(k==j?v-h:v);}
+                    Value *ap=value_array(xsp,n);free(xsp);
+                    Value *am=value_array(xsm,n);free(xsm);
+                    jcols[j]=value_number((DCALLA(fi,ap)-DCALLA(fi,am))/(2.0*h));
+                }
+                jrows[i]=value_array(jcols,n); free(jcols);
+            }
+            Value *J=value_array(jrows,m); free(jrows); return J;
+        }
+        if (strcmp(fnname,"taylor")==0) {
+            double x0=n1d;
+            int nt=(int)(a2d?a2d->num:5);
+            double x=(a3d&&a3d->type==VAL_NUMBER)?a3d->num:x0;
+            double h=1e-4, result=0.0, dx=x-x0;
+            for (int k=0;k<nt;k++){
+                double bk[33]; bk[0]=1.0;
+                for (int i=1;i<=k;i++) bk[i]=bk[i-1]*(k-i+1.0)/i;
+                double deriv=0.0;
+                for (int i=0;i<=k;i++){double sgn=((k-i)%2==0)?1.0:-1.0;deriv+=sgn*bk[i]*DCALL1(f_fn,value_number(x0+i*h));}
+                if (k>0) deriv/=pow(h,(double)k);
+                double fact=1.0; for(int i=1;i<=k;i++) fact*=i;
+                double power=1.0; for(int p=0;p<k;p++) power*=dx;
+                result+=deriv*power/fact;
+            }
+            return value_number(result);
+        }
+        #undef DCALL1
+        #undef DCALLA
+        return value_null();
     }
 
     for (size_t i = 0; i < interp->module_count; i++) {

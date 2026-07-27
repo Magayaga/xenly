@@ -19,6 +19,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -34,13 +35,42 @@ var stdout io.Writer = os.Stdout
 func SetStdout(w io.Writer) { stdout = w }
 
 // RegisterBuiltins installs all built-in functions and modules into env.
-func RegisterBuiltins(env *Env) {
+// processStart marks when this process began, for os.clock().
+var processStart = time.Now()
+
+func RegisterBuiltins(env *Env, xvm *XVM) {
 	// ── Core ──────────────────────────────────────────────────────────────
 	native(env, "print", builtinPrint)
 	native(env, "println", builtinPrint)
 	native(env, "input", builtinInput)
 	native(env, "len", builtinLen)
-	native(env, "type", builtinType)
+	{
+		isType := func(want ValueType) BuiltinFn {
+			return func(a []*Value) (*Value, error) {
+				if len(a) == 0 {
+					return valFalse, nil
+				}
+				if a[0].Tag == want {
+					return valTrue, nil
+				}
+				return valFalse, nil
+			}
+		}
+		typeObj := Object(map[string]*Value{
+			"typeOf":    builtin(builtinType),
+			"isNumber":  builtin(isType(TypeNumber)),
+			"isString":  builtin(isType(TypeString)),
+			"isBoolean": builtin(isType(TypeBool)),
+			"isBool":    builtin(isType(TypeBool)),
+			"isArray":   builtin(isType(TypeArray)),
+			"isObject":  builtin(isType(TypeObject)),
+			"isNull":    builtin(isType(TypeNull)),
+			"toString":  builtin(builtinStr),
+			"toNumber":  builtin(builtinNum),
+			"toBool":    builtin(builtinBool),
+		})
+		env.Define("type", typeObj, true)
+	}
 	native(env, "str", builtinStr)
 	native(env, "num", builtinNum)
 	native(env, "bool", builtinBool)
@@ -241,6 +271,60 @@ func RegisterBuiltins(env *Env) {
 			}
 			return Bool(!math.IsInf(a[0].NumVal, 0) && !math.IsNaN(a[0].NumVal)), nil
 		}),
+		"isInf": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return valFalse, nil
+			}
+			return Bool(math.IsInf(a[0].NumVal, 0)), nil
+		}),
+		// math.complex(re, im?) → [re, im] represented as a 2-element array
+		"complex": builtin(func(a []*Value) (*Value, error) {
+			re, im := 0.0, 0.0
+			if len(a) > 0 {
+				re = a[0].NumVal
+			}
+			if len(a) > 1 {
+				im = a[1].NumVal
+			}
+			return Array([]*Value{Number(re), Number(im)}), nil
+		}),
+		"complexAdd": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray || a[1].Tag != TypeArray ||
+				len(a[0].ArrayVal) < 2 || len(a[1].ArrayVal) < 2 {
+				return valNull, nil
+			}
+			r1, i1 := a[0].ArrayVal[0].NumVal, a[0].ArrayVal[1].NumVal
+			r2, i2 := a[1].ArrayVal[0].NumVal, a[1].ArrayVal[1].NumVal
+			return Array([]*Value{Number(r1 + r2), Number(i1 + i2)}), nil
+		}),
+		"complexMul": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray || a[1].Tag != TypeArray ||
+				len(a[0].ArrayVal) < 2 || len(a[1].ArrayVal) < 2 {
+				return valNull, nil
+			}
+			r1, i1 := a[0].ArrayVal[0].NumVal, a[0].ArrayVal[1].NumVal
+			r2, i2 := a[1].ArrayVal[0].NumVal, a[1].ArrayVal[1].NumVal
+			return Array([]*Value{Number(r1*r2 - i1*i2), Number(r1*i2 + i1*r2)}), nil
+		}),
+		"complexAbs": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 || a[0].Tag != TypeArray || len(a[0].ArrayVal) < 2 {
+				return Number(0), nil
+			}
+			re, im := a[0].ArrayVal[0].NumVal, a[0].ArrayVal[1].NumVal
+			return Number(math.Hypot(re, im)), nil
+		}),
+		"complexConj": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 || a[0].Tag != TypeArray || len(a[0].ArrayVal) < 2 {
+				return valNull, nil
+			}
+			return Array([]*Value{Number(a[0].ArrayVal[0].NumVal), Number(-a[0].ArrayVal[1].NumVal)}), nil
+		}),
+		"complexPhase": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 || a[0].Tag != TypeArray || len(a[0].ArrayVal) < 2 {
+				return Number(0), nil
+			}
+			return Number(math.Atan2(a[0].ArrayVal[1].NumVal, a[0].ArrayVal[0].NumVal)), nil
+		}),
 		"hypot": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 {
 				return Number(0), nil
@@ -259,6 +343,18 @@ func RegisterBuiltins(env *Env) {
 				return valNull, nil
 			}
 			return Number(a[0].NumVal + (a[1].NumVal-a[0].NumVal)*a[2].NumVal), nil
+		}),
+		"degrees": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(a[0].NumVal * 180.0 / math.Pi), nil
+		}),
+		"radians": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(a[0].NumVal * math.Pi / 180.0), nil
 		}),
 		"fmod": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 {
@@ -289,28 +385,145 @@ func RegisterBuiltins(env *Env) {
 			}
 			return Number(x * y / gcd), nil
 		}),
+		"randomInt": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 {
+				return Number(0), nil
+			}
+			lo, hi := int(a[0].NumVal), int(a[1].NumVal)
+			if hi <= lo {
+				return Number(float64(lo)), nil
+			}
+			return Number(float64(lo + rand.Intn(hi-lo))), nil
+		}),
+		// math.sum(arr) / math.product(arr) — over an array, or over varargs
+		"sum": builtin(func(a []*Value) (*Value, error) {
+			nums := numsFromArrayOrArgs(a)
+			total := 0.0
+			for _, n := range nums {
+				total += n
+			}
+			return Number(total), nil
+		}),
+		"product": builtin(func(a []*Value) (*Value, error) {
+			nums := numsFromArrayOrArgs(a)
+			total := 1.0
+			for _, n := range nums {
+				total *= n
+			}
+			return Number(total), nil
+		}),
+		"mean": builtin(func(a []*Value) (*Value, error) {
+			nums := numsFromArrayOrArgs(a)
+			if len(nums) == 0 {
+				return Number(0), nil
+			}
+			total := 0.0
+			for _, n := range nums {
+				total += n
+			}
+			return Number(total / float64(len(nums))), nil
+		}),
+		"median": builtin(func(a []*Value) (*Value, error) {
+			nums := numsFromArrayOrArgs(a)
+			if len(nums) == 0 {
+				return Number(0), nil
+			}
+			sort.Float64s(nums)
+			mid := len(nums) / 2
+			if len(nums)%2 == 0 {
+				return Number((nums[mid-1] + nums[mid]) / 2), nil
+			}
+			return Number(nums[mid]), nil
+		}),
+		"variance": builtin(func(a []*Value) (*Value, error) {
+			nums := numsFromArrayOrArgs(a)
+			if len(nums) == 0 {
+				return Number(0), nil
+			}
+			mean := 0.0
+			for _, n := range nums {
+				mean += n
+			}
+			mean /= float64(len(nums))
+			v := 0.0
+			for _, n := range nums {
+				d := n - mean
+				v += d * d
+			}
+			return Number(v / float64(len(nums))), nil
+		}),
+		"stddev": builtin(func(a []*Value) (*Value, error) {
+			nums := numsFromArrayOrArgs(a)
+			if len(nums) == 0 {
+				return Number(0), nil
+			}
+			mean := 0.0
+			for _, n := range nums {
+				mean += n
+			}
+			mean /= float64(len(nums))
+			v := 0.0
+			for _, n := range nums {
+				d := n - mean
+				v += d * d
+			}
+			return Number(math.Sqrt(v / float64(len(nums)))), nil
+		}),
+		"factorial": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(1), nil
+			}
+			n := int(a[0].NumVal)
+			if n < 0 {
+				return Number(math.NaN()), nil
+			}
+			if n > 170 {
+				return Number(math.Inf(1)), nil
+			}
+			result := 1.0
+			for i := 2; i <= n; i++ {
+				result *= float64(i)
+			}
+			return Number(result), nil
+		}),
+		"combinations": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 {
+				return Number(0), nil
+			}
+			n, k := int(a[0].NumVal), int(a[1].NumVal)
+			if k > n || k < 0 || n < 0 {
+				return Number(0), nil
+			}
+			if k == 0 || k == n {
+				return Number(1), nil
+			}
+			if k > n-k {
+				k = n - k
+			}
+			result := 1.0
+			for i := 0; i < k; i++ {
+				result *= float64(n - i)
+				result /= float64(i + 1)
+			}
+			return Number(result), nil
+		}),
+		"permutations": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 {
+				return Number(0), nil
+			}
+			n, k := int(a[0].NumVal), int(a[1].NumVal)
+			if k > n || k < 0 || n < 0 {
+				return Number(0), nil
+			}
+			result := 1.0
+			for i := 0; i < k; i++ {
+				result *= float64(n - i)
+			}
+			return Number(result), nil
+		}),
 	})
 	env.Define("math", mathObj, true)
 	env.Define("Math", mathObj, true) // alias
-
-	// ── String module ─────────────────────────────────────────────────────
-	strObj := Object(map[string]*Value{
-		"fromCharCode": builtin(func(a []*Value) (*Value, error) {
-			var sb strings.Builder
-			for _, v := range a {
-				sb.WriteRune(rune(int(v.NumVal)))
-			}
-			return String(sb.String()), nil
-		}),
-		"format": builtin(func(a []*Value) (*Value, error) {
-			if len(a) == 0 {
-				return String(""), nil
-			}
-			return String(fmt.Sprint(a[0].String())), nil
-		}),
-	})
-	env.Define("str", strObj, true)
-	env.Define("String", strObj, true)
 
 	// ── Array module ──────────────────────────────────────────────────────
 	arrObj := Object(map[string]*Value{
@@ -488,6 +701,23 @@ func RegisterBuiltins(env *Env) {
 				return Number(0), nil
 			}
 			return Number(float64(len(a[0].ArrayVal))), nil
+		}),
+		// array.length(arr) → number (alias for len)
+		"length": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 || a[0].Tag != TypeArray {
+				return Number(0), nil
+			}
+			return Number(float64(len(a[0].ArrayVal))), nil
+		}),
+		// array.fill(arr, value) → arr, mutated so every element is value
+		"fill": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray {
+				return valNull, nil
+			}
+			for i := range a[0].ArrayVal {
+				a[0].ArrayVal[i] = a[1]
+			}
+			return a[0], nil
 		}),
 		// array.get(arr, idx) → value
 		"get": builtin(func(a []*Value) (*Value, error) {
@@ -718,6 +948,174 @@ func RegisterBuiltins(env *Env) {
 			}
 			return Array(items), nil
 		}),
+		// array.map(arr, fn) → new array of fn(x) for each x
+		"map": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray {
+				return Array(nil), nil
+			}
+			src := a[0].ArrayVal
+			out := make([]*Value, len(src))
+			for i, v := range src {
+				r, err := xvm.callValue(a[1], []*Value{v}, nil, nil)
+				if err != nil {
+					return valNull, err
+				}
+				out[i] = r
+			}
+			return Array(out), nil
+		}),
+		// array.filter(arr, fn) → new array of elements where fn(x) is truthy
+		"filter": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray {
+				return Array(nil), nil
+			}
+			var out []*Value
+			for _, v := range a[0].ArrayVal {
+				r, err := xvm.callValue(a[1], []*Value{v}, nil, nil)
+				if err != nil {
+					return valNull, err
+				}
+				if r.Truthy() {
+					out = append(out, v)
+				}
+			}
+			return Array(out), nil
+		}),
+		// array.reduce(arr, fn, initial?) → accumulated value
+		"reduce": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray {
+				return valNull, nil
+			}
+			src := a[0].ArrayVal
+			var acc *Value
+			start := 0
+			if len(a) > 2 {
+				acc = a[2]
+			} else {
+				if len(src) == 0 {
+					return valNull, nil
+				}
+				acc = src[0]
+				start = 1
+			}
+			for i := start; i < len(src); i++ {
+				r, err := xvm.callValue(a[1], []*Value{acc, src[i]}, nil, nil)
+				if err != nil {
+					return valNull, err
+				}
+				acc = r
+			}
+			return acc, nil
+		}),
+		// array.forEach(arr, fn) → null (side-effecting)
+		"forEach": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray {
+				return valNull, nil
+			}
+			for _, v := range a[0].ArrayVal {
+				if _, err := xvm.callValue(a[1], []*Value{v}, nil, nil); err != nil {
+					return valNull, err
+				}
+			}
+			return valNull, nil
+		}),
+		// array.find(arr, fn) → first element where fn(x) is truthy, or null
+		"find": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray {
+				return valNull, nil
+			}
+			for _, v := range a[0].ArrayVal {
+				r, err := xvm.callValue(a[1], []*Value{v}, nil, nil)
+				if err != nil {
+					return valNull, err
+				}
+				if r.Truthy() {
+					return v, nil
+				}
+			}
+			return valNull, nil
+		}),
+		// array.some(arr, fn) → true if any element passes fn
+		"some": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray {
+				return valFalse, nil
+			}
+			for _, v := range a[0].ArrayVal {
+				r, err := xvm.callValue(a[1], []*Value{v}, nil, nil)
+				if err != nil {
+					return valNull, err
+				}
+				if r.Truthy() {
+					return valTrue, nil
+				}
+			}
+			return valFalse, nil
+		}),
+		// array.every(arr, fn) → true if all elements pass fn
+		"every": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 || a[0].Tag != TypeArray {
+				return valTrue, nil
+			}
+			for _, v := range a[0].ArrayVal {
+				r, err := xvm.callValue(a[1], []*Value{v}, nil, nil)
+				if err != nil {
+					return valNull, err
+				}
+				if !r.Truthy() {
+					return valFalse, nil
+				}
+			}
+			return valTrue, nil
+		}),
+		// array.sort(arr) / array.sortDesc(arr) → new sorted array
+		"sort": builtin(func(a []*Value) (*Value, error) {
+			return sortArrayValue(a, false), nil
+		}),
+		"sortDesc": builtin(func(a []*Value) (*Value, error) {
+			return sortArrayValue(a, true), nil
+		}),
+		// array.unique(arr) → new array with duplicates removed
+		"unique": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 || a[0].Tag != TypeArray {
+				return Array(nil), nil
+			}
+			var out []*Value
+			for _, v := range a[0].ArrayVal {
+				dup := false
+				for _, o := range out {
+					if v.Equal(o) {
+						dup = true
+						break
+					}
+				}
+				if !dup {
+					out = append(out, v)
+				}
+			}
+			return Array(out), nil
+		}),
+		// array.flatten(arr) → new array, one level of nested arrays flattened
+		"flatten": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 || a[0].Tag != TypeArray {
+				return Array(nil), nil
+			}
+			var out []*Value
+			for _, v := range a[0].ArrayVal {
+				if v.Tag == TypeArray {
+					out = append(out, v.ArrayVal...)
+				} else {
+					out = append(out, v)
+				}
+			}
+			return Array(out), nil
+		}),
+		// array.min(arr) / array.max(arr) → number
+		"min": builtin(func(a []*Value) (*Value, error) {
+			return minMaxArrayValue(a, true), nil
+		}),
+		"max": builtin(func(a []*Value) (*Value, error) {
+			return minMaxArrayValue(a, false), nil
+		}),
 	})
 	env.Define("array", arrayObj, true)
 
@@ -774,6 +1172,40 @@ func RegisterBuiltins(env *Env) {
 				return Number(0), nil
 			}
 			return Number(float64(len([]rune(a[0].String())))), nil
+		}),
+		"unicodeLength": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			return Number(float64(len([]rune(a[0].String())))), nil
+		}),
+		"unicodeCharAt": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 {
+				return String(""), nil
+			}
+			runes := []rune(a[0].String())
+			idx := int(a[1].NumVal)
+			if idx < 0 || idx >= len(runes) {
+				return String(""), nil
+			}
+			return String(string(runes[idx])), nil
+		}),
+		"codePointAt": builtin(func(a []*Value) (*Value, error) {
+			if len(a) < 2 {
+				return Number(-1), nil
+			}
+			runes := []rune(a[0].String())
+			idx := int(a[1].NumVal)
+			if idx < 0 || idx >= len(runes) {
+				return Number(-1), nil
+			}
+			return Number(float64(runes[idx])), nil
+		}),
+		"fromCodePoint": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return String(""), nil
+			}
+			return String(string(rune(int(a[0].NumVal)))), nil
 		}),
 		"toString": builtin(func(a []*Value) (*Value, error) {
 			if len(a) == 0 {
@@ -1043,6 +1475,8 @@ func RegisterBuiltins(env *Env) {
 		}),
 	})
 	env.Define("string", stringObj, true)
+	env.Define("str", stringObj, true)
+	env.Define("String", stringObj, true)
 
 	// ── os module (aliases to sys) ─────────────────────────────────────────
 	osObj := Object(map[string]*Value{
@@ -1080,14 +1514,315 @@ func RegisterBuiltins(env *Env) {
 			cwd, _ := os.Getwd()
 			return String(cwd), nil
 		}),
+		"cwd": builtin(func(a []*Value) (*Value, error) {
+			cwd, _ := os.Getwd()
+			return String(cwd), nil
+		}),
+		"time": builtin(func(a []*Value) (*Value, error) {
+			return Number(float64(time.Now().Unix())), nil
+		}),
+		"clock": builtin(func(a []*Value) (*Value, error) {
+			return Number(time.Since(processStart).Seconds()), nil
+		}),
+		"mkdir": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return valFalse, nil
+			}
+			err := os.MkdirAll(a[0].String(), 0755)
+			return Bool(err == nil), nil
+		}),
+		"exists": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return valFalse, nil
+			}
+			_, err := os.Stat(a[0].String())
+			return Bool(err == nil), nil
+		}),
+		"isDir": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return valFalse, nil
+			}
+			info, err := os.Stat(a[0].String())
+			if err != nil {
+				return valFalse, nil
+			}
+			return Bool(info.IsDir()), nil
+		}),
+		"isFile": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return valFalse, nil
+			}
+			info, err := os.Stat(a[0].String())
+			if err != nil {
+				return valFalse, nil
+			}
+			return Bool(!info.IsDir()), nil
+		}),
+		"listdir": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Array(nil), nil
+			}
+			entries, err := os.ReadDir(a[0].String())
+			if err != nil {
+				return Array(nil), nil
+			}
+			items := make([]*Value, len(entries))
+			for i, e := range entries {
+				items[i] = String(e.Name())
+			}
+			return Array(items), nil
+		}),
+		"rmdir": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return valFalse, nil
+			}
+			err := os.Remove(a[0].String())
+			return Bool(err == nil), nil
+		}),
 		"pid": builtin(func(a []*Value) (*Value, error) {
+			return Number(float64(os.Getpid())), nil
+		}),
+		"getpid": builtin(func(a []*Value) (*Value, error) {
 			return Number(float64(os.Getpid())), nil
 		}),
 	})
 	env.Define("os", osObj, true)
+
+	// ── crypto module (simple non-cryptographic hashing utilities) ─────────
+	cryptoObj := Object(map[string]*Value{
+		// crypto.hash(s) → DJB2 hash
+		"hash": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			var h uint32 = 5381
+			for _, b := range []byte(a[0].String()) {
+				h = ((h << 5) + h) + uint32(b) // h*33 + b
+			}
+			return Number(float64(h)), nil
+		}),
+		// crypto.fnv1a(s) → FNV-1a 32-bit hash
+		"fnv1a": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			var h uint32 = 2166136261
+			for _, b := range []byte(a[0].String()) {
+				h ^= uint32(b)
+				h *= 16777619
+			}
+			return Number(float64(h)), nil
+		}),
+		// crypto.murmur3(s, seed) → simplified MurmurHash3-style 32-bit hash
+		"murmur3": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			var seed uint32
+			if len(a) > 1 {
+				seed = uint32(a[1].NumVal)
+			}
+			data := []byte(a[0].String())
+			var h uint32 = seed
+			const c1, c2 uint32 = 0xcc9e2d51, 0x1b873593
+			i := 0
+			for ; i+4 <= len(data); i += 4 {
+				k := uint32(data[i]) | uint32(data[i+1])<<8 | uint32(data[i+2])<<16 | uint32(data[i+3])<<24
+				k *= c1
+				k = (k << 15) | (k >> 17)
+				k *= c2
+				h ^= k
+				h = (h << 13) | (h >> 19)
+				h = h*5 + 0xe6546b64
+			}
+			var k uint32
+			switch len(data) - i {
+			case 3:
+				k ^= uint32(data[i+2]) << 16
+				fallthrough
+			case 2:
+				k ^= uint32(data[i+1]) << 8
+				fallthrough
+			case 1:
+				k ^= uint32(data[i])
+				k *= c1
+				k = (k << 15) | (k >> 17)
+				k *= c2
+				h ^= k
+			}
+			h ^= uint32(len(data))
+			h ^= h >> 16
+			h *= 0x85ebca6b
+			h ^= h >> 13
+			h *= 0xc2b2ae35
+			h ^= h >> 16
+			return Number(float64(h)), nil
+		}),
+		// crypto.checksum(s) → sum of byte values, truncated to 32 bits
+		"checksum": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Number(0), nil
+			}
+			var sum uint32
+			for _, b := range []byte(a[0].String()) {
+				sum += uint32(b)
+			}
+			return Number(float64(sum)), nil
+		}),
+		// crypto.randomBytes(n) → array of n random integers 0-255
+		"randomBytes": builtin(func(a []*Value) (*Value, error) {
+			n := 0
+			if len(a) > 0 {
+				n = int(a[0].NumVal)
+			}
+			items := make([]*Value, n)
+			for i := range items {
+				items[i] = Number(float64(rand.Intn(256)))
+			}
+			return Array(items), nil
+		}),
+		// crypto.uuid() → random UUID v4-shaped string (not cryptographically secure)
+		"uuid": builtin(func(a []*Value) (*Value, error) {
+			b := make([]byte, 16)
+			for i := range b {
+				b[i] = byte(rand.Intn(256))
+			}
+			b[6] = (b[6] & 0x0f) | 0x40 // version 4
+			b[8] = (b[8] & 0x3f) | 0x80 // variant 10
+			return String(fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])), nil
+		}),
+		"MD5_SIZE":    builtin(func(a []*Value) (*Value, error) { return Number(16), nil }),
+		"SHA1_SIZE":   builtin(func(a []*Value) (*Value, error) { return Number(20), nil }),
+		"SHA256_SIZE": builtin(func(a []*Value) (*Value, error) { return Number(32), nil }),
+	})
+	env.Define("crypto", cryptoObj, true)
+
+	// ── path module ─────────────────────────────────────────────────────────
+	pathObj := Object(map[string]*Value{
+		"join": builtin(func(a []*Value) (*Value, error) {
+			parts := make([]string, len(a))
+			for i, v := range a {
+				parts[i] = v.String()
+			}
+			return String(filepath.Join(parts...)), nil
+		}),
+		"basename": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return String(""), nil
+			}
+			return String(filepath.Base(a[0].String())), nil
+		}),
+		"dirname": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return String(""), nil
+			}
+			return String(filepath.Dir(a[0].String())), nil
+		}),
+		"extname": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return String(""), nil
+			}
+			return String(filepath.Ext(a[0].String())), nil
+		}),
+		"ext": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return String(""), nil
+			}
+			return String(filepath.Ext(a[0].String())), nil
+		}),
+		"isAbs": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return valFalse, nil
+			}
+			return Bool(filepath.IsAbs(a[0].String())), nil
+		}),
+		"clean": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return String(""), nil
+			}
+			return String(filepath.Clean(a[0].String())), nil
+		}),
+		"split": builtin(func(a []*Value) (*Value, error) {
+			if len(a) == 0 {
+				return Array([]*Value{String(""), String("")}), nil
+			}
+			dir, file := filepath.Split(a[0].String())
+			return Array([]*Value{String(dir), String(file)}), nil
+		}),
+	})
+	env.Define("path", pathObj, true)
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+// sortArrayValue implements array.sort/array.sortDesc: a[0] must be an array.
+// Sorts numerically if the first element is a number, lexically if it's a
+// string; returns a new array (does not mutate the input).
+func sortArrayValue(a []*Value, desc bool) *Value {
+	if len(a) == 0 || a[0].Tag != TypeArray {
+		return Array(nil)
+	}
+	src := a[0].ArrayVal
+	out := make([]*Value, len(src))
+	copy(out, src)
+	byStr := len(out) > 0 && out[0].Tag == TypeString
+	sort.SliceStable(out, func(i, j int) bool {
+		var less bool
+		if byStr {
+			less = out[i].StrVal < out[j].StrVal
+		} else {
+			less = out[i].NumVal < out[j].NumVal
+		}
+		if desc {
+			return !less && out[i] != out[j]
+		}
+		return less
+	})
+	return Array(out)
+}
+
+// minMaxArrayValue implements array.min/array.max over numeric elements.
+func minMaxArrayValue(a []*Value, wantMin bool) *Value {
+	if len(a) == 0 || a[0].Tag != TypeArray || len(a[0].ArrayVal) == 0 {
+		return valNull
+	}
+	var m float64
+	found := false
+	for _, v := range a[0].ArrayVal {
+		if v.Tag != TypeNumber {
+			continue
+		}
+		if !found || (wantMin && v.NumVal < m) || (!wantMin && v.NumVal > m) {
+			m = v.NumVal
+			found = true
+		}
+	}
+	if !found {
+		return valNull
+	}
+	return Number(m)
+}
+
+// numsFromArrayOrArgs extracts a []float64 from either a single array
+// argument (math.sum([1,2,3])) or a varargs list (math.sum(1,2,3)).
+func numsFromArrayOrArgs(a []*Value) []float64 {
+	if len(a) == 1 && a[0].Tag == TypeArray {
+		nums := make([]float64, 0, len(a[0].ArrayVal))
+		for _, v := range a[0].ArrayVal {
+			if v.Tag == TypeNumber {
+				nums = append(nums, v.NumVal)
+			}
+		}
+		return nums
+	}
+	nums := make([]float64, 0, len(a))
+	for _, v := range a {
+		if v.Tag == TypeNumber {
+			nums = append(nums, v.NumVal)
+		}
+	}
+	return nums
+}
 
 func native(env *Env, name string, fn BuiltinFn) {
 	env.Define(name, &Value{Tag: TypeBuiltin, BuiltinV: fn}, false)

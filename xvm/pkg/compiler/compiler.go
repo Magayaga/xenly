@@ -17,6 +17,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"xvm/pkg/bytecode"
 )
@@ -29,6 +32,18 @@ type Compiler struct {
 	current *fnState
 	// global scope for class name resolution
 	classes map[string]uint32 // class name → class table index
+
+	// baseDir is the directory of the file currently being compiled, used to
+	// resolve relative `import "mylib/foo"` paths for user-defined modules.
+	baseDir string
+	// importedFiles de-dupes user module files already inlined, keyed by
+	// their resolved absolute path, mapping to the mangled prefix used for
+	// that file's top-level names.
+	importedFiles map[string]string
+	// moduleSeq generates unique name-mangling prefixes for each imported
+	// user module file, so their top-level names never collide with the
+	// importing program's own names or with another imported file's names.
+	moduleSeq int
 }
 
 // fnState tracks compilation state for a function body.
@@ -41,11 +56,15 @@ type fnState struct {
 	parent    *fnState
 }
 
-// NewCompiler creates a new Compiler for the given module.
-func NewCompiler() *Compiler {
+// NewCompiler creates a new Compiler for the given module. baseDir is the
+// directory of the source file being compiled, used to resolve relative
+// `import "mylib/foo"` paths for user-defined (file-based) modules.
+func NewCompiler(baseDir string) *Compiler {
 	return &Compiler{
-		module:  &bytecode.Module{},
-		classes: make(map[string]uint32),
+		module:        &bytecode.Module{},
+		classes:       make(map[string]uint32),
+		baseDir:       baseDir,
+		importedFiles: make(map[string]string),
 	}
 }
 
@@ -229,8 +248,7 @@ func (c *Compiler) compileStmt(n *ASTNode) {
 			c.compileStmt(n.Children[0])
 		}
 	case NodeImport:
-		// Runtime: nothing to emit; module is resolved at load time
-		c.emit(bytecode.OP_NOP)
+		c.compileImport(n)
 	case NodeNamespace:
 		c.emitScope()
 		if len(n.Children) > 0 {
@@ -526,8 +544,8 @@ func (c *Compiler) compileIf(n *ASTNode) {
 
 func (c *Compiler) compileWhile(n *ASTNode) {
 	// children: [cond, body]
-	loopStart := c.currentPos()
 	c.emitScope()
+	loopStart := c.currentPos()
 
 	c.compileExpr(n.Children[0])
 	endJump := c.emitJump(bytecode.OP_JUMP_FALSE)
@@ -1038,11 +1056,11 @@ func (c *Compiler) compileNullish(n *ASTNode) {
 }
 
 func (c *Compiler) compileFnCall(n *ASTNode) {
-	// Push arguments, push function, call
+	// Stack layout needed by OP_CALL: [callee, arg0, arg1, ...]
+	c.emitOp4(bytecode.OP_LOAD, c.constString(n.StrVal))
 	for _, arg := range n.Children {
 		c.compileExpr(arg)
 	}
-	c.emitOp4(bytecode.OP_LOAD, c.constString(n.StrVal))
 	c.emitOp1(bytecode.OP_CALL, uint8(len(n.Children)))
 }
 
@@ -1059,10 +1077,11 @@ func (c *Compiler) compileMethodCall(n *ASTNode) {
 
 func (c *Compiler) compileCallExpr(n *ASTNode) {
 	// n.Children[0] = callee expr, n.Children[1..] = args
+	// Stack layout needed by OP_CALL: [callee, arg0, arg1, ...]
+	c.compileExpr(n.Children[0])
 	for _, arg := range n.Children[1:] {
 		c.compileExpr(arg)
 	}
-	c.compileExpr(n.Children[0])
 	c.emitOp1(bytecode.OP_CALL, uint8(len(n.Children)-1))
 }
 
@@ -1099,19 +1118,28 @@ func (c *Compiler) compileAssignExpr(n *ASTNode) {
 	switch lhs.Kind {
 	case NodeIdent:
 		c.compileExpr(rhs)
-		c.emit(bytecode.OP_DUP)
 		c.emitOp4(bytecode.OP_STORE, c.constString(lhs.StrVal))
+		// OP_STORE peeks (doesn't pop) — exactly one copy of the value
+		// remains on the stack, which is what we want here (this is the
+		// expression-context assignment, e.g. `y = (x = 5)` or a bare
+		// assignment statement, which gets a single OP_POP appended by
+		// whichever caller treats it as a statement).
 	case NodePropertyGet:
-		c.compileExpr(lhs.Children[0])
-		c.compileExpr(rhs)
-		c.emit(bytecode.OP_DUP)
+		c.compileExpr(rhs)               // [value]
+		c.emit(bytecode.OP_DUP)          // [value, value]
+		c.compileExpr(lhs.Children[0])   // [value, value, object]
+		c.emit(bytecode.OP_SWAP)         // [value, object, value]
 		c.emitOp4(bytecode.OP_PROP_SET, c.constString(lhs.StrVal))
+		// PROP_SET consumes [object, value] from the top, leaving [value].
 	case NodeIndex:
-		c.compileExpr(lhs.Children[0])
-		c.compileExpr(lhs.Children[1])
-		c.compileExpr(rhs)
-		c.emit(bytecode.OP_DUP)
+		c.compileExpr(rhs)               // [val]
+		c.emit(bytecode.OP_DUP)          // [val, val]
+		c.compileExpr(lhs.Children[0])   // array   → [val, val, arr]
+		c.emit(bytecode.OP_SWAP)         // [val, arr, val]
+		c.compileExpr(lhs.Children[1])   // index   → [val, arr, val, idx]
+		c.emit(bytecode.OP_SWAP)         // [val, arr, idx, val]
 		c.emit(bytecode.OP_INDEX_SET)
+		// INDEX_SET consumes [arr, idx, val] from the top, leaving [val].
 	}
 }
 
@@ -1133,6 +1161,20 @@ func (c *Compiler) compileSleep(n *ASTNode) {
 	c.emit(bytecode.OP_SLEEP)
 }
 
+func (c *Compiler) compileMatchArmBody(expr *ASTNode) {
+	if expr.Kind == NodeBlock {
+		// Block-bodied arm: run as statements (return/if/loops all work
+		// normally — a `return` inside jumps out of the enclosing function,
+		// same as anywhere else). If the block falls through without
+		// returning, push null so the match expression still yields a
+		// value, keeping the stack balanced like every other arm kind.
+		c.compileStmt(expr)
+		c.emit(bytecode.OP_PUSH_NULL)
+		return
+	}
+	c.compileExpr(expr)
+}
+
 func (c *Compiler) compileMatch(n *ASTNode) {
 	// n.Children[0] = discriminant, rest = arms
 	// Store discriminant in a temp variable
@@ -1151,7 +1193,7 @@ func (c *Compiler) compileMatch(n *ASTNode) {
 
 		// ─ Wildcard _ — always matches, no check needed ─────────────────────
 		if pat.StrVal == "_" {
-			c.compileExpr(expr)
+			c.compileMatchArmBody(expr)
 			endJumps = append(endJumps, c.emitJump(bytecode.OP_JUMP))
 			continue
 		}
@@ -1163,7 +1205,7 @@ func (c *Compiler) compileMatch(n *ASTNode) {
 			c.compileExpr(pat.Children[0])
 			c.emit(bytecode.OP_EQ)
 			skipJump := c.emitJump(bytecode.OP_JUMP_FALSE)
-			c.compileExpr(expr)
+			c.compileMatchArmBody(expr)
 			endJumps = append(endJumps, c.emitJump(bytecode.OP_JUMP))
 			c.patchJump(skipJump)
 			continue
@@ -1175,7 +1217,7 @@ func (c *Compiler) compileMatch(n *ASTNode) {
 			c.emitOp4(bytecode.OP_LOAD, tempIdx)
 			c.emitOp4(bytecode.OP_MATCH_TAG, c.constString(pat.StrVal))
 			skipJump := c.emitJump(bytecode.OP_JUMP_FALSE)
-			c.compileExpr(expr)
+			c.compileMatchArmBody(expr)
 			endJumps = append(endJumps, c.emitJump(bytecode.OP_JUMP))
 			c.patchJump(skipJump)
 			continue
@@ -1195,7 +1237,7 @@ func (c *Compiler) compileMatch(n *ASTNode) {
 				c.emitOp4(bytecode.OP_STORE_NEW, c.constString(bind.StrVal))
 			}
 			c.emit(bytecode.OP_POP) // pop the variant used for extractions
-			c.compileExpr(expr)
+			c.compileMatchArmBody(expr)
 			endJumps = append(endJumps, c.emitJump(bytecode.OP_JUMP))
 			c.patchJump(skipJump)
 			continue
@@ -1313,7 +1355,121 @@ func (c *Compiler) compileForever(n *ASTNode) {
 	c.current.loopStart = oldStart
 }
 
-// ─── Declarative / functional compile helpers ────────────────────────────────
+// builtinModuleImportPaths are import path names that resolve to built-in
+// runtime modules (registered as globals by RegisterBuiltins) rather than a
+// user .xe file on disk — `import "math"` needs no file resolution at all.
+var builtinModuleImportPaths = map[string]bool{
+	"math": true, "array": true, "string": true, "io": true, "fs": true,
+	"json": true, "os": true, "time": true, "type": true, "path": true,
+	"crypto": true, "sys": true,
+}
+
+// compileImport handles both built-in module imports (no-op — the module is
+// already a global) and user-defined file-based module imports:
+//
+//	import "mylib/mathutils"          → binds a namespace object "mathutils"
+//	import "mylib/mathutils" as mu    → binds a namespace object "mu"
+//	from "mylib/shapes" import Vec2   → binds "Vec2" directly (already true,
+//	                                     since importing a file compiles its
+//	                                     top-level decls under their own
+//	                                     bare names — see below)
+//
+// The imported file's top-level statements are compiled directly into the
+// current program the first time a given file is imported (cached by
+// resolved absolute path so importing the same file twice doesn't redefine
+// its functions/classes twice). Its `export`ed functions are additionally
+// collected so a namespace object can be built for the plain-import form.
+func (c *Compiler) compileImport(n *ASTNode) {
+	path := n.StrVal
+	if builtinModuleImportPaths[path] {
+		c.emit(bytecode.OP_NOP)
+		return
+	}
+
+	filePath := path
+	if !strings.HasSuffix(filePath, ".xe") {
+		filePath += ".xe"
+	}
+	if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(c.baseDir, filePath)
+	}
+	if abs, err := filepath.Abs(filePath); err == nil {
+		filePath = abs
+	}
+
+	exportKey, already := c.importedFiles[filePath]
+	var exportNames []string
+	if already {
+		if exportKey != "" {
+			exportNames = strings.Split(exportKey, ",")
+		}
+	} else {
+		src, err := os.ReadFile(filePath)
+		if err != nil {
+			c.errors = append(c.errors, fmt.Sprintf("cannot import %q: %v", path, err))
+			c.emit(bytecode.OP_NOP)
+			return
+		}
+		lexer := NewLexer(string(src))
+		tokens, lexErrs := lexer.Tokenize()
+		if len(lexErrs) > 0 {
+			c.errors = append(c.errors, fmt.Sprintf("import %q: lex error: %v", path, lexErrs))
+			c.emit(bytecode.OP_NOP)
+			return
+		}
+		parser := NewParser(tokens)
+		modAST, parseErrs := parser.Parse()
+		if len(parseErrs) > 0 {
+			c.errors = append(c.errors, fmt.Sprintf("import %q: parse error: %v", path, parseErrs))
+			c.emit(bytecode.OP_NOP)
+			return
+		}
+
+		savedDir := c.baseDir
+		c.baseDir = filepath.Dir(filePath)
+		for _, stmt := range modAST.Children {
+			c.compileStmt(stmt)
+			if stmt.Kind == NodeExport && len(stmt.Children) > 0 {
+				inner := stmt.Children[0]
+				if inner.Kind == NodeFnDecl && inner.StrVal != "" {
+					exportNames = append(exportNames, inner.StrVal)
+				}
+				// Classes need no extra tracking: `new X`/`instanceof X`/
+				// `typeof(X)` all resolve classes by bare name already,
+				// via the class table populated when compileStmt above
+				// compiled the class declaration normally.
+			}
+		}
+		c.baseDir = savedDir
+		c.importedFiles[filePath] = strings.Join(exportNames, ",")
+	}
+
+	// `from "path" import X, Y` — the imported file's top-level decls are
+	// already bound under their own bare names by the compile pass above,
+	// so there's nothing left to do for the names the statement listed.
+	if len(n.Children) > 0 {
+		return
+	}
+
+	// Plain `import "path" [as alias]` — build a namespace object out of
+	// the exported functions (classes are already globally bare-named).
+	if len(exportNames) == 0 {
+		c.emit(bytecode.OP_NOP)
+		return
+	}
+	defaultName := strings.TrimSuffix(filepath.Base(path), ".xe")
+	for _, name := range exportNames {
+		c.pushString(name)
+		c.emitOp4(bytecode.OP_LOAD, c.constString(name))
+	}
+	c.emitOp4(bytecode.OP_MAKE_OBJ, uint32(len(exportNames)))
+	c.emitOp4(bytecode.OP_STORE_NEW, c.constString(defaultName))
+	if n.TypeAnnotation != "" && n.TypeAnnotation != defaultName {
+		// Alias also points at the same namespace object.
+		c.emitOp4(bytecode.OP_LOAD, c.constString(defaultName))
+		c.emitOp4(bytecode.OP_STORE_NEW, c.constString(n.TypeAnnotation))
+	}
+}
 
 // compilePipeForward compiles: expr |> fn
 // Semantics: equivalent to fn(expr) — passes LHS as the first argument to RHS.

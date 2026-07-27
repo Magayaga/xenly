@@ -36,6 +36,7 @@ const (
 	TypeInstance
 	TypeVariant
 	TypeIterator
+	TypeNative // opaque Go handle (thread pool, future, channel, ...)
 )
 
 // Value is a dynamically typed runtime value.
@@ -53,6 +54,8 @@ type Value struct {
 	VarTag    string   // for TypeVariant
 	VarFields []*Value // for TypeVariant
 	IterVal   *IterVal
+	Native     any    // opaque Go handle, for TypeNative
+	NativeKind string // "pool" | "future" | "channel", for TypeNative
 }
 
 // BuiltinFn is the signature for native built-in functions.
@@ -164,9 +167,35 @@ func Array(items []*Value) *Value {
 	}
 	return &Value{Tag: TypeArray, ArrayVal: items}
 }
+func newValueMap(sizeHint int) map[string]*Value {
+	if sizeHint < 0 {
+		sizeHint = 0
+	}
+	// Go gives each map an unpredictable hash seed. Keeping VM object tables
+	// behind this constructor makes that randomized-hash-table property explicit
+	// for user-controlled property names and helps avoid collision-based DoS.
+	return make(map[string]*Value, sizeHint)
+}
+
+func newEnvEntryMap(sizeHint int) map[string]*envEntry {
+	if sizeHint < 0 {
+		sizeHint = 0
+	}
+	// Environment overflow tables also receive Go's per-map random hash seed.
+	return make(map[string]*envEntry, sizeHint)
+}
+
+func newMethodMap(sizeHint int) map[string]*FunctionVal {
+	if sizeHint < 0 {
+		sizeHint = 0
+	}
+	// Method lookup tables are randomized maps too, protecting class member names.
+	return make(map[string]*FunctionVal, sizeHint)
+}
+
 func Object(m map[string]*Value) *Value {
 	if m == nil {
-		m = make(map[string]*Value)
+		m = newValueMap(0)
 	}
 	return &Value{Tag: TypeObject, ObjVal: m}
 }
@@ -218,7 +247,7 @@ func (v *Value) Clone() *Value {
 		if v.ObjVal == nil {
 			return Object(nil)
 		}
-		cloned := make(map[string]*Value)
+		cloned := newValueMap(len(v.ObjVal))
 		for k, val := range v.ObjVal {
 			cloned[k] = val.Clone()
 		}
@@ -241,12 +270,20 @@ func (v *Value) Clone() *Value {
 			Tag:      TypeClass,
 			ClassVal: v.ClassVal,
 		}
+	case TypeNative:
+		// Native handles (thread pools, futures, channels) are reference
+		// types — cloning must share the same underlying handle.
+		return &Value{
+			Tag:        TypeNative,
+			Native:     v.Native,
+			NativeKind: v.NativeKind,
+		}
 	case TypeInstance:
 		// Deep clone instance fields
 		if v.InstVal == nil {
 			return &Value{Tag: TypeInstance, InstVal: nil}
 		}
-		clonedFields := make(map[string]*Value)
+		clonedFields := newValueMap(len(v.InstVal.Fields))
 		for k, val := range v.InstVal.Fields {
 			clonedFields[k] = val.Clone()
 		}
@@ -415,6 +452,8 @@ func (v *Value) String() string {
 			parts[i] = f.String()
 		}
 		return fmt.Sprintf("%s(%s)", v.VarTag, strings.Join(parts, ", "))
+	case TypeNative:
+		return fmt.Sprintf("<%s>", v.NativeKind)
 	}
 	return "?"
 }
@@ -448,6 +487,8 @@ func (v *Value) TypeName() string {
 		return "object"
 	case TypeVariant:
 		return v.VarTag
+	case TypeNative:
+		return v.NativeKind
 	}
 	return "unknown"
 }
@@ -475,6 +516,12 @@ type Env struct {
 	flatLen  int
 	overflow map[string]*envEntry
 	parent   *Env
+	// escaped is set once any closure captures this Env (or a descendant
+	// that chains up through it) as part of its Closure field. An escaped
+	// Env must never be returned to envPool — a live closure still holds a
+	// pointer to it, and recycling it would let an unrelated later call
+	// silently corrupt the closure's variables (or worse, its parent chain).
+	escaped bool
 }
 
 // NewEnv creates a new environment with the given parent scope.
@@ -507,7 +554,7 @@ func (e *Env) Define(name string, val *Value, isConst bool) {
 		return
 	}
 	if e.overflow == nil {
-		e.overflow = make(map[string]*envEntry, 8)
+		e.overflow = newEnvEntryMap(8)
 	}
 	e.overflow[name] = &envEntry{name: name, value: val, isConst: isConst}
 }

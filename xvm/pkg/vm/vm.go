@@ -74,6 +74,16 @@ var (
 )
 
 // NewXVM creates a new XVM from a compiled module.
+// markEnvEscaped marks e and every ancestor up the parent chain as escaped,
+// so none of them are ever recycled into envPool while a closure still
+// holds a live reference to one of them. Stops early at an already-escaped
+// env since its ancestors were necessarily marked when it was captured.
+func markEnvEscaped(e *Env) {
+	for ; e != nil && !e.escaped; e = e.parent {
+		e.escaped = true
+	}
+}
+
 func NewXVM(mod *bytecode.Module) *XVM {
 	xvm := &XVM{
 		module: mod,
@@ -81,7 +91,8 @@ func NewXVM(mod *bytecode.Module) *XVM {
 		reader: bufio.NewReader(os.Stdin),
 	}
 	xvm.buildPoolCaches()
-	RegisterBuiltins(xvm.global)
+	RegisterBuiltins(xvm.global, xvm)
+	RegisterMultiprocBuiltins(xvm.global, xvm)
 	xvm.buildFunctions()
 	xvm.buildClasses()
 	return xvm
@@ -135,7 +146,7 @@ func (xvm *XVM) buildClasses() {
 	for i, cd := range xvm.module.Classes {
 		xvm.classes[i] = &ClassVal{
 			Name:    xvm.poolStr(cd.NameIdx),
-			Methods: make(map[string]*FunctionVal),
+			Methods: newMethodMap(len(cd.Methods)),
 		}
 	}
 	for i, cd := range xvm.module.Classes {
@@ -491,20 +502,23 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			e := envPool.Get().(*Env)
 			e.flatLen = 0
 			e.overflow = nil
+			e.escaped = false
 			e.parent = currentEnv()
 			scopes = append(scopes, e)
 		case bytecode.OP_POP_SCOPE:
 			if len(scopes) > 1 {
 				old := scopes[len(scopes)-1]
 				scopes = scopes[:len(scopes)-1]
-				// Return scope to pool — clear references first.
-				for i := 0; i < old.flatLen; i++ {
-					old.flat[i].value = nil
-					old.flat[i].name = ""
+				if !old.escaped {
+					// Safe to recycle — no closure captured this scope.
+					for i := 0; i < old.flatLen; i++ {
+						old.flat[i].value = nil
+						old.flat[i].name = ""
+					}
+					old.overflow = nil
+					old.parent = nil
+					envPool.Put(old)
 				}
-				old.overflow = nil
-				old.parent = nil
-				envPool.Put(old)
 			}
 
 		// ── Functions ────────────────────────────────────────────────────────
@@ -513,12 +527,14 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			if int(idx) < len(xvm.fns) {
 				fn := xvm.fns[idx]
 				// Always capture current environment for proper closure behavior
+				env := currentEnv()
+				markEnvEscaped(env)
 				closure := &FunctionVal{
 					Name:    fn.Name,
 					Params:  fn.Params,
 					Code:    fn.Code,
 					IsAsync: fn.IsAsync,
-					Closure: currentEnv(),
+					Closure: env,
 				}
 				push(&Value{Tag: TypeFunction, FnVal: closure})
 			} else {
@@ -528,12 +544,14 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 			idx := readU32(&ip)
 			if int(idx) < len(xvm.fns) {
 				fn := xvm.fns[idx]
+				env := currentEnv()
+				markEnvEscaped(env)
 				closure := &FunctionVal{
 					Name:    fn.Name,
 					Params:  fn.Params,
 					Code:    fn.Code,
 					IsAsync: fn.IsAsync,
-					Closure: currentEnv(),
+					Closure: env,
 				}
 				push(&Value{Tag: TypeFunction, FnVal: closure})
 			} else {
@@ -616,7 +634,7 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 		// ── Objects ──────────────────────────────────────────────────────────
 		case bytecode.OP_MAKE_OBJ:
 			count := int(readU32(&ip))
-			m := make(map[string]*Value, count)
+			m := newValueMap(count)
 			// For small objects (≤ 8 pairs) use a stack-allocated array to
 			// collect pairs instead of heap-allocating a []*Value slice.
 			if count <= 8 {
@@ -661,6 +679,7 @@ func (xvm *XVM) exec(code []byte, env *Env, thisVal *Value, class *ClassVal) (*V
 				for _, fn := range cls.Methods {
 					if fn.Closure == nil {
 						fn.Closure = currentEnv()
+						markEnvEscaped(fn.Closure)
 					}
 				}
 				push(&Value{Tag: TypeClass, ClassVal: cls})
@@ -1035,16 +1054,15 @@ func (xvm *XVM) callFn(fn *FunctionVal, args []*Value, thisVal *Value, class *Cl
 	callEnv := envPool.Get().(*Env)
 	callEnv.flatLen = 0
 	callEnv.overflow = nil
+	callEnv.escaped = false
 	callEnv.parent = parent
 	xvm.bindArgs(fn, args, callEnv)
 	result, err := xvm.exec(fn.Code, callEnv, thisVal, class)
-	// Return the Env to the pool only when it has no closures that escaped.
-	// A simple heuristic: if the function returned a closure that captured
-	// callEnv we must NOT pool it (the closure still holds a pointer).
-	// We detect this conservatively: if the result is a function value with
-	// Closure == callEnv we skip pooling.
-	if result == nil || result.Tag != TypeFunction ||
-		result.FnVal == nil || result.FnVal.Closure != callEnv {
+	// Return the Env to the pool only if no closure created during this call
+	// captured it (tracked via markEnvEscaped at every closure-creation site —
+	// covers closures returned directly, embedded in a returned object/array,
+	// or escaped via any other route, not just the direct-return case).
+	if !callEnv.escaped {
 		// Safe to recycle — clear references to prevent GC retention.
 		for i := 0; i < callEnv.flatLen; i++ {
 			callEnv.flat[i].value = nil
@@ -1178,13 +1196,13 @@ func (xvm *XVM) propSet(obj *Value, name string, val *Value) {
 	switch obj.Tag {
 	case TypeObject:
 		if obj.ObjVal == nil {
-			obj.ObjVal = make(map[string]*Value)
+			obj.ObjVal = newValueMap(0)
 		}
 		obj.ObjVal[name] = val
 	case TypeInstance:
 		if obj.InstVal != nil {
 			if obj.InstVal.Fields == nil {
-				obj.InstVal.Fields = make(map[string]*Value)
+				obj.InstVal.Fields = newValueMap(0)
 			}
 			obj.InstVal.Fields[name] = val
 		}
@@ -1246,7 +1264,7 @@ func (xvm *XVM) indexSet(container *Value, idx *Value, val *Value) {
 		}
 	case TypeObject:
 		if container.ObjVal == nil {
-			container.ObjVal = make(map[string]*Value)
+			container.ObjVal = newValueMap(0)
 		}
 		container.ObjVal[idx.String()] = val
 	}
@@ -1272,7 +1290,7 @@ func (xvm *XVM) instantiateClassVal(cls *ClassVal, args []*Value) (*Value, error
 	}
 	inst := &InstanceVal{
 		Class:  cls,
-		Fields: make(map[string]*Value),
+		Fields: newValueMap(0),
 	}
 	instVal := &Value{Tag: TypeInstance, InstVal: inst}
 
@@ -1904,13 +1922,14 @@ func (xvm *XVM) objectMethod(obj *Value, name string, args []*Value) (*Value, bo
 // ─── Variant method dispatch ──────────────────────────────────────────────────
 // Implements the Optional / ADT API on TypeVariant values.
 // Supports the Some(x) / None pattern used in functional.xe and elsewhere:
-//   some.getOr(default)  →  inner value (Some) or default (None)
-//   some.isSome()        →  true if tag != "None"
-//   some.isNone()        →  true if tag == "None"
-//   some.unwrap()        →  inner value or runtime error on None
-//   some.orElse(fn)      →  self (Some) or fn() result (None)
-//   some.map(fn)         →  Some(fn(inner)) or None  (functor map)
-//   some.tag()           →  variant tag string
+//
+//	some.getOr(default)  →  inner value (Some) or default (None)
+//	some.isSome()        →  true if tag != "None"
+//	some.isNone()        →  true if tag == "None"
+//	some.unwrap()        →  inner value or runtime error on None
+//	some.orElse(fn)      →  self (Some) or fn() result (None)
+//	some.map(fn)         →  Some(fn(inner)) or None  (functor map)
+//	some.tag()           →  variant tag string
 func (xvm *XVM) variantMethod(v *Value, name string, args []*Value) (*Value, bool, error) {
 	isNone := v.VarTag == "None" || len(v.VarFields) == 0
 	switch name {
@@ -2031,7 +2050,7 @@ func (xvm *XVM) nullMethod(name string, args []*Value) (*Value, bool, error) {
 // Numbers and bools are always "present" values so they participate in Optional
 // chaining without any wrapping.  This makes code like:
 //
-//   const n = maybeNum.getOr(0)   // works whether maybeNum is a number or null
+//	const n = maybeNum.getOr(0)   // works whether maybeNum is a number or null
 //
 // work uniformly regardless of the runtime type.
 //
