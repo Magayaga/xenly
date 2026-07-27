@@ -4649,7 +4649,7 @@ static Value *num_chebyshev(Value **args, size_t argc) {
 /* Stubs for callback-based functions (real impl in interpreter.c call_module_fn) */
 static Value *num_stub(Value **args, size_t argc) { (void)args;(void)argc; return value_null(); }
 
-static NativeModFn numeric_fns[] = {
+static NativeFunc numeric_fns[] = {
     { "horner",       num_horner },
     { "polyEval",     num_horner },
     { "fastInvSqrt",  num_fastInvSqrt },
@@ -4686,7 +4686,8 @@ static Value *mat_create_fn(Value **a, size_t c) {
     return mcreate(r, co, c>=3?mv_dbl(a[2]):0.0);
 }
 static Value *mat_zeros_fn(Value **a, size_t c) {
-    size_t r=(size_t)mv_dbl(c>=1?a[0]:NULL), co=(size_t)mv_dbl(c>=2?a[1]:r);
+    size_t r=(size_t)mv_dbl(c>=1?a[0]:NULL);
+    size_t co=(c>=2)?((size_t)mv_dbl(a[1])):r;
     return mcreate(r, co, 0.0);
 }
 static Value *mat_eye_fn(Value **a, size_t c) {
@@ -4886,7 +4887,7 @@ static Value *mat_powerIter_fn(Value **a, size_t c) {
     free(v);free(w); return value_number(eigenval);
 }
 
-static NativeModFn matrix_fns[] = {
+static NativeFunc matrix_fns[] = {
     { "create",      mat_create_fn },
     { "zeros",       mat_zeros_fn },
     { "eye",         mat_eye_fn },
@@ -4926,7 +4927,7 @@ static Module module_matrix(void) {
  * ═══════════════════════════════════════════════════════════════════════════ */
 static Value *diff_stub(Value **args, size_t argc) { (void)args;(void)argc; return value_null(); }
 
-static NativeModFn diff_fns[] = {
+static NativeFunc diff_fns[] = {
     { "forward",    diff_stub },
     { "backward",   diff_stub },
     { "central",    diff_stub },
