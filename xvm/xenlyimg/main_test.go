@@ -34,7 +34,7 @@ func compileTestBytecode(t *testing.T, out string) {
 	if len(parseErrs) > 0 {
 		t.Fatalf("parse errors: %v", parseErrs)
 	}
-	mod, compErrs := compiler.NewCompiler().Compile(ast)
+	mod, compErrs := compiler.NewCompiler(".").Compile(ast)
 	if len(compErrs) > 0 {
 		t.Fatalf("compile errors: %v", compErrs)
 	}

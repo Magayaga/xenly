@@ -36,6 +36,7 @@ const (
 	TypeInstance
 	TypeVariant
 	TypeIterator
+	TypeNative // opaque Go handle (thread pool, future, channel, ...)
 )
 
 // Value is a dynamically typed runtime value.
@@ -53,6 +54,8 @@ type Value struct {
 	VarTag    string   // for TypeVariant
 	VarFields []*Value // for TypeVariant
 	IterVal   *IterVal
+	Native     any    // opaque Go handle, for TypeNative
+	NativeKind string // "pool" | "future" | "channel", for TypeNative
 }
 
 // BuiltinFn is the signature for native built-in functions.
@@ -267,6 +270,14 @@ func (v *Value) Clone() *Value {
 			Tag:      TypeClass,
 			ClassVal: v.ClassVal,
 		}
+	case TypeNative:
+		// Native handles (thread pools, futures, channels) are reference
+		// types — cloning must share the same underlying handle.
+		return &Value{
+			Tag:        TypeNative,
+			Native:     v.Native,
+			NativeKind: v.NativeKind,
+		}
 	case TypeInstance:
 		// Deep clone instance fields
 		if v.InstVal == nil {
@@ -441,6 +452,8 @@ func (v *Value) String() string {
 			parts[i] = f.String()
 		}
 		return fmt.Sprintf("%s(%s)", v.VarTag, strings.Join(parts, ", "))
+	case TypeNative:
+		return fmt.Sprintf("<%s>", v.NativeKind)
 	}
 	return "?"
 }
@@ -474,6 +487,8 @@ func (v *Value) TypeName() string {
 		return "object"
 	case TypeVariant:
 		return v.VarTag
+	case TypeNative:
+		return v.NativeKind
 	}
 	return "unknown"
 }
@@ -501,6 +516,12 @@ type Env struct {
 	flatLen  int
 	overflow map[string]*envEntry
 	parent   *Env
+	// escaped is set once any closure captures this Env (or a descendant
+	// that chains up through it) as part of its Closure field. An escaped
+	// Env must never be returned to envPool — a live closure still holds a
+	// pointer to it, and recycling it would let an unrelated later call
+	// silently corrupt the closure's variables (or worse, its parent chain).
+	escaped bool
 }
 
 // NewEnv creates a new environment with the given parent scope.

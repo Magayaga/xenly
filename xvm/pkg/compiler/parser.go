@@ -73,6 +73,43 @@ func (p *Parser) expect(t TokenType) (Token, error) {
 	return tok, fmt.Errorf("line %d: expected %v, got %q", tok.Line, t, tok.Lexeme)
 }
 
+// isNameLexeme reports whether s looks like a plain identifier (letters,
+// digits, underscore only). Keyword tokens carry their keyword text as
+// Lexeme, so this lets a keyword token double as a name.
+func isNameLexeme(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// isNameToken reports whether the current token can be used as a name
+// (variable, parameter, property, binding, etc.) — true for TOK_IDENT and
+// also for any keyword token whose lexeme is identifier-shaped (e.g. `input`,
+// `sleep`). Mirrors the C xenlyc parser's is_name_token/is_varname_token,
+// so code like `const input = ...` compiles the same way in both toolchains.
+func (p *Parser) isNameToken() bool {
+	tok := p.peek()
+	if tok.Type == TOK_IDENT {
+		return true
+	}
+	return isNameLexeme(tok.Lexeme)
+}
+
+// expectName consumes the current token as a name if isNameToken() allows it,
+// otherwise behaves like expect(TOK_IDENT) (producing the usual error).
+func (p *Parser) expectName() (Token, error) {
+	if p.isNameToken() {
+		return p.advance(), nil
+	}
+	return p.expect(TOK_IDENT)
+}
+
 func (p *Parser) errorf(format string, args ...interface{}) {
 	tok := p.peek()
 	msg := fmt.Sprintf("line %d: "+format, append([]interface{}{tok.Line}, args...)...)
@@ -162,6 +199,8 @@ func (p *Parser) parseStatement() *ASTNode {
 		return NewNode(NodeContinue, tok.Line)
 	case TOK_IMPORT:
 		return p.parseImport()
+	case TOK_FROM:
+		return p.parseImport()
 	case TOK_EXPORT:
 		return p.parseExport()
 	case TOK_NAMESPACE:
@@ -223,7 +262,7 @@ func (p *Parser) parseBlock() *ASTNode {
 func (p *Parser) parseVarDecl() *ASTNode {
 	tok := p.advance() // var or let
 	n := NewNode(NodeVarDecl, tok.Line)
-	nameTok, err := p.expect(TOK_IDENT)
+	nameTok, err := p.expectName()
 	if err != nil {
 		p.errors = append(p.errors, err.Error())
 		return nil
@@ -243,7 +282,7 @@ func (p *Parser) parseVarDecl() *ASTNode {
 func (p *Parser) parseConstDecl() *ASTNode {
 	tok := p.advance() // const
 	n := NewNode(NodeConstDecl, tok.Line)
-	nameTok, err := p.expect(TOK_IDENT)
+	nameTok, err := p.expectName()
 	if err != nil {
 		p.errors = append(p.errors, err.Error())
 		return nil
@@ -270,7 +309,7 @@ func (p *Parser) parseFnDecl(isAsync bool) *ASTNode {
 	n.IsAsync = isAsync
 
 	// Optional name
-	if p.check(TOK_IDENT) {
+	if p.isNameToken() {
 		n.StrVal = p.advance().Lexeme
 	}
 
@@ -322,7 +361,7 @@ func (p *Parser) parseFnParams() []*FnParam {
 		isRest := p.match(TOK_ELLIPSIS)
 		param.IsRest = isRest
 
-		if p.check(TOK_IDENT) {
+		if p.isNameToken() {
 			param.Name = p.advance().Lexeme
 		} else {
 			break
@@ -349,7 +388,7 @@ func (p *Parser) parseFnParams() []*FnParam {
 func (p *Parser) parseClassDecl() *ASTNode {
 	tok := p.advance() // class
 	n := NewNode(NodeClassDecl, tok.Line)
-	nameTok, err := p.expect(TOK_IDENT)
+	nameTok, err := p.expectName()
 	if err != nil {
 		p.errors = append(p.errors, err.Error())
 		return nil
@@ -461,7 +500,7 @@ func (p *Parser) parseMethodShorthand(isAsync bool) *ASTNode {
 func (p *Parser) parseEnumDecl() *ASTNode {
 	tok := p.advance() // enum
 	n := NewNode(NodeEnumDecl, tok.Line)
-	nameTok, err := p.expect(TOK_IDENT)
+	nameTok, err := p.expectName()
 	if err != nil {
 		p.errors = append(p.errors, err.Error())
 		return nil
@@ -474,7 +513,7 @@ func (p *Parser) parseEnumDecl() *ASTNode {
 			p.advance()
 			continue
 		}
-		variantTok, _ := p.expect(TOK_IDENT)
+		variantTok, _ := p.expectName()
 		variant := NewNode(NodeEnumVariant, variantTok.Line)
 		variant.StrVal = variantTok.Lexeme
 		if p.match(TOK_LPAREN) {
@@ -573,7 +612,7 @@ func (p *Parser) parseFor() *ASTNode {
 		if p.check(TOK_VAR) || p.check(TOK_LET) || p.check(TOK_CONST) {
 			p.advance()
 		}
-		varTok, _ := p.expect(TOK_IDENT)
+		varTok, _ := p.expectName()
 		n.StrVal = varTok.Lexeme
 		p.expect(TOK_IN)
 		n.AddChild(p.parseExpression())
@@ -717,12 +756,12 @@ func (p *Parser) parseInvariantStmt() *ASTNode {
 }
 
 func (p *Parser) parseImport() *ASTNode {
-	tok := p.advance() // import
+	tok := p.peek()
 	n := NewNode(NodeImport, tok.Line)
 
 	// from "module" import name1, name2
 	if p.check(TOK_FROM) {
-		p.advance()
+		p.advance() // from
 		pathTok, _ := p.expect(TOK_STRING)
 		n.StrVal = pathTok.Lexeme
 		p.expect(TOK_IMPORT)
@@ -730,7 +769,7 @@ func (p *Parser) parseImport() *ASTNode {
 			if p.check(TOK_STAR) {
 				p.advance()
 				if p.match(TOK_AS) {
-					aliasTok, _ := p.expect(TOK_IDENT)
+					aliasTok, _ := p.expectName()
 					child := IdentNode(aliasTok.Lexeme, aliasTok.Line)
 					child.StrVal = "*"
 					n.AddChild(child)
@@ -739,7 +778,7 @@ func (p *Parser) parseImport() *ASTNode {
 				nameTok := p.advance()
 				child := IdentNode(nameTok.Lexeme, nameTok.Line)
 				if p.match(TOK_AS) {
-					aliasTok, _ := p.expect(TOK_IDENT)
+					aliasTok, _ := p.expectName()
 					child.TypeAnnotation = aliasTok.Lexeme
 				}
 				n.AddChild(child)
@@ -750,10 +789,11 @@ func (p *Parser) parseImport() *ASTNode {
 		}
 	} else {
 		// import "module" [as alias]
+		p.advance() // import
 		pathTok, _ := p.expect(TOK_STRING)
 		n.StrVal = pathTok.Lexeme
 		if p.match(TOK_AS) {
-			aliasTok, _ := p.expect(TOK_IDENT)
+			aliasTok, _ := p.expectName()
 			n.TypeAnnotation = aliasTok.Lexeme
 		}
 	}
@@ -775,7 +815,7 @@ func (p *Parser) parseExport() *ASTNode {
 func (p *Parser) parseNamespace() *ASTNode {
 	tok := p.advance() // namespace
 	n := NewNode(NodeNamespace, tok.Line)
-	nameTok, _ := p.expect(TOK_IDENT)
+	nameTok, _ := p.expectName()
 	n.StrVal = nameTok.Lexeme
 	body := p.parseBlock()
 	n.AddChild(body)
@@ -785,7 +825,7 @@ func (p *Parser) parseNamespace() *ASTNode {
 func (p *Parser) parseTypeAlias() *ASTNode {
 	tok := p.advance() // type
 	n := NewNode(NodeTypeAlias, tok.Line)
-	nameTok, _ := p.expect(TOK_IDENT)
+	nameTok, _ := p.expectName()
 	n.StrVal = nameTok.Lexeme
 	p.expect(TOK_ASSIGN)
 	n.TypeAnnotation = p.parseTypeName()
@@ -1119,7 +1159,7 @@ func (p *Parser) parsePostfix() *ASTNode {
 		switch p.peek().Type {
 		case TOK_DOT:
 			tok := p.advance()
-			propTok, _ := p.expect(TOK_IDENT)
+			propTok, _ := p.expectName()
 			// Method call or property access
 			if p.check(TOK_LPAREN) {
 				n := NewNode(NodeMethodCall, tok.Line)
@@ -1243,7 +1283,20 @@ func (p *Parser) parsePrimary() *ASTNode {
 	case TOK_MATCH:
 		return p.parseMatch()
 	case TOK_INPUT:
+		if p.peekAt(1).Type != TOK_LPAREN {
+			// Not a call — treat as identifier (e.g. `const input = ...`,
+			// then `print(input)`), matching the C xenlyc parser.
+			t := p.advance()
+			return IdentNode(t.Lexeme, t.Line)
+		}
 		return p.parseInput()
+	case TOK_TYPE:
+		// 'type' is only special as a statement keyword (`type X = ...`
+		// aliases, parsed in parseStatement). In expression position — e.g.
+		// the built-in `type` reflection module (`type.isNumber(42)`) — it's
+		// just an identifier.
+		t := p.advance()
+		return IdentNode(t.Lexeme, t.Line)
 	case TOK_SLEEP:
 		return p.parseSleep()
 	case TOK_LBRACKET:
@@ -1268,7 +1321,7 @@ func (p *Parser) parsePrimary() *ASTNode {
 func (p *Parser) parseNew() *ASTNode {
 	tok := p.advance() // new
 	n := NewNode(NodeNew, tok.Line)
-	nameTok, _ := p.expect(TOK_IDENT)
+	nameTok, _ := p.expectName()
 	n.StrVal = nameTok.Lexeme
 	// Skip generic args
 	if p.check(TOK_LT) {
@@ -1320,7 +1373,14 @@ func (p *Parser) parseMatchArm() *ASTNode {
 	n := NewNode(NodeMatchArm, tok.Line)
 	n.AddChild(pat)
 	p.expect(TOK_FAT_ARROW)
-	n.AddChild(p.parseExpression())
+	if p.check(TOK_LBRACE) {
+		// Block-bodied arm: `pattern => { stmt; stmt; ... }`
+		// Parsed as statements (not an expression) so `return`, `if`, loops,
+		// etc. work inside a match arm the same way they do anywhere else.
+		n.AddChild(p.parseBlock())
+	} else {
+		n.AddChild(p.parseExpression())
+	}
 	return n
 }
 
@@ -1340,7 +1400,7 @@ func (p *Parser) parsePattern() *ASTNode {
 		n.StrVal = nameTok.Lexeme
 		if p.match(TOK_LPAREN) {
 			for !p.check(TOK_RPAREN) && !p.check(TOK_EOF) {
-				bindTok, _ := p.expect(TOK_IDENT)
+				bindTok, _ := p.expectName()
 				bind := IdentNode(bindTok.Lexeme, bindTok.Line)
 				n.AddChild(bind)
 				if !p.match(TOK_COMMA) {
@@ -1398,7 +1458,7 @@ func (p *Parser) parseObjectLiteral() *ASTNode {
 	n := NewNode(NodeObjectLiteral, tok.Line)
 	for !p.check(TOK_RBRACE) && !p.check(TOK_EOF) {
 		var key string
-		if p.check(TOK_IDENT) {
+		if p.isNameToken() {
 			key = p.advance().Lexeme
 		} else if p.check(TOK_STRING) {
 			key = p.advance().Lexeme
@@ -1550,6 +1610,19 @@ func (p *Parser) parseIdentOrCall() *ASTNode {
 
 func (p *Parser) parseTypeName() string {
 	var sb strings.Builder
+
+	// Array type as a prefix form: [T], [[T]], etc. — brackets containing
+	// the element type, used e.g. for return type annotations like
+	// `fn wrap<T>(value: T): [T] { ... }`.
+	if p.check(TOK_LBRACKET) {
+		sb.WriteString(p.advance().Lexeme) // [
+		sb.WriteString(p.parseTypeName())  // element type (recursive)
+		if p.check(TOK_RBRACKET) {
+			sb.WriteString(p.advance().Lexeme) // ]
+		}
+		return sb.String()
+	}
+
 	if p.check(TOK_IDENT) || isTypeKeyword(p.peek().Type) {
 		sb.WriteString(p.advance().Lexeme)
 	}
@@ -1569,7 +1642,7 @@ func (p *Parser) parseTypeName() string {
 			}
 		}
 	}
-	// Array type
+	// Array type — trailing '[]' suffix form: BaseType[]
 	for p.check(TOK_LBRACKET) {
 		sb.WriteString(p.advance().Lexeme)
 		if p.check(TOK_RBRACKET) {

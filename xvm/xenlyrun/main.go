@@ -249,7 +249,7 @@ func compileSource(path string) (*bytecode.Module, error) {
 		return nil, fmt.Errorf("parse errors in %s:\n  %s", path, strings.Join(parseErrs, "\n  "))
 	}
 
-	comp := compiler.NewCompiler()
+	comp := compiler.NewCompiler(filepath.Dir(path))
 	mod, compErrs := comp.Compile(ast)
 	if len(compErrs) > 0 {
 		return nil, fmt.Errorf("compile errors in %s:\n  %s", path, strings.Join(compErrs, "\n  "))
