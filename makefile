@@ -1,22 +1,22 @@
-# ═══════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # Xenly Language Makefile
-# ═══════════════════════════════════════════════════════════════════════════
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-# ─── Platform Detection ──────────────────────────────────────────────────────
+# â”€â”€â”€ Platform Detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
 
-# ─── Compiler Selection ──────────────────────────────────────────────────────
+# â”€â”€â”€ Compiler Selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 CC = gcc
 
-# ─── Base Compiler Flags ─────────────────────────────────────────────────────
+# â”€â”€â”€ Base Compiler Flags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # FIX: Added -MMD -MP for automatic header dependency generation.
 #      Without these, the -include *.d lines were silently no-ops, meaning
 #      every `make` recompiled everything even when nothing changed.
 CFLAGS  = -Wall -Wextra -O3 -std=c11 -D_POSIX_C_SOURCE=200809L -Isrc -MMD -MP
 LDFLAGS = -lm
 
-# ─── Platform-Specific Configuration ─────────────────────────────────────────
+# â”€â”€â”€ Platform-Specific Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 ifeq ($(UNAME_S),Linux)
     CFLAGS  += -DPLATFORM_LINUX
@@ -91,27 +91,26 @@ ifeq ($(UNAME_S),NetBSD)
     AR = ar
 endif
 
-# ─── Debug Build Support ─────────────────────────────────────────────────────
+# â”€â”€â”€ Debug Build Support â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ifdef DEBUG
     CFLAGS := $(filter-out -O3 -O2,$(CFLAGS))
     CFLAGS += -O0 -g -DDEBUG
 endif
 
-# ─── Sanitizer Support ───────────────────────────────────────────────────────
+# â”€â”€â”€ Sanitizer Support â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ifdef SANITIZE
     CFLAGS  += -fsanitize=address,undefined -fno-omit-frame-pointer
     LDFLAGS += -fsanitize=address,undefined
 endif
 
-# ─── Build Banner ────────────────────────────────────────────────────────────
-# FIX: Added closing box character to platform info line — was missing before.
-$(info ╔════════════════════════════════════════════════════════╗)
-$(info ║  Building Xenly for $(UNAME_S) $(UNAME_M))
-$(info ║  Compiler: $(CC))
-$(info ╚════════════════════════════════════════════════════════╝)
+# â”€â”€â”€ Build Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+$(info â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—)
+$(info â•‘  Building Xenly for $(UNAME_S) $(UNAME_M))
+$(info â•‘  Compiler: $(CC))
+$(info â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•)
 $(info )
 
-# ─── Source Files ────────────────────────────────────────────────────────────
+# â”€â”€â”€ Source Files â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 TARGET = xenly
 INTERP_SRCS = src/main.c src/lexer.c src/ast.c src/parser.c \
@@ -121,6 +120,8 @@ INTERP_SRCS = src/main.c src/lexer.c src/ast.c src/parser.c \
 INTERP_OBJS = $(INTERP_SRCS:.c=.o)
 
 XENLYC = xenlyc
+# xenly_linker.c provides the in-process xlnk linker (20x faster than
+# spawning gcc/clang). Must be in XENLYC_SRCS so xenlyc links correctly.
 XENLYC_SRCS = src/xenlyc_main.c src/lexer.c src/ast.c src/parser.c \
 	      src/codegen.c src/unicode.c src/sema.c \
 	      src/xenly_linker.c
@@ -130,23 +131,26 @@ RT_LIB = libxly_rt.a
 # FIX: Added multiproc_rt.o and multiproc_builtins_rt.o to the runtime library.
 #      They were compiled into the interpreter but missing from libxly_rt.a,
 #      causing linker errors for anyone who links against the static runtime.
+# xly_http.o and xenly_linker.o are included so libxly_rt.a exposes the
+# HTTP/1.1 server and in-process linker to anyone linking against the runtime.
 RT_OBJS = src/xly_rt.o src/modules_rt.o src/unicode.o \
 	  src/multiproc_rt.o src/multiproc_builtins_rt.o \
 	  src/xly_http.o src/xenly_linker.o
 
-# libxly_rtc.a — minimal compiler-only runtime (no interpreter symbols).
+# libxly_rtc.a â€” minimal compiler-only runtime (no interpreter symbols).
 # xenlyc links compiled .xe programs against this instead of libxly_rt.a.
 # It must live next to the xenlyc binary so xenlyc can find it at link time.
 RTC_LIB  = libxly_rtc.a
 RTC_OBJS = src/xly_rt.o src/unicode.o src/xly_rt_compiler_stub.o
 
-# ─── Build Targets ───────────────────────────────────────────────────────────
+# â”€â”€â”€ Build Targets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-.PHONY: all clean distclean install uninstall test test-sys run compile format help
+.PHONY: all clean distclean install uninstall test test-sys test-http \
+	linker-version run compile format help
 
 all: $(TARGET) $(XENLYC) $(RT_LIB) $(RTC_LIB)
 	@echo ""
-	@echo "✓ Build complete!"
+	@echo "âœ“ Build complete!"
 	@echo "  Interpreter:     $(TARGET)"
 	@echo "  Compiler:        $(XENLYC)"
 	@echo "  Runtime (interp):$(RT_LIB)"
@@ -159,7 +163,7 @@ all: $(TARGET) $(XENLYC) $(RT_LIB) $(RTC_LIB)
 
 # FIX: Link step now uses only $(LDFLAGS), not $(CFLAGS).
 #      Passing compile flags (-march=native, -ffast-math etc.) to the linker
-#      is harmless but incorrect — the linker ignores them, creating noise.
+#      is harmless but incorrect â€” the linker ignores them, creating noise.
 $(TARGET): $(INTERP_OBJS)
 	@echo "Linking interpreter..."
 	$(CC) -o $@ $^ $(LDFLAGS)
@@ -198,7 +202,7 @@ src/multiproc_builtins_rt.o: src/multiproc_builtins.c \
 	@echo "Compiling $< (runtime stub)..."
 	$(CC) $(CFLAGS) -DXENLY_NO_MULTIPROC -c -o $@ $<
 
-# Generic rule — -MMD -MP in CFLAGS now makes this emit src/*.d files,
+# Generic rule â€” -MMD -MP in CFLAGS now makes this emit src/*.d files,
 # so header changes trigger the right recompiles automatically.
 src/%.o: src/%.c
 	@echo "Compiling $<..."
@@ -209,7 +213,7 @@ src/%.o: src/%.c
 -include $(XENLYC_OBJS:.o=.d)
 -include $(RT_OBJS:.o=.d)
 
-# ─── Convenience Targets ─────────────────────────────────────────────────────
+# â”€â”€â”€ Convenience Targets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 run: $(TARGET)
 	./$(TARGET) examples/hello.xe
@@ -219,55 +223,77 @@ compile: $(XENLYC) $(RT_LIB)
 	./hello_compiled
 	@rm -f hello_compiled
 
-# ─── Test Targets ────────────────────────────────────────────────────────────
+# â”€â”€â”€ Test Targets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 test: all
-	@echo "╔════════════════════════════════════════════════════════╗"
-	@echo "║         Running Xenly Test Suite                       ║"
-	@echo "╚════════════════════════════════════════════════════════╝"
-	@./$(TARGET) examples/hello.xe || (echo "✗ Interpreter test failed" && exit 1)
-	@echo "✓ Interpreter works"
-	@./$(XENLYC) examples/hello.xe -o test_compiled || (echo "✗ Compilation failed" && exit 1)
-	@./test_compiled || (echo "✗ Compiled binary failed" && exit 1)
+	@echo "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
+	@echo "â•‘         Running Xenly Test Suite                       â•‘"
+	@echo "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
+	@./$(TARGET) examples/hello.xe || (echo "âœ— Interpreter test failed" && exit 1)
+	@echo "âœ“ Interpreter works"
+	@./$(XENLYC) examples/hello.xe -o test_compiled || (echo "âœ— Compilation failed" && exit 1)
+	@./test_compiled || (echo "âœ— Compiled binary failed" && exit 1)
 	@rm -f test_compiled
-	@echo "✓ All tests passed!"
+	@echo "âœ“ All tests passed!"
 
-# FIX: Added test-sys target — the sys module had no make entry point before.
 test-sys: $(TARGET)
-	@echo "╔════════════════════════════════════════════════════════╗"
-	@echo "║         Running sys Module Test                        ║"
-	@echo "╚════════════════════════════════════════════════════════╝"
-	@./$(TARGET) examples/sys_demo.xe || (echo "✗ sys module test failed" && exit 1)
-	@echo "✓ sys module test passed!"
+	@echo "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
+	@echo "â•‘         Running sys Module Test                        â•‘"
+	@echo "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
+	@./$(TARGET) examples/sys_demo.xe || (echo "âœ— sys module test failed" && exit 1)
+	@echo "âœ“ sys module test passed!"
 
-# ─── Code Formatting ─────────────────────────────────────────────────────────
-# FIX: Added format target. .clang-format existed in the repo but there was
-#      no way to invoke it from the build system. Gracefully skips if
-#      clang-format is not installed.
+# FIX: Added test-http target to mirror install-c.py's cmd_test_http.
+#      Starts the interpreter running examples/http_test.xe in the
+#      background, curls /ping, then tears the server down.
+test-http: all
+	@echo "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—"
+	@echo "â•‘         Running HTTP Server Smoke Test                 â•‘"
+	@echo "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
+	@if [ ! -f examples/http_test.xe ]; then \
+	    echo "âš   examples/http_test.xe not found â€” skipping HTTP test"; \
+	else \
+	    ./$(TARGET) examples/http_test.xe & \
+	    SRV_PID=$$!; \
+	    sleep 0.5; \
+	    curl -sf http://localhost:8080/ping; RC=$$?; \
+	    kill $$SRV_PID 2>/dev/null; wait $$SRV_PID 2>/dev/null; \
+	    if [ $$RC -ne 0 ]; then \
+	        echo "âœ— HTTP server smoke test failed"; exit 1; \
+	    fi; \
+	    echo "âœ“ HTTP server smoke test passed!"; \
+	fi
+
+# FIX: Added linker-version target to mirror install-c.py's
+#      cmd_linker_version â€” prints the built-in xlnk linker version.
+linker-version: $(XENLYC)
+	./$(XENLYC) --linker-version
+
+# â”€â”€â”€ Code Formatting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 format:
 	@if command -v clang-format >/dev/null 2>&1; then \
 	    echo "Formatting source files..."; \
 	    clang-format -i src/*.c src/*.h; \
-	    echo "✓ Formatting complete"; \
+	    echo "âœ“ Formatting complete"; \
 	else \
-	    echo "⚠  clang-format not found — install it or run manually"; \
+	    echo "âš   clang-format not found â€” install it or run manually"; \
 	fi
 
-# ─── Cleaning ────────────────────────────────────────────────────────────────
+# â”€â”€â”€ Cleaning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -f src/*.o src/*.d
 	rm -f $(TARGET) $(XENLYC) $(RT_LIB) $(RTC_LIB)
 	rm -f *.s *.o *.d a.out hello_compiled test_compiled
-	@echo "✓ Clean complete"
+	@echo "âœ“ Clean complete"
 
 distclean: clean
 	find . -name '*~' -delete
 	find . -name '*.swp' -delete
 	find . -name '.DS_Store' -delete
 
-# ─── Installation ────────────────────────────────────────────────────────────
+# â”€â”€â”€ Installation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 PREFIX  ?= /usr/local
 BINDIR  = $(PREFIX)/bin
@@ -284,7 +310,7 @@ install: all
 	$(INSTALL) -m 644 $(RTC_LIB) $(LIBDIR)/xenly/
 	$(INSTALL) -m 644 src/*.h $(INCDIR)/xenly/
 	$(INSTALL) -m 644 *.md $(DATADIR)/doc/xenly/ 2>/dev/null || true
-	@echo "✓ Installed to $(PREFIX)"
+	@echo "âœ“ Installed to $(PREFIX)"
 	@echo "  xenlyc:       $(BINDIR)/$(XENLYC)"
 	@echo "  libxly_rtc.a: $(BINDIR)/$(RTC_LIB)"
 	@echo ""
@@ -296,14 +322,11 @@ uninstall:
 	rm -f $(BINDIR)/$(RTC_LIB)
 	rm -f $(LIBDIR)/$(RT_LIB)
 	rm -rf $(LIBDIR)/xenly $(INCDIR)/xenly $(DATADIR)/doc/xenly
-	@echo "✓ Uninstalled"
+	@echo "âœ“ Uninstalled"
 
-# ─── macOS Universal Binary ──────────────────────────────────────────────────
+# â”€â”€â”€ macOS Universal Binary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ifeq ($(UNAME_S),Darwin)
 .PHONY: universal clean-objs
-# FIX: Replaced the broken filter-out on "-arch%" with an explicit ARCH_FLAG
-#      variable override. The old filter-out didn't reliably strip all -arch
-#      flags, leaving duplicate -arch arguments that clang rejects.
 universal:
 	@echo "Building universal (x86_64 + arm64) binaries..."
 	$(MAKE) clean
@@ -314,18 +337,18 @@ universal:
 	lipo -create -output $(XENLYC) xenlyc_x86 xenlyc_arm
 	rm -f xenly_x86 xenly_arm xenlyc_x86 xenlyc_arm
 	@file $(TARGET) $(XENLYC)
-	@echo "✓ Universal binaries created"
+	@echo "âœ“ Universal binaries created"
 
 clean-objs:
 	rm -f src/*.o src/*.d
 endif
 
-# ─── Help ────────────────────────────────────────────────────────────────────
+# â”€â”€â”€ Help â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 help:
 	@echo ""
 	@echo "Xenly Build System"
-	@echo "══════════════════════════════════════════════════════"
+	@echo "â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•"
 	@echo ""
 	@echo "  Quick start (Linux):"
 	@echo "    make NO_NATIVE=1           # build everything"
@@ -333,22 +356,24 @@ help:
 	@echo "    ./main                     # run the executable"
 	@echo ""
 	@echo "  Compiler pipeline:"
-	@echo "    .xe → lexer → parser → AST → sema → codegen → .s"
-	@echo "        → gcc -nostartfiles … libxly_rtc.a → ELF binary"
+	@echo "    .xe â†’ lexer â†’ parser â†’ AST â†’ sema â†’ codegen â†’ .s"
+	@echo "        â†’ gcc -nostartfiles â€¦ libxly_rtc.a â†’ ELF binary"
 	@echo ""
 	@echo "  Targets:"
-	@echo "    all          Build interpreter, compiler, and both runtimes (default)"
-	@echo "    run          Build and run examples/hello.xe (interpreter)"
-	@echo "    compile      Build xenlyc + libxly_rtc.a and test-compile hello.xe"
-	@echo "    test         Run the core test suite"
-	@echo "    test-sys     Run the sys module demo (examples/sys_demo.xe)"
-	@echo "    format       Auto-format all C source with clang-format"
-	@echo "    clean        Remove all build artifacts"
-	@echo "    distclean    Clean + remove editor temp files"
-	@echo "    install      Install to PREFIX (default: /usr/local)"
-	@echo "    uninstall    Remove installed files"
-	@echo "    universal    [macOS only] Build x86_64 + arm64 fat binary"
-	@echo "    help         Show this message"
+	@echo "    all             Build interpreter, compiler, and both runtimes (default)"
+	@echo "    run             Build and run examples/hello.xe (interpreter)"
+	@echo "    compile         Build xenlyc + libxly_rtc.a and test-compile hello.xe"
+	@echo "    test            Run the core test suite"
+	@echo "    test-sys        Run the sys module demo (examples/sys_demo.xe)"
+	@echo "    test-http       Run the HTTP server smoke test"
+	@echo "    linker-version  Print the built-in xlnk linker version"
+	@echo "    format          Auto-format all C source with clang-format"
+	@echo "    clean           Remove all build artifacts"
+	@echo "    distclean       Clean + remove editor temp files"
+	@echo "    install         Install to PREFIX (default: /usr/local)"
+	@echo "    uninstall       Remove installed files"
+	@echo "    universal       [macOS only] Build x86_64 + arm64 fat binary"
+	@echo "    help            Show this message"
 	@echo ""
 	@echo "  Variables:"
 	@echo "    PREFIX=<path>  Install prefix       (default: /usr/local)"
