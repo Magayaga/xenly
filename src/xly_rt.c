@@ -711,6 +711,47 @@ XlyVal *xly_array_contains(XlyVal *arr, XlyVal *val) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+ * MATRIX / NUMERIC / DIFF HELPERS  (shared by all three new compute modules)
+ * ══════════════════════════════════════════════════════════════════════════════ */
+
+static inline double xv_dbl(XlyVal *v) {
+    return (v && v->type == VAL_NUMBER) ? v->num : 0.0;
+}
+static inline double mat_get_rt(XlyVal *M, size_t i, size_t j) {
+    if (!M || M->type != VAL_ARRAY || i >= M->array_len) return 0.0;
+    XlyVal *row = M->array[i];
+    if (!row || row->type != VAL_ARRAY || j >= row->array_len) return 0.0;
+    return xv_dbl(row->array[j]);
+}
+static inline void mat_set_rt(XlyVal *M, size_t i, size_t j, double v) {
+    if (!M || M->type != VAL_ARRAY || i >= M->array_len) return;
+    XlyVal *row = M->array[i];
+    if (!row || row->type != VAL_ARRAY || j >= row->array_len) return;
+    row->array[j] = xly_num(v);
+}
+static XlyVal *mat_create_rt(size_t rows, size_t cols, double val) {
+    if (rows == 0 || cols == 0) return xly_array_create(NULL, 0);
+    XlyVal **row_arr = (XlyVal **)malloc(sizeof(XlyVal *) * rows);
+    for (size_t i = 0; i < rows; i++) {
+        XlyVal **col_arr = (XlyVal **)malloc(sizeof(XlyVal *) * cols);
+        for (size_t j = 0; j < cols; j++) col_arr[j] = xly_num(val);
+        row_arr[i] = xly_array_create(col_arr, cols);
+        free(col_arr);
+    }
+    XlyVal *M = xly_array_create(row_arr, rows);
+    free(row_arr);
+    return M;
+}
+static inline size_t mat_rows_rt(XlyVal *M) {
+    return (M && M->type == VAL_ARRAY) ? M->array_len : 0;
+}
+static inline size_t mat_cols_rt(XlyVal *M) {
+    if (!M || M->type != VAL_ARRAY || M->array_len == 0) return 0;
+    XlyVal *r = M->array[0];
+    return (r && r->type == VAL_ARRAY) ? r->array_len : 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
  * MODULE DISPATCH
  *
  * Bridges compiled code → the same 160+ module functions the interpreter uses.
@@ -1528,6 +1569,649 @@ XlyVal *xly_call_module(const char *mod, const char *fn,
         }
         if (strcmp(fn, "degrees") == 0) return xly_num(n0 * 180.0 / M_PI);
         if (strcmp(fn, "radians") == 0) return xly_num(n0 * M_PI / 180.0);
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+     * NUMERIC MODULE — fast numerical methods
+     * horner, fastInvSqrt, lagrange, chebyshev, dot, cross, norm1/2/Inf,
+     * bisect, secant, newton, integrate(simpson), trapezoid, romberg
+     * ══════════════════════════════════════════════════════════════════════ */
+    if (strcmp(mod, "numeric") == 0) {
+        XlyVal *a0 = argc >= 1 ? args[0] : NULL;
+        XlyVal *a1 = argc >= 2 ? args[1] : NULL;
+        XlyVal *a2 = argc >= 3 ? args[2] : NULL;
+        XlyVal *a3 = argc >= 4 ? args[3] : NULL;
+        double n0 = (a0 && a0->type == VAL_NUMBER) ? a0->num : 0.0;
+        double n1 = (a1 && a1->type == VAL_NUMBER) ? a1->num : 0.0;
+        double n2 = (a2 && a2->type == VAL_NUMBER) ? a2->num : 0.0;
+
+        /* --- Non-callback numeric functions --- */
+
+        /* numeric.horner(coeffs, x) — Horner's method polynomial eval
+         * coeffs = [a_n, ..., a_1, a_0] (highest degree first)           */
+        if (strcmp(fn, "horner") == 0 || strcmp(fn, "polyEval") == 0) {
+            if (!a0 || a0->type != VAL_ARRAY) return xly_num(0.0);
+            double x = n1, r = 0.0;
+            for (size_t k = 0; k < a0->array_len; k++)
+                r = r * x + xv_dbl(a0->array[k]);
+            return xly_num(r);
+        }
+        /* numeric.fastInvSqrt(x) — fast inverse sqrt (Quake III, 2 NR iters) */
+        if (strcmp(fn, "fastInvSqrt") == 0) {
+            float x = (float)n0, x2 = x * 0.5f;
+            union { float f; uint32_t i; } u;
+            u.f = x; u.i = 0x5f3759dfU - (u.i >> 1);
+            u.f *= (1.5f - x2 * u.f * u.f);
+            u.f *= (1.5f - x2 * u.f * u.f);
+            return xly_num((double)u.f);
+        }
+        /* numeric.dot(a, b) */
+        if (strcmp(fn, "dot") == 0) {
+            if (!a0 || !a1 || a0->type != VAL_ARRAY || a1->type != VAL_ARRAY) return xly_num(0.0);
+            size_t n = a0->array_len < a1->array_len ? a0->array_len : a1->array_len;
+            double s = 0.0;
+            for (size_t k = 0; k < n; k++) s += xv_dbl(a0->array[k]) * xv_dbl(a1->array[k]);
+            return xly_num(s);
+        }
+        /* numeric.cross(a, b) — 3-D cross product */
+        if (strcmp(fn, "cross") == 0) {
+            if (!a0 || !a1 || a0->type != VAL_ARRAY || a1->type != VAL_ARRAY ||
+                a0->array_len < 3 || a1->array_len < 3) return xly_null();
+            double ax=xv_dbl(a0->array[0]),ay=xv_dbl(a0->array[1]),az=xv_dbl(a0->array[2]);
+            double bx=xv_dbl(a1->array[0]),by=xv_dbl(a1->array[1]),bz=xv_dbl(a1->array[2]);
+            XlyVal *e[3]={xly_num(ay*bz-az*by),xly_num(az*bx-ax*bz),xly_num(ax*by-ay*bx)};
+            return xly_array_create(e, 3);
+        }
+        /* numeric.norm1/norm2/normInf(arr) */
+        if (strcmp(fn, "norm1") == 0) {
+            if (!a0 || a0->type != VAL_ARRAY) return xly_num(0.0);
+            double s = 0.0;
+            for (size_t k=0; k<a0->array_len; k++) s += fabs(xv_dbl(a0->array[k]));
+            return xly_num(s);
+        }
+        if (strcmp(fn, "norm2") == 0 || strcmp(fn, "norm") == 0) {
+            if (!a0 || a0->type != VAL_ARRAY) return xly_num(0.0);
+            double s = 0.0;
+            for (size_t k=0; k<a0->array_len; k++) { double v=xv_dbl(a0->array[k]); s+=v*v; }
+            return xly_num(sqrt(s));
+        }
+        if (strcmp(fn, "normInf") == 0) {
+            if (!a0 || a0->type != VAL_ARRAY) return xly_num(0.0);
+            double m = 0.0;
+            for (size_t k=0; k<a0->array_len; k++) { double v=fabs(xv_dbl(a0->array[k])); if(v>m) m=v; }
+            return xly_num(m);
+        }
+        /* numeric.lagrange(xs, ys, x) — Lagrange interpolation */
+        if (strcmp(fn, "lagrange") == 0) {
+            if (!a0 || !a1 || a0->type != VAL_ARRAY || a1->type != VAL_ARRAY) return xly_num(0.0);
+            size_t nn = a0->array_len < a1->array_len ? a0->array_len : a1->array_len;
+            double x = n2, result = 0.0;
+            for (size_t i=0; i<nn; i++) {
+                double xi=xv_dbl(a0->array[i]), yi=xv_dbl(a1->array[i]), term=yi;
+                for (size_t j=0; j<nn; j++) {
+                    if (j==i) continue;
+                    double xj=xv_dbl(a0->array[j]), d=xi-xj;
+                    if (fabs(d)<1e-15) continue;
+                    term *= (x-xj)/d;
+                }
+                result += term;
+            }
+            return xly_num(result);
+        }
+        /* numeric.chebyshev(n, x) — Chebyshev polynomial T_n(x) */
+        if (strcmp(fn, "chebyshev") == 0) {
+            int ord=(int)n0; double x=n1;
+            if (ord==0) return xly_num(1.0);
+            if (ord==1) return xly_num(x);
+            double t0=1.0, t1=x, t2=0.0;
+            for (int i=2; i<=ord; i++) { t2=2.0*x*t1-t0; t0=t1; t1=t2; }
+            return xly_num(t2);
+        }
+
+        /* --- Callback-based numerical methods --- */
+
+        /* numeric.bisect(f, a, b, tol) — bisection root finding */
+        if (strcmp(fn, "bisect") == 0) {
+            if (!a0 || !a1 || !a2) return xly_num(NAN);
+            double lo=n1, hi=n2;
+            double tol=(a3&&a3->type==VAL_NUMBER)?a3->num:1e-10;
+            XlyVal *v; XlyVal *fv;
+            v=xly_num(lo); fv=xly_call_fnval(a0,&v,1); double flo=fv?fv->num:0.0;
+            v=xly_num(hi); fv=xly_call_fnval(a0,&v,1); double fhi=fv?fv->num:0.0;
+            if (flo*fhi>0) return xly_num(NAN);
+            for (int it=0; it<200; it++) {
+                double mid=(lo+hi)*0.5;
+                if ((hi-lo)<tol) return xly_num(mid);
+                v=xly_num(mid); fv=xly_call_fnval(a0,&v,1); double fm=fv?fv->num:0.0;
+                if (fm*flo<=0){hi=mid;fhi=fm;}else{lo=mid;flo=fm;}
+            }
+            return xly_num((lo+hi)*0.5);
+        }
+        /* numeric.secant(f, x0, x1, tol) — secant method */
+        if (strcmp(fn, "secant") == 0) {
+            if (!a0||!a1||!a2) return xly_num(NAN);
+            double x0=n1, x1=n2;
+            double tol=(a3&&a3->type==VAL_NUMBER)?a3->num:1e-10;
+            XlyVal *v; XlyVal *fv;
+            v=xly_num(x0); fv=xly_call_fnval(a0,&v,1); double f0=fv?fv->num:0.0;
+            for (int it=0; it<100; it++) {
+                v=xly_num(x1); fv=xly_call_fnval(a0,&v,1); double f1=fv?fv->num:0.0;
+                double denom=f1-f0;
+                if (fabs(denom)<1e-15) break;
+                double x2=x1-f1*(x1-x0)/denom;
+                if (fabs(x2-x1)<tol) return xly_num(x2);
+                x0=x1; f0=f1; x1=x2;
+            }
+            return xly_num(x1);
+        }
+        /* numeric.newton(f, df, x0, tol) — Newton-Raphson */
+        if (strcmp(fn, "newton") == 0) {
+            if (!a0||!a1||!a2) return xly_num(NAN);
+            double x=n2, tol=(a3&&a3->type==VAL_NUMBER)?a3->num:1e-10;
+            for (int it=0; it<100; it++) {
+                XlyVal *xv=xly_num(x);
+                XlyVal *fv=xly_call_fnval(a0,&xv,1); double fval=fv?fv->num:0.0;
+                xv=xly_num(x);
+                XlyVal *dfv=xly_call_fnval(a1,&xv,1); double dfval=dfv?dfv->num:1.0;
+                if (fabs(dfval)<1e-15) break;
+                double dx=fval/dfval; x-=dx;
+                if (fabs(dx)<tol) break;
+            }
+            return xly_num(x);
+        }
+        /* numeric.integrate(f, a, b, n) — Simpson's rule */
+        if (strcmp(fn, "integrate") == 0 || strcmp(fn, "simpson") == 0) {
+            if (!a0||!a1||!a2) return xly_num(0.0);
+            double lo=n1, hi=n2;
+            int n=(a3&&a3->type==VAL_NUMBER)?(int)a3->num:1000;
+            if (n%2!=0) n++;
+            double h=(hi-lo)/n;
+            XlyVal *v; XlyVal *fv;
+            v=xly_num(lo); fv=xly_call_fnval(a0,&v,1); double s=fv?fv->num:0.0;
+            v=xly_num(hi); fv=xly_call_fnval(a0,&v,1); s+=fv?fv->num:0.0;
+            for (int i=1; i<n; i++) {
+                v=xly_num(lo+i*h); fv=xly_call_fnval(a0,&v,1);
+                s+=(i%2==0?2.0:4.0)*(fv?fv->num:0.0);
+            }
+            return xly_num(s*h/3.0);
+        }
+        /* numeric.trapezoid(f, a, b, n) */
+        if (strcmp(fn, "trapezoid") == 0) {
+            if (!a0||!a1||!a2) return xly_num(0.0);
+            double lo=n1, hi=n2;
+            int n=(a3&&a3->type==VAL_NUMBER)?(int)a3->num:1000;
+            double h=(hi-lo)/n;
+            XlyVal *v; XlyVal *fv;
+            v=xly_num(lo); fv=xly_call_fnval(a0,&v,1); double s=fv?fv->num:0.0;
+            v=xly_num(hi); fv=xly_call_fnval(a0,&v,1); s+=fv?fv->num:0.0;
+            for (int i=1; i<n; i++) {
+                v=xly_num(lo+i*h); fv=xly_call_fnval(a0,&v,1);
+                s+=2.0*(fv?fv->num:0.0);
+            }
+            return xly_num(s*h*0.5);
+        }
+        /* numeric.romberg(f, a, b, depth) — Richardson extrapolation */
+        if (strcmp(fn, "romberg") == 0) {
+            if (!a0||!a1||!a2) return xly_num(0.0);
+            double lo=n1, hi=n2;
+            int md=(a3&&a3->type==VAL_NUMBER)?(int)a3->num:8;
+            if (md>16) md=16;
+            double R[16][16]; memset(R,0,sizeof(R));
+            XlyVal *v; XlyVal *fv;
+            v=xly_num(lo); fv=xly_call_fnval(a0,&v,1); double fa=fv?fv->num:0.0;
+            v=xly_num(hi); fv=xly_call_fnval(a0,&v,1); double fb=fv?fv->num:0.0;
+            R[0][0]=(hi-lo)*(fa+fb)*0.5;
+            for (int i=1; i<md; i++) {
+                int steps=1<<i; double hh=(hi-lo)/steps, inner=0.0;
+                for (int k=1; k<steps; k+=2) {
+                    v=xly_num(lo+k*hh); fv=xly_call_fnval(a0,&v,1);
+                    inner+=fv?fv->num:0.0;
+                }
+                R[i][0]=R[i-1][0]*0.5+inner*hh;
+                for (int j=1; j<=i; j++) {
+                    double p4=pow(4.0,(double)j);
+                    R[i][j]=(p4*R[i][j-1]-R[i-1][j-1])/(p4-1.0);
+                }
+                if (i>1&&fabs(R[i][i]-R[i-1][i-1])<1e-12) return xly_num(R[i][i]);
+            }
+            return xly_num(R[md-1][md-1]);
+        }
+        return xly_null();
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+     * MATRIX MODULE — create, mul, transpose, det, inv, solve, lu, rank,
+     *                  trace, norm, dot, matvec, scale, add, sub, eye,
+     *                  powerIter (dominant eigenvalue)
+     * ══════════════════════════════════════════════════════════════════════ */
+    if (strcmp(mod, "matrix") == 0) {
+        XlyVal *a0 = argc >= 1 ? args[0] : NULL;
+        XlyVal *a1 = argc >= 2 ? args[1] : NULL;
+        XlyVal *a2 = argc >= 3 ? args[2] : NULL;
+        XlyVal *a3 = argc >= 4 ? args[3] : NULL;
+
+        if (strcmp(fn, "create") == 0) {
+            size_t r=(size_t)(a0?a0->num:0), c=(size_t)(a1?a1->num:0);
+            return mat_create_rt(r, c, a2?a2->num:0.0);
+        }
+        if (strcmp(fn, "zeros") == 0) {
+            size_t r=(size_t)(a0?a0->num:0), c=(size_t)(a1?a1->num:r);
+            return mat_create_rt(r, c, 0.0);
+        }
+        if (strcmp(fn, "eye") == 0 || strcmp(fn, "identity") == 0) {
+            size_t n=(size_t)(a0?a0->num:0);
+            XlyVal *M=mat_create_rt(n,n,0.0);
+            for (size_t i=0;i<n;i++) mat_set_rt(M,i,i,1.0);
+            return M;
+        }
+        if (strcmp(fn, "rows") == 0) return xly_num((double)mat_rows_rt(a0));
+        if (strcmp(fn, "cols") == 0) return xly_num((double)mat_cols_rt(a0));
+        if (strcmp(fn, "get") == 0) {
+            size_t i=(size_t)(a1?a1->num:0), j=(size_t)(a2?a2->num:0);
+            return xly_num(mat_get_rt(a0,i,j));
+        }
+        if (strcmp(fn, "set") == 0) {
+            if (!a0) return xly_null();
+            mat_set_rt(a0,(size_t)(a1?a1->num:0),(size_t)(a2?a2->num:0),a3?a3->num:0.0);
+            return a0;
+        }
+        if (strcmp(fn, "transpose") == 0) {
+            size_t rows=mat_rows_rt(a0), cols=mat_cols_rt(a0);
+            XlyVal *T=mat_create_rt(cols,rows,0.0);
+            for (size_t i=0;i<rows;i++) for (size_t j=0;j<cols;j++) mat_set_rt(T,j,i,mat_get_rt(a0,i,j));
+            return T;
+        }
+        if (strcmp(fn, "add") == 0) {
+            size_t r=mat_rows_rt(a0), c=mat_cols_rt(a0);
+            XlyVal *C=mat_create_rt(r,c,0.0);
+            for (size_t i=0;i<r;i++) for (size_t j=0;j<c;j++) mat_set_rt(C,i,j,mat_get_rt(a0,i,j)+mat_get_rt(a1,i,j));
+            return C;
+        }
+        if (strcmp(fn, "sub") == 0) {
+            size_t r=mat_rows_rt(a0), c=mat_cols_rt(a0);
+            XlyVal *C=mat_create_rt(r,c,0.0);
+            for (size_t i=0;i<r;i++) for (size_t j=0;j<c;j++) mat_set_rt(C,i,j,mat_get_rt(a0,i,j)-mat_get_rt(a1,i,j));
+            return C;
+        }
+        if (strcmp(fn, "scale") == 0) {
+            size_t r=mat_rows_rt(a0), c=mat_cols_rt(a0);
+            double s=a1?a1->num:1.0;
+            XlyVal *C=mat_create_rt(r,c,0.0);
+            for (size_t i=0;i<r;i++) for (size_t j=0;j<c;j++) mat_set_rt(C,i,j,mat_get_rt(a0,i,j)*s);
+            return C;
+        }
+        if (strcmp(fn, "mul") == 0) {
+            size_t ra=mat_rows_rt(a0), ca=mat_cols_rt(a0), cb=mat_cols_rt(a1);
+            XlyVal *C=mat_create_rt(ra,cb,0.0);
+            for (size_t i=0;i<ra;i++) for (size_t j=0;j<cb;j++) {
+                double s=0.0;
+                for (size_t k=0;k<ca;k++) s+=mat_get_rt(a0,i,k)*mat_get_rt(a1,k,j);
+                mat_set_rt(C,i,j,s);
+            }
+            return C;
+        }
+        if (strcmp(fn, "matvec") == 0) {
+            if (!a0||!a1||a1->type!=VAL_ARRAY) return xly_null();
+            size_t rows=mat_rows_rt(a0), cols=a1->array_len;
+            XlyVal **out=(XlyVal**)malloc(sizeof(XlyVal*)*rows);
+            for (size_t i=0;i<rows;i++) {
+                double s=0.0;
+                for (size_t j=0;j<cols;j++) s+=mat_get_rt(a0,i,j)*xv_dbl(a1->array[j]);
+                out[i]=xly_num(s);
+            }
+            XlyVal *res=xly_array_create(out,rows); free(out); return res;
+        }
+        if (strcmp(fn, "dot") == 0) {
+            if (!a0||!a1||a0->type!=VAL_ARRAY||a1->type!=VAL_ARRAY) return xly_num(0.0);
+            size_t n=a0->array_len<a1->array_len?a0->array_len:a1->array_len;
+            double s=0.0;
+            for (size_t k=0;k<n;k++) s+=xv_dbl(a0->array[k])*xv_dbl(a1->array[k]);
+            return xly_num(s);
+        }
+        if (strcmp(fn, "trace") == 0) {
+            size_t n=mat_rows_rt(a0); double s=0.0;
+            for (size_t i=0;i<n;i++) s+=mat_get_rt(a0,i,i);
+            return xly_num(s);
+        }
+        if (strcmp(fn, "norm") == 0 || strcmp(fn, "fnorm") == 0) {
+            double s=0.0;
+            for (size_t i=0;i<mat_rows_rt(a0);i++) {
+                XlyVal *row=a0?a0->array[i]:NULL;
+                if (!row||row->type!=VAL_ARRAY) continue;
+                for (size_t j=0;j<row->array_len;j++) { double v=xv_dbl(row->array[j]); s+=v*v; }
+            }
+            return xly_num(sqrt(s));
+        }
+        if (strcmp(fn, "det") == 0) {
+            if (!a0||a0->type!=VAL_ARRAY) return xly_num(0.0);
+            size_t n=a0->array_len;
+            if (n==0) return xly_num(1.0);
+            double *M=(double*)malloc(sizeof(double)*n*n);
+            for (size_t i=0;i<n;i++) for (size_t j=0;j<n;j++) M[i*n+j]=mat_get_rt(a0,i,j);
+            double det=1.0; int sign=1;
+            for (size_t col=0;col<n;col++) {
+                size_t piv=col; double mx=fabs(M[col*n+col]);
+                for (size_t r=col+1;r<n;r++) if(fabs(M[r*n+col])>mx){mx=fabs(M[r*n+col]);piv=r;}
+                if (fabs(M[piv*n+col])<1e-12){free(M);return xly_num(0.0);}
+                if (piv!=col){for(size_t j=0;j<n;j++){double t=M[col*n+j];M[col*n+j]=M[piv*n+j];M[piv*n+j]=t;}sign=-sign;}
+                det*=M[col*n+col];
+                for (size_t r=col+1;r<n;r++){
+                    double f=M[r*n+col]/M[col*n+col];
+                    for (size_t j=col;j<n;j++) M[r*n+j]-=f*M[col*n+j];
+                }
+            }
+            free(M); return xly_num(det*sign);
+        }
+        if (strcmp(fn, "inv") == 0 || strcmp(fn, "inverse") == 0) {
+            if (!a0||a0->type!=VAL_ARRAY) return xly_null();
+            size_t n=a0->array_len;
+            double *F=(double*)malloc(sizeof(double)*n*(2*n));
+            for (size_t i=0;i<n;i++){
+                for (size_t j=0;j<n;j++) F[i*(2*n)+j]=mat_get_rt(a0,i,j);
+                for (size_t j=0;j<n;j++) F[i*(2*n)+n+j]=(i==j)?1.0:0.0;
+            }
+            for (size_t col=0;col<n;col++){
+                size_t piv=col; double mx=fabs(F[col*(2*n)+col]);
+                for (size_t r=col+1;r<n;r++) if(fabs(F[r*(2*n)+col])>mx){mx=fabs(F[r*(2*n)+col]);piv=r;}
+                if (piv!=col) for(size_t j=0;j<2*n;j++){double t=F[col*(2*n)+j];F[col*(2*n)+j]=F[piv*(2*n)+j];F[piv*(2*n)+j]=t;}
+                double d=F[col*(2*n)+col];
+                if (fabs(d)<1e-12){free(F);return xly_null();}
+                for (size_t j=0;j<2*n;j++) F[col*(2*n)+j]/=d;
+                for (size_t r=0;r<n;r++){
+                    if (r==col) continue;
+                    double f=F[r*(2*n)+col];
+                    for (size_t j=0;j<2*n;j++) F[r*(2*n)+j]-=f*F[col*(2*n)+j];
+                }
+            }
+            XlyVal *inv=mat_create_rt(n,n,0.0);
+            for (size_t i=0;i<n;i++) for (size_t j=0;j<n;j++) mat_set_rt(inv,i,j,F[i*(2*n)+n+j]);
+            free(F); return inv;
+        }
+        if (strcmp(fn, "solve") == 0) {
+            if (!a0||!a1||a0->type!=VAL_ARRAY||a1->type!=VAL_ARRAY) return xly_null();
+            size_t n=a0->array_len;
+            double *M=(double*)malloc(sizeof(double)*n*(n+1));
+            for (size_t i=0;i<n;i++){
+                for (size_t j=0;j<n;j++) M[i*(n+1)+j]=mat_get_rt(a0,i,j);
+                M[i*(n+1)+n]=(i<a1->array_len)?xv_dbl(a1->array[i]):0.0;
+            }
+            for (size_t col=0;col<n;col++){
+                size_t piv=col; double mx=fabs(M[col*(n+1)+col]);
+                for (size_t r=col+1;r<n;r++) if(fabs(M[r*(n+1)+col])>mx){mx=fabs(M[r*(n+1)+col]);piv=r;}
+                if (piv!=col) for(size_t j=0;j<=n;j++){double t=M[col*(n+1)+j];M[col*(n+1)+j]=M[piv*(n+1)+j];M[piv*(n+1)+j]=t;}
+                if (fabs(M[col*(n+1)+col])<1e-12){free(M);return xly_null();}
+                for (size_t r=col+1;r<n;r++){
+                    double f=M[r*(n+1)+col]/M[col*(n+1)+col];
+                    for (size_t j=col;j<=n;j++) M[r*(n+1)+j]-=f*M[col*(n+1)+j];
+                }
+            }
+            XlyVal **xarr=(XlyVal**)malloc(sizeof(XlyVal*)*n);
+            for (int i=(int)n-1;i>=0;i--){
+                double s=M[i*(n+1)+n];
+                for (size_t j=(size_t)i+1;j<n;j++) s-=M[i*(n+1)+j]*xarr[j]->num;
+                xarr[i]=xly_num(s/M[i*(n+1)+i]);
+            }
+            XlyVal *x=xly_array_create(xarr,n); free(M); free(xarr); return x;
+        }
+        if (strcmp(fn, "lu") == 0) {
+            if (!a0||a0->type!=VAL_ARRAY) return xly_null();
+            size_t n=a0->array_len;
+            XlyVal *L=mat_create_rt(n,n,0.0), *U=mat_create_rt(n,n,0.0);
+            for (size_t i=0;i<n;i++) for (size_t j=0;j<n;j++) mat_set_rt(U,i,j,mat_get_rt(a0,i,j));
+            for (size_t i=0;i<n;i++) mat_set_rt(L,i,i,1.0);
+            for (size_t k=0;k<n;k++) for (size_t i=k+1;i<n;i++){
+                double ukk=mat_get_rt(U,k,k);
+                if (fabs(ukk)<1e-15) continue;
+                double f=mat_get_rt(U,i,k)/ukk;
+                mat_set_rt(L,i,k,f);
+                for (size_t j=k;j<n;j++) mat_set_rt(U,i,j,mat_get_rt(U,i,j)-f*mat_get_rt(U,k,j));
+            }
+            XlyVal *res[2]={L,U}; return xly_array_create(res,2);
+        }
+        if (strcmp(fn, "rank") == 0) {
+            if (!a0||a0->type!=VAL_ARRAY) return xly_num(0);
+            size_t rows=mat_rows_rt(a0), cols=mat_cols_rt(a0);
+            double *M=(double*)malloc(sizeof(double)*rows*cols);
+            for (size_t i=0;i<rows;i++) for (size_t j=0;j<cols;j++) M[i*cols+j]=mat_get_rt(a0,i,j);
+            size_t rank=0, row=0;
+            for (size_t col=0;col<cols&&row<rows;col++){
+                size_t piv=row; double mx=fabs(M[row*cols+col]);
+                for (size_t r=row+1;r<rows;r++) if(fabs(M[r*cols+col])>mx){mx=fabs(M[r*cols+col]);piv=r;}
+                if (mx<1e-10) continue;
+                if (piv!=row) for(size_t j=0;j<cols;j++){double t=M[row*cols+j];M[row*cols+j]=M[piv*cols+j];M[piv*cols+j]=t;}
+                for (size_t r=row+1;r<rows;r++){
+                    double f=M[r*cols+col]/M[row*cols+col];
+                    for (size_t j=col;j<cols;j++) M[r*cols+j]-=f*M[row*cols+j];
+                }
+                rank++; row++;
+            }
+            free(M); return xly_num((double)rank);
+        }
+        /* matrix.powerIter(A, iters) — dominant eigenvalue via power iteration */
+        if (strcmp(fn, "powerIter") == 0) {
+            if (!a0||a0->type!=VAL_ARRAY) return xly_null();
+            size_t n=mat_rows_rt(a0);
+            int iters=(a1&&a1->type==VAL_NUMBER)?(int)a1->num:100;
+            double *v=(double*)calloc(n,sizeof(double));
+            double *w=(double*)malloc(n*sizeof(double));
+            v[0]=1.0; double eigenval=0.0;
+            for (int it=0;it<iters;it++){
+                for (size_t i=0;i<n;i++){
+                    w[i]=0.0;
+                    for (size_t j=0;j<n;j++) w[i]+=mat_get_rt(a0,i,j)*v[j];
+                }
+                eigenval=w[0]; double mx=fabs(w[0]);
+                for (size_t i=1;i<n;i++) if(fabs(w[i])>mx){mx=fabs(w[i]);eigenval=w[i];}
+                if (mx<1e-15) break;
+                for (size_t i=0;i<n;i++) v[i]=w[i]/eigenval;
+            }
+            free(v); free(w); return xly_num(eigenval);
+        }
+        return xly_null();
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+     * DIFF MODULE — numerical differentiation and calculus
+     * forward, backward, central(=deriv=d), second(=d2), nth,
+     * partial, gradient(=grad), hessian, jacobian, taylor
+     * ══════════════════════════════════════════════════════════════════════ */
+    if (strcmp(mod, "diff") == 0) {
+        XlyVal *a0 = argc >= 1 ? args[0] : NULL;
+        XlyVal *a1 = argc >= 2 ? args[1] : NULL;
+        XlyVal *a2 = argc >= 3 ? args[2] : NULL;
+        XlyVal *a3 = argc >= 4 ? args[3] : NULL;
+        double n1 = (a1 && a1->type == VAL_NUMBER) ? a1->num : 0.0;
+        double n2 = (a2 && a2->type == VAL_NUMBER) ? a2->num : 0.0;
+
+        /* Helper lambda: call f at scalar x */
+        #define CALL1(fn_val, xval) ({ XlyVal *_xv=xly_num(xval); XlyVal *_r=xly_call_fnval(fn_val,&_xv,1); _r?_r->num:0.0; })
+
+        /* diff.forward(f, x, h) */
+        if (strcmp(fn, "forward") == 0) {
+            if (!a0) return xly_num(0.0);
+            double x=n1, h=(a2&&a2->type==VAL_NUMBER)?n2:1e-5;
+            XlyVal *v1=xly_num(x+h), *v2=xly_num(x);
+            double f1=(xly_call_fnval(a0,&v1,1))?xly_call_fnval(a0,&v1,1)->num:0.0;
+            double f2=(xly_call_fnval(a0,&v2,1))?xly_call_fnval(a0,&v2,1)->num:0.0;
+            v1=xly_num(x+h); XlyVal *r1=xly_call_fnval(a0,&v1,1); double fph=r1?r1->num:0.0;
+            v2=xly_num(x);   XlyVal *r2=xly_call_fnval(a0,&v2,1); double fx=r2?r2->num:0.0;
+            (void)f1;(void)f2;
+            return xly_num((fph-fx)/h);
+        }
+        /* diff.backward(f, x, h) */
+        if (strcmp(fn, "backward") == 0) {
+            if (!a0) return xly_num(0.0);
+            double x=n1, h=(a2&&a2->type==VAL_NUMBER)?n2:1e-5;
+            XlyVal *v1=xly_num(x), *v2=xly_num(x-h);
+            XlyVal *r1=xly_call_fnval(a0,&v1,1), *r2=xly_call_fnval(a0,&v2,1);
+            return xly_num(((r1?r1->num:0.0)-(r2?r2->num:0.0))/h);
+        }
+        /* diff.central / diff.deriv / diff.d — central difference O(h^2) */
+        if (strcmp(fn,"central")==0||strcmp(fn,"deriv")==0||strcmp(fn,"d")==0) {
+            if (!a0) return xly_num(0.0);
+            double x=n1, h=(a2&&a2->type==VAL_NUMBER)?n2:1e-5;
+            XlyVal *vp=xly_num(x+h), *vm=xly_num(x-h);
+            XlyVal *rp=xly_call_fnval(a0,&vp,1), *rm=xly_call_fnval(a0,&vm,1);
+            return xly_num(((rp?rp->num:0.0)-(rm?rm->num:0.0))/(2.0*h));
+        }
+        /* diff.second / diff.d2 */
+        if (strcmp(fn,"second")==0||strcmp(fn,"d2")==0) {
+            if (!a0) return xly_num(0.0);
+            double x=n1, h=(a2&&a2->type==VAL_NUMBER)?n2:1e-4;
+            XlyVal *vp=xly_num(x+h),*v0=xly_num(x),*vm=xly_num(x-h);
+            XlyVal *rp=xly_call_fnval(a0,&vp,1),*r0=xly_call_fnval(a0,&v0,1),*rm=xly_call_fnval(a0,&vm,1);
+            return xly_num(((rp?rp->num:0.0)-2.0*(r0?r0->num:0.0)+(rm?rm->num:0.0))/(h*h));
+        }
+        /* diff.nth(f, x, order, h) — nth derivative via forward differences */
+        if (strcmp(fn, "nth") == 0) {
+            if (!a0) return xly_num(0.0);
+            double x=n1;
+            int ord=(int)(a2?a2->num:1);
+            double h=(a3&&a3->type==VAL_NUMBER)?a3->num:1e-3;
+            if (ord<0||ord>30) return xly_num(NAN);
+            double binom[31]; binom[0]=1.0;
+            for (int i=1;i<=ord;i++) binom[i]=binom[i-1]*(ord-i+1.0)/i;
+            double result=0.0;
+            for (int k=0;k<=ord;k++){
+                XlyVal *xv=xly_num(x+k*h); XlyVal *fv=xly_call_fnval(a0,&xv,1);
+                double sign=((ord-k)%2==0)?1.0:-1.0;
+                result+=sign*binom[k]*(fv?fv->num:0.0);
+            }
+            return xly_num(result/pow(h,(double)ord));
+        }
+        /* diff.partial(f, xs, i, h) — partial ∂f/∂x_i at point xs (f takes array) */
+        if (strcmp(fn, "partial") == 0) {
+            if (!a0||!a1||a1->type!=VAL_ARRAY) return xly_num(0.0);
+            size_t idx=(size_t)(a2?a2->num:0);
+            double h=(a3&&a3->type==VAL_NUMBER)?a3->num:1e-5;
+            size_t dim=a1->array_len;
+            XlyVal **xsp=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+            XlyVal **xsm=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+            for (size_t k=0;k<dim;k++){
+                double val=xv_dbl(a1->array[k]);
+                xsp[k]=xly_num(k==idx?val+h:val);
+                xsm[k]=xly_num(k==idx?val-h:val);
+            }
+            XlyVal *ap=xly_array_create(xsp,dim); free(xsp);
+            XlyVal *am=xly_array_create(xsm,dim); free(xsm);
+            XlyVal *rp=xly_call_fnval(a0,&ap,1), *rm=xly_call_fnval(a0,&am,1);
+            return xly_num(((rp?rp->num:0.0)-(rm?rm->num:0.0))/(2.0*h));
+        }
+        /* diff.gradient / diff.grad — gradient ∇f at xs */
+        if (strcmp(fn,"gradient")==0||strcmp(fn,"grad")==0) {
+            if (!a0||!a1||a1->type!=VAL_ARRAY) return xly_null();
+            size_t dim=a1->array_len;
+            double h=(a2&&a2->type==VAL_NUMBER)?n2:1e-5;
+            XlyVal **grad=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+            for (size_t idx=0;idx<dim;idx++){
+                XlyVal **xsp=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+                XlyVal **xsm=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+                for (size_t k=0;k<dim;k++){
+                    double val=xv_dbl(a1->array[k]);
+                    xsp[k]=xly_num(k==idx?val+h:val);
+                    xsm[k]=xly_num(k==idx?val-h:val);
+                }
+                XlyVal *ap=xly_array_create(xsp,dim); free(xsp);
+                XlyVal *am=xly_array_create(xsm,dim); free(xsm);
+                XlyVal *rp=xly_call_fnval(a0,&ap,1), *rm=xly_call_fnval(a0,&am,1);
+                grad[idx]=xly_num(((rp?rp->num:0.0)-(rm?rm->num:0.0))/(2.0*h));
+            }
+            XlyVal *res=xly_array_create(grad,dim); free(grad); return res;
+        }
+        /* diff.hessian(f, xs, h) — Hessian matrix H_ij = ∂²f/∂xi∂xj */
+        if (strcmp(fn, "hessian") == 0) {
+            if (!a0||!a1||a1->type!=VAL_ARRAY) return xly_null();
+            size_t dim=a1->array_len;
+            double h=(a2&&a2->type==VAL_NUMBER)?n2:1e-4;
+            /* f(xs) baseline */
+            XlyVal *xs0=a1; XlyVal *f0v=xly_call_fnval(a0,&xs0,1); double f0=f0v?f0v->num:0.0;
+            XlyVal *H=mat_create_rt(dim,dim,0.0);
+            for (size_t i=0;i<dim;i++) for (size_t j=i;j<dim;j++){
+                double val;
+                if (i==j){
+                    XlyVal **xp=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+                    XlyVal **xm=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+                    for (size_t k=0;k<dim;k++){
+                        double v=xv_dbl(a1->array[k]);
+                        xp[k]=xly_num(k==i?v+h:v); xm[k]=xly_num(k==i?v-h:v);
+                    }
+                    XlyVal *ap=xly_array_create(xp,dim); free(xp);
+                    XlyVal *am=xly_array_create(xm,dim); free(xm);
+                    XlyVal *rp=xly_call_fnval(a0,&ap,1), *rm=xly_call_fnval(a0,&am,1);
+                    val=((rp?rp->num:0.0)-2.0*f0+(rm?rm->num:0.0))/(h*h);
+                } else {
+                    XlyVal **xpp=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+                    XlyVal **xpm=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+                    XlyVal **xmp=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+                    XlyVal **xmm=(XlyVal**)malloc(sizeof(XlyVal*)*dim);
+                    for (size_t k=0;k<dim;k++){
+                        double v=xv_dbl(a1->array[k]);
+                        xpp[k]=xly_num(k==i?v+h:(k==j?v+h:v));
+                        xpm[k]=xly_num(k==i?v+h:(k==j?v-h:v));
+                        xmp[k]=xly_num(k==i?v-h:(k==j?v+h:v));
+                        xmm[k]=xly_num(k==i?v-h:(k==j?v-h:v));
+                    }
+                    XlyVal *app=xly_array_create(xpp,dim);free(xpp);
+                    XlyVal *apm=xly_array_create(xpm,dim);free(xpm);
+                    XlyVal *amp=xly_array_create(xmp,dim);free(xmp);
+                    XlyVal *amm=xly_array_create(xmm,dim);free(xmm);
+                    XlyVal *rpp=xly_call_fnval(a0,&app,1);
+                    XlyVal *rpm=xly_call_fnval(a0,&apm,1);
+                    XlyVal *rmp=xly_call_fnval(a0,&amp,1);
+                    XlyVal *rmm=xly_call_fnval(a0,&amm,1);
+                    val=((rpp?rpp->num:0.0)-(rpm?rpm->num:0.0)-(rmp?rmp->num:0.0)+(rmm?rmm->num:0.0))/(4.0*h*h);
+                }
+                mat_set_rt(H,i,j,val); mat_set_rt(H,j,i,val);
+            }
+            return H;
+        }
+        /* diff.jacobian(fs, xs, h) — Jacobian matrix (fs = array of functions) */
+        if (strcmp(fn, "jacobian") == 0) {
+            if (!a0||!a1||a0->type!=VAL_ARRAY||a1->type!=VAL_ARRAY) return xly_null();
+            size_t m=a0->array_len, n=a1->array_len;
+            double h=(a2&&a2->type==VAL_NUMBER)?n2:1e-5;
+            XlyVal *J=mat_create_rt(m,n,0.0);
+            for (size_t i=0;i<m;i++) for (size_t j=0;j<n;j++){
+                XlyVal *fi=a0->array[i];
+                XlyVal **xsp=(XlyVal**)malloc(sizeof(XlyVal*)*n);
+                XlyVal **xsm=(XlyVal**)malloc(sizeof(XlyVal*)*n);
+                for (size_t k=0;k<n;k++){
+                    double val=xv_dbl(a1->array[k]);
+                    xsp[k]=xly_num(k==j?val+h:val); xsm[k]=xly_num(k==j?val-h:val);
+                }
+                XlyVal *ap=xly_array_create(xsp,n);free(xsp);
+                XlyVal *am=xly_array_create(xsm,n);free(xsm);
+                XlyVal *rp=xly_call_fnval(fi,&ap,1), *rm=xly_call_fnval(fi,&am,1);
+                mat_set_rt(J,i,j,((rp?rp->num:0.0)-(rm?rm->num:0.0))/(2.0*h));
+            }
+            return J;
+        }
+        /* diff.taylor(f, x0, nTerms, x) — Taylor series approximation */
+        if (strcmp(fn, "taylor") == 0) {
+            if (!a0) return xly_num(0.0);
+            double x0=n1;
+            int nt=(int)(a2?a2->num:5);
+            double x=(a3&&a3->type==VAL_NUMBER)?a3->num:x0;
+            double h=1e-4, result=0.0, fact=1.0, dx=x-x0;
+            for (int k=0;k<nt;k++){
+                double deriv=0.0;
+                double bk[33]; bk[0]=1.0;
+                for (int i=1;i<=k;i++) bk[i]=bk[i-1]*(k-i+1.0)/i;
+                for (int i=0;i<=k;i++){
+                    XlyVal *xv=xly_num(x0+i*h); XlyVal *fv=xly_call_fnval(a0,&xv,1);
+                    double sgn=((k-i)%2==0)?1.0:-1.0;
+                    deriv+=sgn*bk[i]*(fv?fv->num:0.0);
+                }
+                if (k>0) deriv/=pow(h,(double)k);
+                if (k==0) fact=1.0; else { double ff=1.0; for(int i=1;i<=k;i++) ff*=i; fact=ff; }
+                double power=1.0; for(int p=0;p<k;p++) power*=dx;
+                result+=deriv*power/fact;
+            }
+            return xly_num(result);
+        }
+
+        #undef CALL1
+        return xly_null();
     }
 
     Mod m;

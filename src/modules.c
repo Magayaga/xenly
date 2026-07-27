@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <time.h>
 #include <float.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -31,6 +32,11 @@
 static Module module_fs(void);
 
 // ─── Registry ────────────────────────────────────────────────────────────────
+// Forward declarations for new compute modules
+static Module module_numeric(void);
+static Module module_matrix(void);
+static Module module_diff(void);
+
 int modules_get(const char *name, Module *out) {
     if (strcmp(name, "math")      == 0) { *out = module_math();      return 1; }
     if (strcmp(name, "string")    == 0) { *out = module_string();    return 1; }
@@ -43,6 +49,9 @@ int modules_get(const char *name, Module *out) {
     if (strcmp(name, "multiproc") == 0) { *out = module_multiproc(); return 1; }
     if (strcmp(name, "sys")       == 0) { *out = module_sys();       return 1; }
     if (strcmp(name, "fs")        == 0) { *out = module_fs();        return 1; }
+    if (strcmp(name, "numeric")   == 0) { *out = module_numeric();   return 1; }
+    if (strcmp(name, "matrix")    == 0) { *out = module_matrix();    return 1; }
+    if (strcmp(name, "diff")      == 0) { *out = module_diff();      return 1; }
     if (strcmp(name, "http")      == 0) { extern Module module_http(void);    *out = module_http();    return 1; }
     if (strcmp(name, "reflect")   == 0) { extern Module module_reflect(void); *out = module_reflect(); return 1; }
     if (strcmp(name, "iter")      == 0) { extern Module module_iter(void);    *out = module_iter();    return 1; }
@@ -4521,5 +4530,422 @@ Module module_http(void) {
     m.name      = NULL;
     m.functions = http_fns;
     m.fn_count  = sizeof(http_fns)/sizeof(http_fns[0]) - 1;
+    return m;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * MATRIX / NUMERIC / DIFF HELPERS  (interpreter-side Value* helpers)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static inline double mv_dbl(Value *v) {
+    return (v && v->type == VAL_NUMBER) ? v->num : 0.0;
+}
+static inline double mget(Value *M, size_t i, size_t j) {
+    if (!M || M->type != VAL_ARRAY || i >= M->array_len) return 0.0;
+    Value *row = M->array[i];
+    if (!row || row->type != VAL_ARRAY || j >= row->array_len) return 0.0;
+    return mv_dbl(row->array[j]);
+}
+static inline void mset(Value *M, size_t i, size_t j, double v) {
+    if (!M || M->type != VAL_ARRAY || i >= M->array_len) return;
+    Value *row = M->array[i];
+    if (!row || row->type != VAL_ARRAY || j >= row->array_len) return;
+    row->array[j] = value_number(v);
+}
+static Value *mcreate(size_t rows, size_t cols, double val) {
+    if (rows == 0 || cols == 0) return value_array(NULL, 0);
+    Value **ra = (Value **)malloc(sizeof(Value *) * rows);
+    for (size_t i = 0; i < rows; i++) {
+        Value **ca = (Value **)malloc(sizeof(Value *) * cols);
+        for (size_t j = 0; j < cols; j++) ca[j] = value_number(val);
+        ra[i] = value_array(ca, cols);
+        free(ca);
+    }
+    Value *M = value_array(ra, rows);
+    free(ra);
+    return M;
+}
+static inline size_t mrows(Value *M) { return (M && M->type == VAL_ARRAY) ? M->array_len : 0; }
+static inline size_t mcols(Value *M) {
+    if (!M || M->type != VAL_ARRAY || !M->array_len) return 0;
+    Value *r = M->array[0];
+    return (r && r->type == VAL_ARRAY) ? r->array_len : 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * NUMERIC MODULE (non-callback functions only; callbacks handled in interpreter.c)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static Value *num_horner(Value **args, size_t argc) {
+    if (argc < 2 || !args[0] || args[0]->type != VAL_ARRAY) return value_number(0.0);
+    double x = mv_dbl(args[1]), r = 0.0;
+    for (size_t k = 0; k < args[0]->array_len; k++) r = r * x + mv_dbl(args[0]->array[k]);
+    return value_number(r);
+}
+static Value *num_fastInvSqrt(Value **args, size_t argc) {
+    if (argc < 1) return value_number(0.0);
+    float x = (float)mv_dbl(args[0]), x2 = x * 0.5f;
+    union { float f; uint32_t i; } u;
+    u.f = x; u.i = 0x5f3759dfU - (u.i >> 1);
+    u.f *= (1.5f - x2 * u.f * u.f);
+    u.f *= (1.5f - x2 * u.f * u.f);
+    return value_number((double)u.f);
+}
+static Value *num_dot(Value **args, size_t argc) {
+    if (argc < 2 || !args[0] || !args[1] || args[0]->type != VAL_ARRAY || args[1]->type != VAL_ARRAY) return value_number(0.0);
+    size_t n = args[0]->array_len < args[1]->array_len ? args[0]->array_len : args[1]->array_len;
+    double s = 0.0;
+    for (size_t k = 0; k < n; k++) s += mv_dbl(args[0]->array[k]) * mv_dbl(args[1]->array[k]);
+    return value_number(s);
+}
+static Value *num_cross(Value **args, size_t argc) {
+    if (argc < 2 || !args[0] || !args[1] || args[0]->array_len < 3 || args[1]->array_len < 3) return value_null();
+    double ax=mv_dbl(args[0]->array[0]),ay=mv_dbl(args[0]->array[1]),az=mv_dbl(args[0]->array[2]);
+    double bx=mv_dbl(args[1]->array[0]),by=mv_dbl(args[1]->array[1]),bz=mv_dbl(args[1]->array[2]);
+    Value *e[3]={value_number(ay*bz-az*by),value_number(az*bx-ax*bz),value_number(ax*by-ay*bx)};
+    return value_array(e, 3);
+}
+static Value *num_norm1(Value **args, size_t argc) {
+    if (argc < 1 || !args[0] || args[0]->type != VAL_ARRAY) return value_number(0.0);
+    double s = 0.0;
+    for (size_t k=0; k<args[0]->array_len; k++) s += fabs(mv_dbl(args[0]->array[k]));
+    return value_number(s);
+}
+static Value *num_norm2(Value **args, size_t argc) {
+    if (argc < 1 || !args[0] || args[0]->type != VAL_ARRAY) return value_number(0.0);
+    double s = 0.0;
+    for (size_t k=0; k<args[0]->array_len; k++) { double v=mv_dbl(args[0]->array[k]); s+=v*v; }
+    return value_number(sqrt(s));
+}
+static Value *num_normInf(Value **args, size_t argc) {
+    if (argc < 1 || !args[0] || args[0]->type != VAL_ARRAY) return value_number(0.0);
+    double m = 0.0;
+    for (size_t k=0; k<args[0]->array_len; k++) { double v=fabs(mv_dbl(args[0]->array[k])); if(v>m) m=v; }
+    return value_number(m);
+}
+static Value *num_lagrange(Value **args, size_t argc) {
+    if (argc < 3 || !args[0] || !args[1] || args[0]->type != VAL_ARRAY || args[1]->type != VAL_ARRAY) return value_number(0.0);
+    size_t nn = args[0]->array_len < args[1]->array_len ? args[0]->array_len : args[1]->array_len;
+    double x = mv_dbl(args[2]), result = 0.0;
+    for (size_t i=0; i<nn; i++) {
+        double xi=mv_dbl(args[0]->array[i]), yi=mv_dbl(args[1]->array[i]), term=yi;
+        for (size_t j=0; j<nn; j++) {
+            if (j==i) continue;
+            double d=xi-mv_dbl(args[0]->array[j]);
+            if (fabs(d)<1e-15) continue;
+            term*=(x-mv_dbl(args[0]->array[j]))/d;
+        }
+        result+=term;
+    }
+    return value_number(result);
+}
+static Value *num_chebyshev(Value **args, size_t argc) {
+    if (argc < 2) return value_number(0.0);
+    int ord=(int)mv_dbl(args[0]); double x=mv_dbl(args[1]);
+    if (ord==0) return value_number(1.0);
+    if (ord==1) return value_number(x);
+    double t0=1.0,t1=x,t2=0.0;
+    for (int i=2;i<=ord;i++){t2=2.0*x*t1-t0;t0=t1;t1=t2;}
+    return value_number(t2);
+}
+/* Stubs for callback-based functions (real impl in interpreter.c call_module_fn) */
+static Value *num_stub(Value **args, size_t argc) { (void)args;(void)argc; return value_null(); }
+
+static NativeModFn numeric_fns[] = {
+    { "horner",       num_horner },
+    { "polyEval",     num_horner },
+    { "fastInvSqrt",  num_fastInvSqrt },
+    { "dot",          num_dot },
+    { "cross",        num_cross },
+    { "norm1",        num_norm1 },
+    { "norm2",        num_norm2 },
+    { "norm",         num_norm2 },
+    { "normInf",      num_normInf },
+    { "lagrange",     num_lagrange },
+    { "chebyshev",    num_chebyshev },
+    /* callback-based: implemented in interpreter.c, stubs here so import works */
+    { "bisect",       num_stub },
+    { "secant",       num_stub },
+    { "newton",       num_stub },
+    { "integrate",    num_stub },
+    { "simpson",      num_stub },
+    { "trapezoid",    num_stub },
+    { "romberg",      num_stub },
+    { NULL, NULL }
+};
+static Module module_numeric(void) {
+    Module m; m.name=NULL;
+    m.functions=numeric_fns;
+    m.fn_count=sizeof(numeric_fns)/sizeof(numeric_fns[0])-1;
+    return m;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * MATRIX MODULE — full implementation (no callbacks needed)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static Value *mat_create_fn(Value **a, size_t c) {
+    size_t r=(size_t)mv_dbl(c>=1?a[0]:NULL), co=(size_t)mv_dbl(c>=2?a[1]:NULL);
+    return mcreate(r, co, c>=3?mv_dbl(a[2]):0.0);
+}
+static Value *mat_zeros_fn(Value **a, size_t c) {
+    size_t r=(size_t)mv_dbl(c>=1?a[0]:NULL), co=(size_t)mv_dbl(c>=2?a[1]:r);
+    return mcreate(r, co, 0.0);
+}
+static Value *mat_eye_fn(Value **a, size_t c) {
+    size_t n=(size_t)mv_dbl(c>=1?a[0]:NULL);
+    Value *M=mcreate(n,n,0.0);
+    for (size_t i=0;i<n;i++) mset(M,i,i,1.0);
+    return M;
+}
+static Value *mat_rows_fn(Value **a, size_t c) { return value_number((double)mrows(c>=1?a[0]:NULL)); }
+static Value *mat_cols_fn(Value **a, size_t c) { return value_number((double)mcols(c>=1?a[0]:NULL)); }
+static Value *mat_get_fn(Value **a, size_t c) {
+    if (c<3) return value_number(0.0);
+    return value_number(mget(a[0],(size_t)mv_dbl(a[1]),(size_t)mv_dbl(a[2])));
+}
+static Value *mat_set_fn(Value **a, size_t c) {
+    if (c<4||!a[0]) return value_null();
+    mset(a[0],(size_t)mv_dbl(a[1]),(size_t)mv_dbl(a[2]),mv_dbl(a[3]));
+    return a[0];
+}
+static Value *mat_transpose_fn(Value **a, size_t c) {
+    if (c<1||!a[0]) return value_null();
+    size_t r=mrows(a[0]), co=mcols(a[0]);
+    Value *T=mcreate(co,r,0.0);
+    for (size_t i=0;i<r;i++) for (size_t j=0;j<co;j++) mset(T,j,i,mget(a[0],i,j));
+    return T;
+}
+static Value *mat_add_fn(Value **a, size_t c) {
+    if (c<2||!a[0]||!a[1]) return value_null();
+    size_t r=mrows(a[0]), co=mcols(a[0]);
+    Value *C=mcreate(r,co,0.0);
+    for (size_t i=0;i<r;i++) for (size_t j=0;j<co;j++) mset(C,i,j,mget(a[0],i,j)+mget(a[1],i,j));
+    return C;
+}
+static Value *mat_sub_fn(Value **a, size_t c) {
+    if (c<2||!a[0]||!a[1]) return value_null();
+    size_t r=mrows(a[0]), co=mcols(a[0]);
+    Value *C=mcreate(r,co,0.0);
+    for (size_t i=0;i<r;i++) for (size_t j=0;j<co;j++) mset(C,i,j,mget(a[0],i,j)-mget(a[1],i,j));
+    return C;
+}
+static Value *mat_scale_fn(Value **a, size_t c) {
+    if (c<2||!a[0]) return value_null();
+    size_t r=mrows(a[0]), co=mcols(a[0]); double s=mv_dbl(a[1]);
+    Value *C=mcreate(r,co,0.0);
+    for (size_t i=0;i<r;i++) for (size_t j=0;j<co;j++) mset(C,i,j,mget(a[0],i,j)*s);
+    return C;
+}
+static Value *mat_mul_fn(Value **a, size_t c) {
+    if (c<2||!a[0]||!a[1]) return value_null();
+    size_t ra=mrows(a[0]),ca=mcols(a[0]),cb=mcols(a[1]);
+    Value *C=mcreate(ra,cb,0.0);
+    for (size_t i=0;i<ra;i++) for (size_t j=0;j<cb;j++){
+        double s=0.0;
+        for (size_t k=0;k<ca;k++) s+=mget(a[0],i,k)*mget(a[1],k,j);
+        mset(C,i,j,s);
+    }
+    return C;
+}
+static Value *mat_matvec_fn(Value **a, size_t c) {
+    if (c<2||!a[0]||!a[1]||a[1]->type!=VAL_ARRAY) return value_null();
+    size_t r=mrows(a[0]),co=a[1]->array_len;
+    Value **out=(Value**)malloc(sizeof(Value*)*r);
+    for (size_t i=0;i<r;i++){
+        double s=0.0;
+        for (size_t j=0;j<co;j++) s+=mget(a[0],i,j)*mv_dbl(a[1]->array[j]);
+        out[i]=value_number(s);
+    }
+    Value *res=value_array(out,r); free(out); return res;
+}
+static Value *mat_dot_fn(Value **a, size_t c) {
+    if (c<2||!a[0]||!a[1]||a[0]->type!=VAL_ARRAY||a[1]->type!=VAL_ARRAY) return value_number(0.0);
+    size_t n=a[0]->array_len<a[1]->array_len?a[0]->array_len:a[1]->array_len;
+    double s=0.0;
+    for (size_t k=0;k<n;k++) s+=mv_dbl(a[0]->array[k])*mv_dbl(a[1]->array[k]);
+    return value_number(s);
+}
+static Value *mat_trace_fn(Value **a, size_t c) {
+    if (c<1||!a[0]) return value_number(0.0);
+    size_t n=mrows(a[0]); double s=0.0;
+    for (size_t i=0;i<n;i++) s+=mget(a[0],i,i);
+    return value_number(s);
+}
+static Value *mat_norm_fn(Value **a, size_t c) {
+    if (c<1||!a[0]||a[0]->type!=VAL_ARRAY) return value_number(0.0);
+    double s=0.0;
+    for (size_t i=0;i<a[0]->array_len;i++){
+        Value *row=a[0]->array[i];
+        if (!row||row->type!=VAL_ARRAY) continue;
+        for (size_t j=0;j<row->array_len;j++){double v=mv_dbl(row->array[j]);s+=v*v;}
+    }
+    return value_number(sqrt(s));
+}
+static Value *mat_det_fn(Value **a, size_t c) {
+    if (c<1||!a[0]||a[0]->type!=VAL_ARRAY) return value_number(0.0);
+    size_t n=a[0]->array_len;
+    if (n==0) return value_number(1.0);
+    double *M=(double*)malloc(sizeof(double)*n*n);
+    for (size_t i=0;i<n;i++) for (size_t j=0;j<n;j++) M[i*n+j]=mget(a[0],i,j);
+    double det=1.0; int sign=1;
+    for (size_t col=0;col<n;col++){
+        size_t piv=col; double mx=fabs(M[col*n+col]);
+        for (size_t r=col+1;r<n;r++) if(fabs(M[r*n+col])>mx){mx=fabs(M[r*n+col]);piv=r;}
+        if (fabs(M[piv*n+col])<1e-12){free(M);return value_number(0.0);}
+        if (piv!=col){for(size_t j=0;j<n;j++){double t=M[col*n+j];M[col*n+j]=M[piv*n+j];M[piv*n+j]=t;}sign=-sign;}
+        det*=M[col*n+col];
+        for (size_t r=col+1;r<n;r++){double f=M[r*n+col]/M[col*n+col];for(size_t j=col;j<n;j++) M[r*n+j]-=f*M[col*n+j];}
+    }
+    free(M); return value_number(det*sign);
+}
+static Value *mat_inv_fn(Value **a, size_t c) {
+    if (c<1||!a[0]||a[0]->type!=VAL_ARRAY) return value_null();
+    size_t n=a[0]->array_len;
+    double *F=(double*)malloc(sizeof(double)*n*2*n);
+    for (size_t i=0;i<n;i++){
+        for (size_t j=0;j<n;j++) F[i*(2*n)+j]=mget(a[0],i,j);
+        for (size_t j=0;j<n;j++) F[i*(2*n)+n+j]=(i==j)?1.0:0.0;
+    }
+    for (size_t col=0;col<n;col++){
+        size_t piv=col; double mx=fabs(F[col*(2*n)+col]);
+        for (size_t r=col+1;r<n;r++) if(fabs(F[r*(2*n)+col])>mx){mx=fabs(F[r*(2*n)+col]);piv=r;}
+        if (piv!=col) for(size_t j=0;j<2*n;j++){double t=F[col*(2*n)+j];F[col*(2*n)+j]=F[piv*(2*n)+j];F[piv*(2*n)+j]=t;}
+        double d=F[col*(2*n)+col];
+        if (fabs(d)<1e-12){free(F);return value_null();}
+        for(size_t j=0;j<2*n;j++) F[col*(2*n)+j]/=d;
+        for(size_t r=0;r<n;r++){if(r==col)continue;double f=F[r*(2*n)+col];for(size_t j=0;j<2*n;j++) F[r*(2*n)+j]-=f*F[col*(2*n)+j];}
+    }
+    Value *inv=mcreate(n,n,0.0);
+    for (size_t i=0;i<n;i++) for (size_t j=0;j<n;j++) mset(inv,i,j,F[i*(2*n)+n+j]);
+    free(F); return inv;
+}
+static Value *mat_solve_fn(Value **a, size_t c) {
+    if (c<2||!a[0]||!a[1]||a[0]->type!=VAL_ARRAY||a[1]->type!=VAL_ARRAY) return value_null();
+    size_t n=a[0]->array_len;
+    double *M=(double*)malloc(sizeof(double)*n*(n+1));
+    for (size_t i=0;i<n;i++){
+        for (size_t j=0;j<n;j++) M[i*(n+1)+j]=mget(a[0],i,j);
+        M[i*(n+1)+n]=(i<a[1]->array_len)?mv_dbl(a[1]->array[i]):0.0;
+    }
+    for (size_t col=0;col<n;col++){
+        size_t piv=col; double mx=fabs(M[col*(n+1)+col]);
+        for (size_t r=col+1;r<n;r++) if(fabs(M[r*(n+1)+col])>mx){mx=fabs(M[r*(n+1)+col]);piv=r;}
+        if (piv!=col) for(size_t j=0;j<=n;j++){double t=M[col*(n+1)+j];M[col*(n+1)+j]=M[piv*(n+1)+j];M[piv*(n+1)+j]=t;}
+        if (fabs(M[col*(n+1)+col])<1e-12){free(M);return value_null();}
+        for(size_t r=col+1;r<n;r++){double f=M[r*(n+1)+col]/M[col*(n+1)+col];for(size_t j=col;j<=n;j++) M[r*(n+1)+j]-=f*M[col*(n+1)+j];}
+    }
+    Value **xarr=(Value**)malloc(sizeof(Value*)*n);
+    for (int i=(int)n-1;i>=0;i--){
+        double s=M[i*(n+1)+n];
+        for (size_t j=(size_t)i+1;j<n;j++) s-=M[i*(n+1)+j]*xarr[j]->num;
+        xarr[i]=value_number(s/M[i*(n+1)+i]);
+    }
+    Value *x=value_array(xarr,n); free(M); free(xarr); return x;
+}
+static Value *mat_lu_fn(Value **a, size_t c) {
+    if (c<1||!a[0]||a[0]->type!=VAL_ARRAY) return value_null();
+    size_t n=a[0]->array_len;
+    Value *L=mcreate(n,n,0.0), *U=mcreate(n,n,0.0);
+    for (size_t i=0;i<n;i++) for (size_t j=0;j<n;j++) mset(U,i,j,mget(a[0],i,j));
+    for (size_t i=0;i<n;i++) mset(L,i,i,1.0);
+    for (size_t k=0;k<n;k++) for (size_t i=k+1;i<n;i++){
+        double ukk=mget(U,k,k);
+        if (fabs(ukk)<1e-15) continue;
+        double f=mget(U,i,k)/ukk;
+        mset(L,i,k,f);
+        for (size_t j=k;j<n;j++) mset(U,i,j,mget(U,i,j)-f*mget(U,k,j));
+    }
+    Value *res[2]={L,U}; return value_array(res,2);
+}
+static Value *mat_rank_fn(Value **a, size_t c) {
+    if (c<1||!a[0]||a[0]->type!=VAL_ARRAY) return value_number(0);
+    size_t rows=mrows(a[0]),cols=mcols(a[0]);
+    double *M=(double*)malloc(sizeof(double)*rows*cols);
+    for (size_t i=0;i<rows;i++) for (size_t j=0;j<cols;j++) M[i*cols+j]=mget(a[0],i,j);
+    size_t rank=0,row=0;
+    for (size_t col=0;col<cols&&row<rows;col++){
+        size_t piv=row; double mx=fabs(M[row*cols+col]);
+        for (size_t r=row+1;r<rows;r++) if(fabs(M[r*cols+col])>mx){mx=fabs(M[r*cols+col]);piv=r;}
+        if (mx<1e-10) continue;
+        if (piv!=row) for(size_t j=0;j<cols;j++){double t=M[row*cols+j];M[row*cols+j]=M[piv*cols+j];M[piv*cols+j]=t;}
+        for(size_t r=row+1;r<rows;r++){double f=M[r*cols+col]/M[row*cols+col];for(size_t j=col;j<cols;j++) M[r*cols+j]-=f*M[row*cols+j];}
+        rank++;row++;
+    }
+    free(M); return value_number((double)rank);
+}
+static Value *mat_powerIter_fn(Value **a, size_t c) {
+    if (c<1||!a[0]||a[0]->type!=VAL_ARRAY) return value_null();
+    size_t n=mrows(a[0]); int iters=(c>=2&&a[1])?(int)mv_dbl(a[1]):100;
+    double *v=(double*)calloc(n,sizeof(double)),*w=(double*)malloc(n*sizeof(double));
+    v[0]=1.0; double eigenval=0.0;
+    for (int it=0;it<iters;it++){
+        for (size_t i=0;i<n;i++){w[i]=0.0;for(size_t j=0;j<n;j++) w[i]+=mget(a[0],i,j)*v[j];}
+        eigenval=w[0]; double mx=fabs(w[0]);
+        for (size_t i=1;i<n;i++) if(fabs(w[i])>mx){mx=fabs(w[i]);eigenval=w[i];}
+        if (mx<1e-15) break;
+        for (size_t i=0;i<n;i++) v[i]=w[i]/eigenval;
+    }
+    free(v);free(w); return value_number(eigenval);
+}
+
+static NativeModFn matrix_fns[] = {
+    { "create",      mat_create_fn },
+    { "zeros",       mat_zeros_fn },
+    { "eye",         mat_eye_fn },
+    { "identity",    mat_eye_fn },
+    { "rows",        mat_rows_fn },
+    { "cols",        mat_cols_fn },
+    { "get",         mat_get_fn },
+    { "set",         mat_set_fn },
+    { "transpose",   mat_transpose_fn },
+    { "add",         mat_add_fn },
+    { "sub",         mat_sub_fn },
+    { "scale",       mat_scale_fn },
+    { "mul",         mat_mul_fn },
+    { "matvec",      mat_matvec_fn },
+    { "dot",         mat_dot_fn },
+    { "trace",       mat_trace_fn },
+    { "norm",        mat_norm_fn },
+    { "fnorm",       mat_norm_fn },
+    { "det",         mat_det_fn },
+    { "inv",         mat_inv_fn },
+    { "inverse",     mat_inv_fn },
+    { "solve",       mat_solve_fn },
+    { "lu",          mat_lu_fn },
+    { "rank",        mat_rank_fn },
+    { "powerIter",   mat_powerIter_fn },
+    { NULL, NULL }
+};
+static Module module_matrix(void) {
+    Module m; m.name=NULL;
+    m.functions=matrix_fns;
+    m.fn_count=sizeof(matrix_fns)/sizeof(matrix_fns[0])-1;
+    return m;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * DIFF MODULE — stubs only; all diff functions use callbacks → interpreter.c
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static Value *diff_stub(Value **args, size_t argc) { (void)args;(void)argc; return value_null(); }
+
+static NativeModFn diff_fns[] = {
+    { "forward",    diff_stub },
+    { "backward",   diff_stub },
+    { "central",    diff_stub },
+    { "deriv",      diff_stub },
+    { "d",          diff_stub },
+    { "second",     diff_stub },
+    { "d2",         diff_stub },
+    { "nth",        diff_stub },
+    { "partial",    diff_stub },
+    { "gradient",   diff_stub },
+    { "grad",       diff_stub },
+    { "hessian",    diff_stub },
+    { "jacobian",   diff_stub },
+    { "taylor",     diff_stub },
+    { NULL, NULL }
+};
+static Module module_diff(void) {
+    Module m; m.name=NULL;
+    m.functions=diff_fns;
+    m.fn_count=sizeof(diff_fns)/sizeof(diff_fns[0])-1;
     return m;
 }
