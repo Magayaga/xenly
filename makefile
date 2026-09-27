@@ -112,6 +112,42 @@ $(info )
 
 # â”€â”€â”€ Source Files â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+# --- Stale Object Guard -----------------------------------------------
+# FIX: If the source tree is copied/zipped/rsynced between machines (or a
+#      previous build used a different OS/arch/compiler), leftover .o files
+#      can be newer than their .c files, so make treats them as "up to
+#      date" and skips recompiling them. Linking those stale objects
+#      against freshly compiled ones fails with a cryptic linker error like
+#      "unknown file type in 'src/lexer.o'" instead of a clear message.
+#      This stamp records the config used for the last build; if it
+#      doesn't match the current one (different CC/OS/arch), stale .o/.d
+#      files are purged before anything is compiled.
+BUILD_STAMP  := .build_config
+BUILD_CONFIG := $(CC)|$(UNAME_S)|$(UNAME_M)|$(ARCH_FLAG)
+
+# NOTE: this must not become the makefile's default goal (make uses the
+# first target defined in the file). Force the real default explicitly.
+.DEFAULT_GOAL := all
+
+.PHONY: check-stale-objects
+check-stale-objects:
+	@if [ -f $(BUILD_STAMP) ]; then \
+	    if [ "$$(cat $(BUILD_STAMP))" != "$(BUILD_CONFIG)" ]; then \
+	        echo "Build config changed since last build ($$(cat $(BUILD_STAMP)) -> $(BUILD_CONFIG))"; \
+	        echo "Removing stale object files to avoid linker errors..."; \
+	        rm -f src/*.o src/*.d; \
+	    fi; \
+	elif ls src/*.o >/dev/null 2>&1; then \
+	    echo "Object files exist with no build-config stamp from this makefile"; \
+	    echo "(likely committed to git or copied from another checkout/machine)."; \
+	    echo "A fresh git checkout gives .o files the same timestamp as their .c"; \
+	    echo "source, so make would treat them as already up to date and skip"; \
+	    echo "recompiling them, which can link stale or incompatible objects."; \
+	    echo "Removing them to force a clean rebuild..."; \
+	    rm -f src/*.o src/*.d; \
+	fi
+	@echo "$(BUILD_CONFIG)" > $(BUILD_STAMP)
+
 TARGET = xenly
 INTERP_SRCS = src/main.c src/lexer.c src/ast.c src/parser.c \
 	      src/interpreter.c src/modules.c src/typecheck.c \
@@ -137,9 +173,24 @@ RT_OBJS = src/xly_rt.o src/modules_rt.o src/unicode.o \
 	  src/multiproc_rt.o src/multiproc_builtins_rt.o \
 	  src/xly_http.o src/xenly_linker.o
 
-# libxly_rtc.a â€” minimal compiler-only runtime (no interpreter symbols).
+# libxly_rtc.a â€” compiler runtime with real sys module support.
 # xenlyc links compiled .xe programs against this instead of libxly_rt.a.
 # It must live next to the xenlyc binary so xenlyc can find it at link time.
+#
+# FIX: previously used xly_rt_compiler_stub.o's modules_get(), which always
+#      returned "not found" ("compiled programs do not support dynamic
+#      module import"). In reality only sys.* CONSTANTS were ever ported to
+#      the compiler's codegen fast path (src/codegen.c) â€” every sys.*
+#      FUNCTION (sys.getpid, sys.open, sys.read, sys.mmap, sockets, clocks,
+#      etc.) fell through to that stub, silently returning null and printing
+#      "[xenly] unknown module" at runtime for any compiled program that
+#      used them. xly_rt_compiler_stub.c now includes src/sys_module.inc,
+#      the same sys implementation src/modules.c uses for the interpreter
+#      (see that file's header comment for why sharing it is ABI-safe),
+#      giving xenlyc-compiled binaries a real sys module with no per-
+#      function porting required. Linking the OTHER modules (reflect, http)
+#      the same way isn't possible: they need interpreter-only glue
+#      (Environment, HTTP server plumbing) that compiled binaries don't have.
 RTC_LIB  = libxly_rtc.a
 RTC_OBJS = src/xly_rt.o src/unicode.o src/xly_rt_compiler_stub.o
 
@@ -148,7 +199,7 @@ RTC_OBJS = src/xly_rt.o src/unicode.o src/xly_rt_compiler_stub.o
 .PHONY: all clean distclean install uninstall test test-sys test-http \
 	linker-version run compile format help
 
-all: $(TARGET) $(XENLYC) $(RT_LIB) $(RTC_LIB)
+all: check-stale-objects $(TARGET) $(XENLYC) $(RT_LIB) $(RTC_LIB)
 	@echo ""
 	@echo "âœ“ Build complete!"
 	@echo "  Interpreter:     $(TARGET)"
@@ -184,27 +235,27 @@ $(RTC_LIB): $(RTC_OBJS)
 	$(AR) rcs $@ $^
 	@echo "  Compiler runtime: $(RTC_LIB)"
 
-src/xly_rt_compiler_stub.o: src/xly_rt_compiler_stub.c
+src/xly_rt_compiler_stub.o: src/xly_rt_compiler_stub.c | check-stale-objects
 	@echo "Compiling $<..."
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # Runtime-specific object rules (XENLY_NO_MULTIPROC disables threading)
-src/modules_rt.o: src/modules.c
+src/modules_rt.o: src/modules.c | check-stale-objects
 	@echo "Compiling $< (runtime, no multiprocessing)..."
 	$(CC) $(CFLAGS) -DXENLY_NO_MULTIPROC -c -o $@ $<
 
-src/multiproc_rt.o: src/multiproc.c
+src/multiproc_rt.o: src/multiproc.c | check-stale-objects
 	@echo "Compiling $< (runtime stub)..."
 	$(CC) $(CFLAGS) -DXENLY_NO_MULTIPROC -c -o $@ $<
 
 src/multiproc_builtins_rt.o: src/multiproc_builtins.c \
-	      src/xly_http.c
+	      src/xly_http.c | check-stale-objects
 	@echo "Compiling $< (runtime stub)..."
 	$(CC) $(CFLAGS) -DXENLY_NO_MULTIPROC -c -o $@ $<
 
 # Generic rule â€” -MMD -MP in CFLAGS now makes this emit src/*.d files,
 # so header changes trigger the right recompiles automatically.
-src/%.o: src/%.c
+src/%.o: src/%.c | check-stale-objects
 	@echo "Compiling $<..."
 	$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -286,6 +337,7 @@ clean:
 	rm -f src/*.o src/*.d
 	rm -f $(TARGET) $(XENLYC) $(RT_LIB) $(RTC_LIB)
 	rm -f *.s *.o *.d a.out hello_compiled test_compiled
+	rm -f $(BUILD_STAMP)
 	@echo "âœ“ Clean complete"
 
 distclean: clean
