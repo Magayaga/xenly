@@ -19,8 +19,13 @@
  * need interpreter-only glue (Environment for reflect, HTTP server plumbing
  * for http) that compiled Xenly binaries don't link against.
  */
+#if !defined(__APPLE__)
+#define _GNU_SOURCE
+#endif
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <unistd.h>
 #include "xly_rt.h"
 
@@ -69,14 +74,21 @@ typedef struct { char *name; NativeFunc *functions; size_t fn_count; } Module;
 /* value_number/_string/_bool/_null/_array aren't declared in xly_rt.h (only
  * defined in xly_rt.c), so declare them here against our local Value* so
  * sys_module.inc's calls resolve to the exact same symbols xly_rt.c
- * defines. value_to_string IS already declared in xly_rt.h (against
- * XlyVal*); its calls below pass our structurally-identical Value* instead
- * -- a harmless implicit pointer conversion (warning only, no -Werror). */
+ * defines. */
 Value *value_number(double n);
 Value *value_string(const char *s);
 Value *value_bool(int b);
 Value *value_null(void);
 Value *value_array(Value **items, size_t len);
+
+/* value_to_string IS already declared in xly_rt.h (against XlyVal*); this
+ * macro casts our locally-visible Value* to XlyVal* at the call site so the
+ * call type-checks cleanly instead of relying on an implicit pointer
+ * conversion warning (harmless here since the structs are ABI-identical,
+ * but there's no reason to leave the warning in). The preprocessor does not
+ * re-expand a macro within its own expansion, so this correctly calls the
+ * real xly_rt.c function rather than looping. */
+#define value_to_string(v) value_to_string((XlyVal *)(v))
 
 #include "sys_module.inc"
 
