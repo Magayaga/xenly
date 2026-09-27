@@ -25,7 +25,8 @@
 | Version             | Released date        | Git Commit     | Tag |
 |:-------------------:|:--------------------:|:--------------:|:---:|
 |`v0.1.0-alpha1`      | March 13, 2026       | [`bea774c`](https://github.com/Magayaga/xenly/commit/bea774cab1e1a5081a5eda434c15374483ca33d9) | [Open](https://github.com/Magayaga/xenly/releases/tag/v0.1.0-alpha1) |
-|`v0.1.0-alpha2`      | TBA                  | -              |
+|`v0.1.0-alpha2`      | September 30, 2026   | -               | -  |
+|`v0.1.0-alpha3`      | TBA 2027             | -               | -  |
 
 ## Copyright
 Copyright (c) 2023-2026 [Cyril John Magayaga](https://github.com/magayaga). All rights reserved.
