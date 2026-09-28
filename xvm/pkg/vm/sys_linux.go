@@ -65,10 +65,20 @@ func sysPoll(fds []sysPollFd, timeout int) (int, error) {
 	if len(fds) == 0 {
 		return 0, nil
 	}
-	r, _, errno := syscall.Syscall(syscall.SYS_POLL,
+	// poll(2) doesn't exist as a syscall on linux/arm64, riscv64 or
+	// loong64 (only ppoll does), so use ppoll everywhere on Linux. A
+	// negative timeout means "wait forever", which ppoll expresses as a
+	// NULL timespec; otherwise convert milliseconds to a timespec.
+	var ts *syscall.Timespec
+	if timeout >= 0 {
+		t := syscall.NsecToTimespec(int64(timeout) * 1e6)
+		ts = &t
+	}
+	r, _, errno := syscall.Syscall6(syscall.SYS_PPOLL,
 		uintptr(unsafe.Pointer(&fds[0])),
 		uintptr(len(fds)),
-		uintptr(timeout))
+		uintptr(unsafe.Pointer(ts)),
+		0, 0, 0)
 	if errno != 0 {
 		return -1, errno
 	}
@@ -199,3 +209,19 @@ func sysMunmap(ptr uintptr, size int) int {
 }
 
 func sysMonoNow() int64 { return time.Now().UnixNano() }
+
+// sysDup2 duplicates oldfd onto newfd. dup2(2) doesn't exist as a syscall
+// on linux/arm64, riscv64 or loong64, so use dup3 (available on every
+// Linux arch). dup3 differs from dup2 in one way: it fails with EINVAL when
+// oldfd == newfd, whereas dup2 just returns newfd - so handle that case by
+// checking that the descriptor is valid, which is all dup2 would do.
+func sysDup2(oldfd, newfd int) error {
+	if oldfd == newfd {
+		_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(oldfd), syscall.F_GETFD, 0)
+		if errno != 0 {
+			return errno
+		}
+		return nil
+	}
+	return syscall.Dup3(oldfd, newfd, 0)
+}

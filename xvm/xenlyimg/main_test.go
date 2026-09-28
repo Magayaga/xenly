@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"xvm/pkg/bytecode"
@@ -110,5 +111,66 @@ func TestXenlyimgBuildsRelativeOutput(t *testing.T) {
 	}
 	if got := runOut.String(); got != "xenlyimg-test\n" {
 		t.Fatalf("native image output = %q, want %q", got, "xenlyimg-test\n")
+	}
+}
+
+func TestMultiTargetOutput(t *testing.T) {
+	dir := filepath.Join("out", "dir")
+	cases := []struct{ input, goos, goarch, want string }{
+		{"hello.xebc", "linux", "amd64", filepath.Join(dir, "hello-linux-amd64")},
+		{"path/to/app.xebc", "darwin", "arm64", filepath.Join(dir, "app-darwin-arm64")},
+		{"hello.xebc", "windows", "amd64", filepath.Join(dir, "hello-windows-amd64.exe")},
+	}
+	for _, c := range cases {
+		if got := multiTargetOutput(dir, c.input, c.goos, c.goarch); got != c.want {
+			t.Errorf("multiTargetOutput(%q, %s/%s) = %q, want %q", c.input, c.goos, c.goarch, got, c.want)
+		}
+	}
+}
+
+func TestBuildEnvOverridesExistingKeys(t *testing.T) {
+	t.Setenv("GOOS", "plan9")
+	t.Setenv("XENLYIMG_TEST_KEEP", "kept")
+	env := buildEnv(map[string]string{"GOOS": "linux", "GOARCH": "arm64"})
+	counts := map[string]int{}
+	values := map[string]string{}
+	for _, kv := range env {
+		k, v, _ := strings.Cut(kv, "=")
+		counts[k]++
+		values[k] = v
+	}
+	// Exactly one entry per overridden key, so the result never depends on
+	// which duplicate a given consumer happens to honor.
+	if counts["GOOS"] != 1 || values["GOOS"] != "linux" {
+		t.Errorf("GOOS: got %d entries, value %q; want exactly 1 = linux", counts["GOOS"], values["GOOS"])
+	}
+	if counts["GOARCH"] != 1 || values["GOARCH"] != "arm64" {
+		t.Errorf("GOARCH: got %d entries, value %q; want exactly 1 = arm64", counts["GOARCH"], values["GOARCH"])
+	}
+	if values["XENLYIMG_TEST_KEEP"] != "kept" {
+		t.Errorf("unrelated variable was dropped or changed: %q", values["XENLYIMG_TEST_KEEP"])
+	}
+}
+
+func TestPersistentGoCache(t *testing.T) {
+	root := t.TempDir()
+	dir, warm := persistentGoCache(root)
+	if dir == "" || warm {
+		t.Fatalf("first call: dir=%q warm=%v, want a created dir and warm=false", dir, warm)
+	}
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		t.Fatalf("cache dir not created: %v", err)
+	}
+	if _, warm := persistentGoCache(root); !warm {
+		t.Error("second call should report the cache as already warm")
+	}
+	// A module dir that can't hold the cache must degrade to Go's default
+	// (empty string), never fail the build.
+	file := filepath.Join(root, "afile")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if dir, _ := persistentGoCache(file); dir != "" {
+		t.Errorf("unwritable module dir: got %q, want empty fallback", dir)
 	}
 }

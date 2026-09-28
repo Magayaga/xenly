@@ -138,7 +138,7 @@ func registerSysModule(env *Env) {
 		}),
 		"dup2": builtin(func(a []*Value) (*Value, error) {
 			if len(a) < 2 { return Number(-1), nil }
-			if err := syscall.Dup2(int(a[0].NumVal), int(a[1].NumVal)); err != nil { return Number(-1), nil }
+			if err := sysDup2(int(a[0].NumVal), int(a[1].NumVal)); err != nil { return Number(-1), nil }
 			return Number(0), nil
 		}),
 		"pipe": builtin(func(a []*Value) (*Value, error) {

@@ -18,9 +18,9 @@ It is written in **Go** programming language.
 * Native executable (`.exe` on Windows, no fixed suffix on macOS/Linux) - a standalone, platform-specific image produced by `xenlyimg`.
 
 ## Getting started
-1. Install Go 1.21+ from [go.dev/dl](https://go.dev/dl) if you don't have it:
+1. Install Go 1.27+ from [go.dev/dl](https://go.dev/dl) if you don't have it:
    ```bash
-   # go1.21 or later
+   # go1.27 or later
    $ go version
    ```
 
@@ -66,6 +66,19 @@ It is written in **Go** programming language.
    $ ./bin/xenlybyc hello.xe -o hello.xebc
    $ ./bin/xenlyimg hello.xebc -o hello
    ```
+
+   Build several targets in one run with `--targets` (built in parallel, one
+   worker per CPU core); `-o` then names an output directory and files are
+   named `<base>-<goos>-<goarch>`:
+   ```bash
+   $ ./bin/xenlyimg hello.xebc --targets linux/amd64,linux/arm64,darwin/arm64,windows/amd64 -o dist
+   ```
+
+   `xenlyimg` keeps Go's build cache in `xvm/.xenlyimg-cache/`, independent of
+   `$HOME`, so only the first build of each target pays the ~10s cost of
+   compiling Go's standard library (later builds take roughly 0.15s). This
+   matters most in CI, where `$HOME` is often fresh on every run - persist that
+   directory between runs to keep builds fast. Pass `--no-cache` to opt out.
 
 ## Copyright
 

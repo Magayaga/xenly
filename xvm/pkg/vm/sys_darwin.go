@@ -191,3 +191,8 @@ func sysMunmap(ptr uintptr, size int) int {
 }
 
 func sysMonoNow() int64 { return time.Now().UnixNano() }
+
+// sysDup2 duplicates oldfd onto newfd (dup2 exists on macOS on all archs).
+func sysDup2(oldfd, newfd int) error {
+	return syscall.Dup2(oldfd, newfd)
+}
