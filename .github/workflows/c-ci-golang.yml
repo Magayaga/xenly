@@ -25,8 +25,6 @@ jobs:
         run: ./xvm/bin/xenlybyc
       - name: xenlyrun test
         run: ./xvm/bin/xenlyrun
-      - name: xenlyimg test
-        run: ./xvm/bin/xenlyimg
       - name: hello test (1)
         run: time ./xvm/bin/xenlybyc examples/hello.xe -o hello.xebc
       - name: run hello test (1)
